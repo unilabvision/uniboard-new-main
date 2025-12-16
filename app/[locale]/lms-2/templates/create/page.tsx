@@ -1,0 +1,3010 @@
+'use client';
+
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { 
+  Palette, Image, Eye, Save, 
+  ArrowLeft, HelpCircle, RefreshCw
+} from 'lucide-react';
+import Link from 'next/link';
+import NextImage from 'next/image';
+import { useUser } from '@clerk/nextjs';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { generateDashboardCertificatePreview } from '@/utils/dashboardCertificateGenerator';
+import FileUpload from '@/app/components/ui/FileUpload';
+import { uploadFileToSupabase, validateFile } from '@/app/_services/fileUploadService';
+
+// Supabase client
+const supabase = createClientComponentClient({
+  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL2 || 'https://emfvwpztyuykqtepnsfp.supabase.co',
+  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY2 || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtZnZ3cHp0eXV5a3F0ZXBuc2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzg0OTM5MDksImV4cCI6MjA1NDA2OTkwOX0.EbGPYHtXMO2RYGavv-FQa3mgI3RECiFnwAVqpUgghxg'
+});
+
+// Types
+interface Organization {
+  id: number;
+  slug: string;
+  name: string;
+  description?: string;
+  logo?: string;
+  primary_color?: string;
+  secondary_color?: string;
+}
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  organizationSlugs?: string[];
+}
+
+
+interface TemplateFormData {
+  name: string;
+  description: string;
+  organization_slug: string;
+  background_image: string;
+  is_default: boolean;
+  design_settings: {
+    colors: {
+      primary: string;
+      secondary: string;
+      text: string;
+      title: string;
+      name: string;
+      description: string;
+      institution: string;
+      certificate_no: string;
+      date: string;
+      signature: string;
+      course_name: string;
+    };
+    fonts: {
+      title: string;
+      body: string;
+      name: string;
+      description: string;
+      institution: string;
+      certificate_no: string;
+      date: string;
+      signature: string;
+      course_name: string;
+    };
+    font_sizes: {
+      title: number;
+      name: number;
+      description: number;
+      institution: number;
+      certificate_no: number;
+      date: number;
+      signature: number;
+      course_name: number;
+    };
+    layout: {
+      title_position: { x: number; y: number; enabled?: boolean; align?: 'left' | 'center' | 'right'; x_manual?: number; y_manual?: number };
+      name_position: { x: number; y: number; enabled?: boolean; align?: 'left' | 'center' | 'right'; x_manual?: number; y_manual?: number };
+      description_position: { x: number; y: number; enabled?: boolean; align?: 'left' | 'center' | 'right'; x_manual?: number; y_manual?: number };
+      institution_position: { x: number; y: number; enabled?: boolean; align?: 'left' | 'center' | 'right'; x_manual?: number; y_manual?: number };
+      certificate_no_position: { x: number; y: number; enabled?: boolean; align?: 'left' | 'center' | 'right'; x_manual?: number; y_manual?: number };
+      date_position: { x: number; y: number; enabled?: boolean; align?: 'left' | 'center' | 'right'; x_manual?: number; y_manual?: number };
+      signature_position: { x: number; y: number; enabled?: boolean; align?: 'left' | 'center' | 'right'; x_manual?: number; y_manual?: number };
+      course_name_position: { x: number; y: number; enabled?: boolean; align?: 'left' | 'center' | 'right'; x_manual?: number; y_manual?: number };
+    };
+  };
+}
+
+// Localized texts
+const texts = {
+  tr: {
+    title: "Yeni Sertifika Şablonu",
+    subtitle: "Kuruluşunuz için özel bir sertifika şablonu oluşturun",
+    basicInfo: "Temel Bilgiler",
+    designSettings: "Tasarım Ayarları",
+    preview: "Önizleme",
+    templateName: "Şablon Adı",
+    templateNamePlaceholder: "Örn: Mezuniyet Sertifikası Şablonu",
+    description: "Açıklama",
+    descriptionPlaceholder: "Bu şablon hakkında kısa bir açıklama yazın...",
+    organization: "Kuruluş",
+    selectOrganization: "Kuruluş seçin",
+    backgroundImage: "Arka Plan Görseli",
+    backgroundImagePlaceholder: "Arka plan görseli URL'si girin",
+    uploadImage: "Görsel Yükle",
+    setAsDefault: "Bu şablonu varsayılan yap",
+    defaultTemplateHelp: "Varsayılan şablon, yeni sertifikalar oluştururken otomatik olarak seçilir",
+    colors: "Renkler",
+    primaryColor: "Ana Renk",
+    secondaryColor: "İkincil Renk",
+    textColor: "Yazı Rengi",
+    fonts: "Yazı Tipleri",
+    titleFont: "Başlık Yazı Tipi",
+    bodyFont: "Gövde Yazı Tipi",
+    fontSizes: "Yazı Boyutları",
+    titleSize: "Başlık Boyutu (px)",
+    nameSize: "İsim Boyutu (px)",
+    descriptionSize: "Açıklama Boyutu (px)",
+    courseNameSize: "Kurs Adı Boyutu (px)",
+    dateSize: "Tarih Boyutu (px)",
+    signatureSize: "İmza Boyutu (px)",
+    layout: "Yerleşim",
+    titlePosition: "Başlık Pozisyonu",
+    namePosition: "İsim Pozisyonu",
+    descriptionPosition: "Açıklama Pozisyonu",
+    courseNamePosition: "Kurs Adı Pozisyonu",
+    institutionPosition: "Kurum/Eğitmen Pozisyonu",
+    certificateNoPosition: "Sertifika No Pozisyonu",
+    datePosition: "Tarih Pozisyonu",
+    signaturePosition: "İmza Pozisyonu",
+    positionX: "X Pozisyonu (%)",
+    positionY: "Y Pozisyonu (%)",
+    previewTemplate: "Şablon Önizlemesi",
+    sampleCertificate: "Örnek Sertifika",
+    sampleName: "Ahmet YILMAZ",
+    sampleCourse: "Web Geliştirme Bootcamp",
+    sampleDate: "28 Ağustos 2025",
+    sampleInstructor: "Dr. Mehmet ÖZDEMİR",
+    save: "Şablonu Kaydet",
+    cancel: "İptal",
+    saving: "Kaydediliyor...",
+    saved: "Kaydedildi",
+    error: "Hata",
+    success: "Başarılı",
+    templateCreated: "Şablon başarıyla oluşturuldu",
+    templateCreateError: "Şablon oluşturulurken bir hata oluştu",
+    requiredFields: "Lütfen tüm gerekli alanları doldurun",
+    invalidUrl: "Geçerli bir URL girin",
+    resetToDefaults: "Varsayılanlara Sıfırla",
+    fontOptions: {
+      serif: "Serif (Times New Roman)",
+      sans_serif: "Sans Serif (Arial)",
+      monospace: "Monospace (Courier)",
+      custom: "Özel Font"
+    },
+    help: {
+      backgroundImage: "PNG, JPG veya SVG formatında, en az 1920x1080 piksel önerilen boyut",
+      colors: "Renkleri hex formatında (#RRGGBB) girin veya renk seçiciyi kullanın",
+      layout: "Pozisyonlar yüzde değerleridir (0-100). 0,0 sol üst köşe, 100,100 sağ alt köşedir",
+      defaultTemplate: "Her kuruluş için sadece bir varsayılan şablon olabilir"
+    }
+  },
+  en: {
+    title: "New Certificate Template",
+    subtitle: "Create a custom certificate template for your organization",
+    basicInfo: "Basic Information",
+    designSettings: "Design Settings",
+    preview: "Preview",
+    templateName: "Template Name",
+    templateNamePlaceholder: "e.g. Graduation Certificate Template",
+    description: "Description",
+    descriptionPlaceholder: "Write a brief description about this template...",
+    organization: "Organization",
+    selectOrganization: "Select organization",
+    backgroundImage: "Background Image",
+    backgroundImagePlaceholder: "Enter background image URL",
+    uploadImage: "Upload Image",
+    setAsDefault: "Set as default template",
+    defaultTemplateHelp: "Default template will be automatically selected when creating new certificates",
+    colors: "Colors",
+    primaryColor: "Primary Color",
+    secondaryColor: "Secondary Color",
+    textColor: "Text Color",
+    fonts: "Fonts",
+    titleFont: "Title Font",
+    bodyFont: "Body Font",
+    fontSizes: "Font Sizes",
+    titleSize: "Title Size (px)",
+    nameSize: "Name Size (px)",
+    descriptionSize: "Description Size (px)",
+    courseNameSize: "Course Name Size (px)",
+    dateSize: "Date Size (px)",
+    signatureSize: "Signature Size (px)",
+    layout: "Layout",
+    titlePosition: "Title Position",
+    namePosition: "Name Position",
+    descriptionPosition: "Description Position",
+    courseNamePosition: "Course Name Position",
+    institutionPosition: "Institution/Instructor Position",
+    certificateNoPosition: "Certificate No Position",
+    datePosition: "Date Position",
+    signaturePosition: "Signature Position",
+    positionX: "X Position (%)",
+    positionY: "Y Position (%)",
+    previewTemplate: "Template Preview",
+    sampleCertificate: "Sample Certificate",
+    sampleName: "John DOE",
+    sampleCourse: "Web Development Bootcamp",
+    sampleDate: "August 28, 2025",
+    sampleInstructor: "Dr. Michael JOHNSON",
+    save: "Save Template",
+    cancel: "Cancel",
+    saving: "Saving...",
+    saved: "Saved",
+    error: "Error",
+    success: "Success",
+    templateCreated: "Template created successfully",
+    templateCreateError: "An error occurred while creating template",
+    requiredFields: "Please fill in all required fields",
+    invalidUrl: "Please enter a valid URL",
+    resetToDefaults: "Reset to Defaults",
+    fontOptions: {
+      serif: "Serif (Times New Roman)",
+      sans_serif: "Sans Serif (Arial)",
+      monospace: "Monospace (Courier)",
+      custom: "Custom Font"
+    },
+    help: {
+      backgroundImage: "PNG, JPG or SVG format, minimum 1920x1080 pixels recommended",
+      colors: "Enter colors in hex format (#RRGGBB) or use color picker",
+      layout: "Positions are percentage values (0-100). 0,0 is top-left, 100,100 is bottom-right",
+      defaultTemplate: "Only one default template per organization is allowed"
+    }
+  }
+};
+
+// Main Component
+export default function CreateTemplatePage() {
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [previewCanvas, setPreviewCanvas] = useState<HTMLCanvasElement | null>(null);
+  const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  // File upload states
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string>('');
+  
+  // Form data
+  const [formData, setFormData] = useState<TemplateFormData>({
+    name: '',
+    description: '',
+    organization_slug: '',
+    background_image: '',
+    is_default: false,
+    design_settings: {
+      colors: {
+        primary: '#1A5276',
+        secondary: '#666666',
+        text: '#000',
+        title: '#1A5276',
+        name: '#000',
+        description: '#000',
+        institution: '#8a0000',
+        certificate_no: '#fff',
+        date: '#000',
+        signature: '#000',
+        course_name: '#000'
+      },
+      fonts: {
+        title: 'sans_serif',
+        body: 'sans_serif',
+        name: 'sans_serif',
+        description: 'sans_serif',
+        institution: 'sans_serif',
+        certificate_no: 'sans_serif',
+        date: 'sans_serif',
+        signature: 'sans_serif',
+        course_name: 'sans_serif'
+      },
+      font_sizes: {
+        title: 26,
+        name: 69,
+        description: 35,
+        institution: 21,
+        certificate_no: 22,
+        date: 30,
+        signature: 30,
+        course_name: 34
+      },
+      layout: {
+        title_position: { x: 42, y: 20, enabled: false, align: 'center', x_manual: 42, y_manual: 20 },
+        name_position: { x: 7, y: 35.5, enabled: true, align: 'left', x_manual: 7, y_manual: 37 },
+        description_position: { x: 7, y: 49, enabled: true, align: 'left', x_manual: 7, y_manual: 49 },
+        institution_position: { x: 23.5, y: 76.5, enabled: false, align: 'left', x_manual: 23.5, y_manual: 76.5 },
+        certificate_no_position: { x: 96, y: 93, enabled: true, align: 'right', x_manual: 96, y_manual: 93 },
+        date_position: { x: 8.9, y: 64, enabled: true, align: 'left', x_manual: 8.9, y_manual: 64 },
+        signature_position: { x: 35.3, y: 64, enabled: true, align: 'center', x_manual: 35.3, y_manual: 64 },
+        course_name_position: { x: 15.3, y: 42.7, enabled: true, align: 'left', x_manual: 15.3, y_manual: 42.7 }
+      }
+    }
+  });
+  
+  // Validation errors
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  
+  // Clerk user hook and locale
+  const { user: clerkUser, isLoaded } = useUser();
+  const locale = 'tr'; // You can get this from params or context
+  const t = texts[locale] || texts.tr;
+  
+  // File upload handlers
+  const handleFileSelect = useCallback(async (file: File) => {
+    setUploadError('');
+    setIsUploading(true);
+    
+    try {
+      // Validate file
+      const validation = validateFile(file, 10, ['image/jpeg', 'image/jpg', 'image/png', 'image/svg+xml', 'image/webp']);
+      if (!validation.isValid) {
+        setUploadError(validation.error || 'Geçersiz dosya');
+        setIsUploading(false);
+        return;
+      }
+      
+      // Upload file to Supabase
+      const result = await uploadFileToSupabase(file, 'myunilab', 'certificate-templates', clerkUser?.id);
+      
+      if (result.success && result.url) {
+        setSelectedFile(file);
+        setFormData(prev => ({ ...prev, background_image: result.url! }));
+        setUploadError('');
+      } else {
+        setUploadError(result.error || 'Dosya yüklenirken hata oluştu');
+      }
+    } catch (error) {
+      console.error('File upload error:', error);
+      setUploadError('Dosya yüklenirken beklenmeyen hata oluştu');
+    } finally {
+      setIsUploading(false);
+    }
+  }, [clerkUser?.id]);
+  
+  const handleFileRemove = useCallback(() => {
+    setSelectedFile(null);
+    setFormData(prev => ({ ...prev, background_image: '' }));
+    setUploadError('');
+  }, []);
+  
+  // Generate preview function
+  const generatePreview = useCallback(async () => {
+    if (!formData.background_image || isGeneratingPreview) {
+      return;
+    }
+    
+    setIsGeneratingPreview(true);
+    try {
+      const previewWidth = 600;
+      const previewHeight = 450;
+      
+      const canvas = await generateDashboardCertificatePreview(
+        formData,
+        previewWidth,
+        previewHeight,
+        locale
+      );
+      
+      setPreviewCanvas(canvas);
+      
+      // Update canvas in the DOM if ref exists
+      if (canvasRef.current && canvas) {
+        const ctx = canvasRef.current.getContext('2d');
+        if (ctx) {
+          canvasRef.current.width = canvas.width;
+          canvasRef.current.height = canvas.height;
+          ctx.drawImage(canvas, 0, 0);
+        }
+      }
+    } catch (error) {
+      console.error('Preview generation error:', error);
+    } finally {
+      setIsGeneratingPreview(false);
+    }
+  }, [formData, isGeneratingPreview, locale]);
+  
+  // Update preview when form data changes
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      generatePreview();
+    }, 500); // Debounce to avoid too many updates
+    
+    return () => clearTimeout(timeoutId);
+  }, [formData.background_image, formData.design_settings, formData.name, formData.organization_slug, generatePreview]);
+
+  // Set current user
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      if (!isLoaded) return;
+      
+      if (!clerkUser) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // Initialize basic user info
+        setCurrentUser({
+          id: clerkUser.id,
+          name: clerkUser.fullName || clerkUser.firstName || 'Kullanıcı',
+          email: clerkUser.emailAddresses[0]?.emailAddress || '',
+          organizationSlugs: []
+        });
+        
+        // Fetch user's organization access from the database
+        const { data, error } = await supabase
+          .from('user_module_access')
+          .select(`
+            *,
+            organizations:organization_id (
+              slug
+            )
+          `)
+          .eq('clerk_user_id', clerkUser.id)
+          .eq('module_key', 'certificates')
+          .eq('is_enabled', true);
+        
+        if (error) {
+          console.error('Error fetching user module access:', error);
+          return;
+        }
+        
+        // Extract organization slugs from the join result
+        const orgSlugs = data
+          ?.filter(item => item.organizations?.slug)
+          .map(item => item.organizations.slug) || [];
+        
+        // Update current user with organization slugs
+        setCurrentUser(prev => ({
+          ...(prev || {
+            id: clerkUser.id,
+            name: clerkUser.fullName || clerkUser.firstName || 'Kullanıcı',
+            email: clerkUser.emailAddresses[0]?.emailAddress || ''
+          }),
+          organizationSlugs: orgSlugs
+        }));
+      } catch (error) {
+        console.error('Error getting user profile:', error);
+      }
+    };
+
+    getCurrentUser();
+  }, [clerkUser, isLoaded]);
+
+  // Fetch organizations
+  useEffect(() => {
+    const fetchOrganizations = async () => {
+      if (!currentUser?.organizationSlugs?.length) {
+        setLoading(false);
+        return;
+      }
+      
+      try {
+        const { data, error } = await supabase
+          .from('organizations')
+          .select('*')
+          .in('slug', currentUser.organizationSlugs);
+        
+        if (error) {
+          throw error;
+        }
+        
+        setOrganizations(data || []);
+        
+        // Set first organization as default if only one
+        if (data && data.length === 1) {
+          setFormData(prev => ({
+            ...prev,
+            organization_slug: data[0].slug
+          }));
+        }
+        
+      } catch (error: unknown) {
+        console.error('Error fetching organizations:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchOrganizations();
+  }, [currentUser]);
+
+  // Validate form
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+    
+    if (!formData.name.trim()) {
+      newErrors.name = t.requiredFields;
+    }
+    
+    if (!formData.organization_slug) {
+      newErrors.organization_slug = t.requiredFields;
+    }
+    
+    if (!formData.background_image.trim()) {
+      newErrors.background_image = t.requiredFields;
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  // Handle form submission
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+    
+    // Check if we're still uploading a file
+    if (isUploading) {
+      setError('Lütfen dosya yüklenmesini bekleyin');
+      return;
+    }
+    
+    setSaving(true);
+    
+    try {
+      // Remove auto-generated fields to avoid constraint violations
+      const { ...formDataWithoutAutoFields } = formData as TemplateFormData;
+      
+      // Always check for existing default templates in the organization
+      const { data: existingDefaults, error: checkError } = await supabase
+        .from('certificate_templates')
+        .select('id, name, is_default')
+        .eq('organization_slug', formData.organization_slug)
+        .eq('is_default', true);
+      
+      if (checkError) {
+        console.error('Error checking existing default templates:', checkError);
+        throw checkError;
+      }
+      
+      console.log('Existing default templates found:', existingDefaults);
+      
+      // If there are existing default templates, remove their default status
+      if (existingDefaults && existingDefaults.length > 0) {
+        console.log('Removing default status from existing templates...');
+        
+        const { error: updateError } = await supabase
+          .from('certificate_templates')
+          .update({ is_default: false })
+          .eq('organization_slug', formData.organization_slug)
+          .eq('is_default', true);
+        
+        if (updateError) {
+          console.error('Error updating existing default templates:', updateError);
+          throw updateError;
+        }
+        
+        console.log('Successfully removed default status from existing templates');
+      }
+      
+      // Prepare form data - only include is_default if it's true
+      const finalFormData = {
+        ...formDataWithoutAutoFields
+      };
+      
+      // Only set is_default if checkbox is checked (to avoid constraint issues)
+      if (formData.is_default) {
+        finalFormData.is_default = true;
+      }
+      // If not checked, don't include is_default field at all (defaults to false in DB)
+      
+      // Debug logging
+      console.log('Creating template with data:', {
+        organization_slug: finalFormData.organization_slug,
+        is_default: finalFormData.is_default,
+        checkbox_checked: formData.is_default,
+        has_is_default_field: 'is_default' in finalFormData,
+        finalFormDataKeys: Object.keys(finalFormData)
+      });
+      
+      // Insert the new template
+      const { error } = await supabase
+        .from('certificate_templates')
+        .insert([finalFormData])
+        .select()
+        .single();
+      
+      if (error) {
+        // Handle specific constraint violation errors
+        if (error.code === '23505' && error.message.includes('unique_default_per_org')) {
+          throw new Error('Bu kuruluş için zaten bir varsayılan şablon bulunmaktadır. Lütfen önce mevcut varsayılan şablonu kaldırın veya bu şablonu varsayılan olarak işaretlemeyin.');
+        }
+        throw error;
+      }
+      
+      // Success - redirect to templates page
+      alert(t.templateCreated);
+      window.location.href = `/${locale}/certificates/templates`;
+      
+    } catch (error: unknown) {
+      console.error('Error creating template:', error);
+      alert(t.templateCreateError + ': ' + (error instanceof Error ? error.message : 'An error occurred'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Reset to defaults
+  const resetToDefaults = () => {
+    setFormData(prev => ({
+      ...prev,
+      design_settings: {
+        colors: {
+          primary: '#1A5276',
+          secondary: '#666666',
+          text: '#000',
+          title: '#1A5276',
+          name: '#000',
+          description: '#000',
+          institution: '#8a0000',
+          certificate_no: '#fff',
+          date: '#000',
+          signature: '#000',
+          course_name: '#000'
+        },
+        fonts: {
+          title: 'sans_serif',
+          body: 'sans_serif',
+          name: 'sans_serif',
+          description: 'sans_serif',
+          institution: 'sans_serif',
+          certificate_no: 'sans_serif',
+          date: 'sans_serif',
+          signature: 'sans_serif',
+          course_name: 'sans_serif'
+        },
+        font_sizes: {
+          title: 26,
+          name: 69,
+          description: 35,
+          institution: 21,
+          certificate_no: 22,
+          date: 30,
+          signature: 30,
+          course_name: 34
+        },
+        layout: {
+          title_position: { x: 42, y: 20, enabled: false, align: 'center', x_manual: 42, y_manual: 20 },
+          name_position: { x: 7, y: 35.5, enabled: true, align: 'left', x_manual: 7, y_manual: 37 },
+          description_position: { x: 7, y: 49, enabled: true, align: 'left', x_manual: 7, y_manual: 49 },
+          institution_position: { x: 23.5, y: 76.5, enabled: false, align: 'left', x_manual: 23.5, y_manual: 76.5 },
+          certificate_no_position: { x: 96, y: 93, enabled: true, align: 'right', x_manual: 96, y_manual: 93 },
+          date_position: { x: 8.9, y: 64, enabled: true, align: 'left', x_manual: 8.9, y_manual: 64 },
+          signature_position: { x: 35.3, y: 64, enabled: true, align: 'center', x_manual: 35.3, y_manual: 64 },
+          course_name_position: { x: 15.3, y: 42.7, enabled: true, align: 'left', x_manual: 15.3, y_manual: 42.7 }
+        }
+      }
+    }));
+  };
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 py-8 sm:py-12">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="animate-pulse">
+            <div className="h-8 bg-neutral-200 dark:bg-neutral-700 rounded w-64 mb-4"></div>
+            <div className="h-4 bg-neutral-200 dark:bg-neutral-700 rounded w-96 mb-8"></div>
+            <div className="space-y-6">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="bg-white dark:bg-neutral-800 rounded-lg p-6">
+                  <div className="h-6 bg-neutral-200 dark:bg-neutral-700 rounded w-48 mb-4"></div>
+                  <div className="space-y-4">
+                    <div className="h-10 bg-neutral-200 dark:bg-neutral-700 rounded"></div>
+                    <div className="h-10 bg-neutral-200 dark:bg-neutral-700 rounded"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Auth check
+  if (!clerkUser || !currentUser) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-lg text-red-600">Lütfen giriş yapınız.</div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 py-8 sm:py-12">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 text-red-600 dark:text-red-400 p-6 rounded-lg text-center">
+            <h2 className="text-xl font-semibold mb-2">{t.error}</h2>
+            <p className="mb-4">{error}</p>
+            <Link 
+              href={`/${locale}/certificates/templates`}
+              className="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Şablonlara Dön
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 py-8 sm:py-12">
+      <div className="max-w-full xl:max-w-[1500px] 2xl:max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center mb-4">
+            <Link 
+              href={`/${locale}/certificates/templates`}
+              className="mr-4 p-2 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-medium text-neutral-900 dark:text-neutral-100">
+                {t.title}
+              </h1>
+              <div className="w-12 h-px bg-[#990000] mt-2"></div>
+            </div>
+          </div>
+          <p className="text-base text-neutral-600 dark:text-neutral-400 max-w-2xl">
+            {t.subtitle}
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Left Column - Form */}
+          <div className="space-y-6">
+            {/* Basic Information */}
+            <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6">
+              <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-4 flex items-center">
+                <Palette className="w-5 h-5 mr-2 text-[#990000]" />
+                {t.basicInfo}
+              </h2>
+              
+              <div className="space-y-4">
+                {/* Template Name */}
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                    {t.templateName} *
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder={t.templateNamePlaceholder}
+                    className={`w-full px-4 py-3 border rounded-lg bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-[#990000] focus:border-transparent ${
+                      errors.name ? 'border-red-500' : 'border-neutral-300 dark:border-neutral-600'
+                    }`}
+                  />
+                  {errors.name && (
+                    <p className="text-red-500 text-sm mt-1">{errors.name}</p>
+                  )}
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                    {t.description}
+                  </label>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder={t.descriptionPlaceholder}
+                    rows={3}
+                    className="w-full px-4 py-3 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 placeholder-neutral-400 dark:placeholder-neutral-500 focus:ring-2 focus:ring-[#990000] focus:border-transparent"
+                  />
+                </div>
+
+                {/* Organization */}
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                    {t.organization} *
+                  </label>
+                  <select
+                    value={formData.organization_slug}
+                    onChange={(e) => setFormData(prev => ({ ...prev, organization_slug: e.target.value }))}
+                    className={`w-full px-4 py-3 border rounded-lg bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 focus:ring-2 focus:ring-[#990000] focus:border-transparent ${
+                      errors.organization_slug ? 'border-red-500' : 'border-neutral-300 dark:border-neutral-600'
+                    }`}
+                  >
+                    <option value="">{t.selectOrganization}</option>
+                    {organizations.map(org => (
+                      <option key={org.slug} value={org.slug}>
+                        {org.name}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.organization_slug && (
+                    <p className="text-red-500 text-sm mt-1">{errors.organization_slug}</p>
+                  )}
+                </div>
+
+                {/* Background Image */}
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                    {t.backgroundImage} *
+                    <span className="group relative">
+                      <HelpCircle className="w-4 h-4 inline-block ml-1 text-neutral-400 cursor-help" />
+                      <span className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-neutral-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+                        {t.help.backgroundImage}
+                      </span>
+                    </span>
+                  </label>
+                  <FileUpload
+                    onFileSelect={handleFileSelect}
+                    onFileRemove={handleFileRemove}
+                    currentFile={selectedFile}
+                    currentUrl={formData.background_image}
+                    accept="image/*"
+                    maxSize={10}
+                    disabled={isUploading || saving}
+                    error={errors.background_image || uploadError}
+                    placeholder="Arka plan görseli seçin veya buraya sürükleyin"
+                  />
+                  {isUploading && (
+                    <div className="mt-2 flex items-center space-x-2 text-blue-600 dark:text-blue-400">
+                      <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                      <p className="text-sm">Dosya yükleniyor...</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Default Template */}
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="is_default"
+                    checked={formData.is_default}
+                    onChange={(e) => setFormData(prev => ({ ...prev, is_default: e.target.checked }))}
+                    className="w-4 h-4 text-[#990000] bg-white dark:bg-neutral-800 border-neutral-300 dark:border-neutral-600 rounded focus:ring-[#990000] focus:ring-2"
+                  />
+                  <label htmlFor="is_default" className="ml-2 text-sm text-neutral-700 dark:text-neutral-300">
+                    {t.setAsDefault}
+                    <span className="group relative">
+                      <HelpCircle className="w-4 h-4 inline-block ml-1 text-neutral-400 cursor-help" />
+                      <span className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-neutral-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+                        {t.help.defaultTemplate}
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Design Settings */}
+            <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 flex items-center">
+                  {/* eslint-disable-next-line jsx-a11y/alt-text */}
+                  <Image className="w-5 h-5 mr-2 text-[#990000]" />
+                  {t.designSettings}
+                </h2>
+                <button
+                  type="button"
+                  onClick={resetToDefaults}
+                  className="flex items-center px-3 py-1 text-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 transition-colors"
+                >
+                  <RefreshCw className="w-4 h-4 mr-1" />
+                  {t.resetToDefaults}
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                {/* Fonts */}
+                <div>
+                  <h3 className="text-base font-medium text-neutral-900 dark:text-neutral-100 mb-3">
+                    {t.fonts}
+                  </h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+                        {t.titleFont}
+                      </label>
+                      <select
+                        value={formData.design_settings.fonts.title}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          design_settings: {
+                            ...prev.design_settings,
+                            fonts: {
+                              ...prev.design_settings.fonts,
+                              title: e.target.value
+                            }
+                          }
+                        }))}
+                        className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100"
+                      >
+                        <option value="serif">{t.fontOptions.serif}</option>
+                        <option value="sans_serif">{t.fontOptions.sans_serif}</option>
+                        <option value="monospace">{t.fontOptions.monospace}</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+                        {t.bodyFont}
+                      </label>
+                      <select
+                        value={formData.design_settings.fonts.body}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          design_settings: {
+                            ...prev.design_settings,
+                            fonts: {
+                              ...prev.design_settings.fonts,
+                              body: e.target.value
+                            }
+                          }
+                        }))}
+                        className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100"
+                      >
+                        <option value="serif">{t.fontOptions.serif}</option>
+                        <option value="sans_serif">{t.fontOptions.sans_serif}</option>
+                        <option value="monospace">{t.fontOptions.monospace}</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Element Configurations */}
+                <div className="space-y-6">
+                  {/* Title Element */}
+                  <div className="border border-neutral-200 dark:border-neutral-600 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-base font-medium text-neutral-900 dark:text-neutral-100">
+                        {t.titlePosition}
+                      </h3>
+                      <input
+                        type="checkbox"
+                        id="enable_title"
+                        checked={formData.design_settings.layout.title_position.enabled !== false}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          design_settings: {
+                            ...prev.design_settings,
+                            layout: {
+                              ...prev.design_settings.layout,
+                              title_position: {
+                                ...prev.design_settings.layout.title_position,
+                                enabled: e.target.checked
+                              }
+                            }
+                          }
+                        }))}
+                        className="w-4 h-4 text-[#990000] bg-white dark:bg-neutral-800 border-neutral-300 dark:border-neutral-600 rounded focus:ring-[#990000] focus:ring-2"
+                      />
+                    </div>
+                    {formData.design_settings.layout.title_position.enabled !== false && (
+                      <div className="space-y-4">
+                        {/* Title Color */}
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            Renk
+                          </label>
+                          <input
+                            type="color"
+                            value={formData.design_settings.colors.primary}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                colors: {
+                                  ...prev.design_settings.colors,
+                                  primary: e.target.value
+                                }
+                              }
+                            }))}
+                            className="w-20 h-10 border border-neutral-300 dark:border-neutral-600 rounded cursor-pointer"
+                          />
+                        </div>
+                        
+                        {/* Title Font Size */}
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            {t.titleSize}
+                          </label>
+                          <input
+                            type="number"
+                            min="8"
+                            max="72"
+                            value={formData.design_settings.font_sizes.title}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                font_sizes: {
+                                  ...prev.design_settings.font_sizes,
+                                  title: Number(e.target.value)
+                                }
+                              }
+                            }))}
+                            className="w-20 px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                          />
+                        </div>
+
+                        {/* Text Alignment */}
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            Metin Hizalama
+                          </label>
+                          <select
+                            value={formData.design_settings.layout.title_position.align || 'center'}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                layout: {
+                                  ...prev.design_settings.layout,
+                                  title_position: {
+                                    ...prev.design_settings.layout.title_position,
+                                    align: e.target.value as 'left' | 'center' | 'right'
+                                  }
+                                }
+                              }
+                            }))}
+                            className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                          >
+                            <option value="left">Sol</option>
+                            <option value="center">Orta</option>
+                            <option value="right">Sağ</option>
+                          </select>
+                        </div>
+
+                        {/* Manual Position Inputs */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                              X Pozisyonu (Manuel)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={formData.design_settings.layout.title_position.x_manual || formData.design_settings.layout.title_position.x}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      title_position: {
+                                        ...prev.design_settings.layout.title_position,
+                                        x: value,
+                                        x_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                              Y Pozisyonu (Manuel)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={formData.design_settings.layout.title_position.y_manual || formData.design_settings.layout.title_position.y}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      title_position: {
+                                        ...prev.design_settings.layout.title_position,
+                                        y: value,
+                                        y_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                            />
+                          </div>
+                        </div>
+                        
+                        {/* Title Position */}
+                        <div className="space-y-3">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                {t.positionX}
+                              </label>
+                              <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                                {formData.design_settings.layout.title_position.x}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={formData.design_settings.layout.title_position.x}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      title_position: {
+                                        ...prev.design_settings.layout.title_position,
+                                        x: value,
+                                        x_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-lg appearance-none cursor-pointer slider"
+                            />
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                {t.positionY}
+                              </label>
+                              <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                                {formData.design_settings.layout.title_position.y}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={formData.design_settings.layout.title_position.y}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      title_position: {
+                                        ...prev.design_settings.layout.title_position,
+                                        y: value,
+                                        y_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-lg appearance-none cursor-pointer slider"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Name Element */}
+                  <div className="border border-neutral-200 dark:border-neutral-600 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-base font-medium text-neutral-900 dark:text-neutral-100">
+                        {t.namePosition}
+                      </h3>
+                      <input
+                        type="checkbox"
+                        id="enable_name"
+                        checked={formData.design_settings.layout.name_position.enabled !== false}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          design_settings: {
+                            ...prev.design_settings,
+                            layout: {
+                              ...prev.design_settings.layout,
+                              name_position: {
+                                ...prev.design_settings.layout.name_position,
+                                enabled: e.target.checked
+                              }
+                            }
+                          }
+                        }))}
+                        className="w-4 h-4 text-[#990000] bg-white dark:bg-neutral-800 border-neutral-300 dark:border-neutral-600 rounded focus:ring-[#990000] focus:ring-2"
+                      />
+                    </div>
+                    {formData.design_settings.layout.name_position.enabled !== false && (
+                      <div className="space-y-4">
+                        {/* Name Color */}
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            Renk
+                          </label>
+                          <input
+                            type="color"
+                            value={formData.design_settings.colors.text}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                colors: {
+                                  ...prev.design_settings.colors,
+                                  text: e.target.value
+                                }
+                              }
+                            }))}
+                            className="w-20 h-10 border border-neutral-300 dark:border-neutral-600 rounded cursor-pointer"
+                          />
+                        </div>
+                        
+                        {/* Name Font Size */}
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            {t.nameSize}
+                          </label>
+                          <input
+                            type="number"
+                            min="8"
+                            max="72"
+                            value={formData.design_settings.font_sizes.name}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                font_sizes: {
+                                  ...prev.design_settings.font_sizes,
+                                  name: Number(e.target.value)
+                                }
+                              }
+                            }))}
+                            className="w-20 px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                          />
+                        </div>
+
+                        {/* Text Alignment */}
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            Metin Hizalama
+                          </label>
+                          <select
+                            value={formData.design_settings.layout.name_position.align || 'center'}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                layout: {
+                                  ...prev.design_settings.layout,
+                                  name_position: {
+                                    ...prev.design_settings.layout.name_position,
+                                    align: e.target.value as 'left' | 'center' | 'right'
+                                  }
+                                }
+                              }
+                            }))}
+                            className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                          >
+                            <option value="left">Sol</option>
+                            <option value="center">Orta</option>
+                            <option value="right">Sağ</option>
+                          </select>
+                        </div>
+
+                        {/* Manual Position Inputs */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                              X Pozisyonu (Manuel)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={formData.design_settings.layout.name_position.x_manual || formData.design_settings.layout.name_position.x}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      name_position: {
+                                        ...prev.design_settings.layout.name_position,
+                                        x: value,
+                                        x_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                              Y Pozisyonu (Manuel)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={formData.design_settings.layout.name_position.y_manual || formData.design_settings.layout.name_position.y}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      name_position: {
+                                        ...prev.design_settings.layout.name_position,
+                                        y: value,
+                                        y_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                            />
+                          </div>
+                        </div>
+                        
+                        {/* Name Position */}
+                        <div className="space-y-3">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                {t.positionX}
+                              </label>
+                              <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                                {formData.design_settings.layout.name_position.x}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={formData.design_settings.layout.name_position.x}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      name_position: {
+                                        ...prev.design_settings.layout.name_position,
+                                        x: value,
+                                        x_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-lg appearance-none cursor-pointer slider"
+                            />
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                {t.positionY}
+                              </label>
+                              <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                                {formData.design_settings.layout.name_position.y}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={formData.design_settings.layout.name_position.y}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      name_position: {
+                                        ...prev.design_settings.layout.name_position,
+                                        y: value,
+                                        y_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-lg appearance-none cursor-pointer slider"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Description Element */}
+                  <div className="border border-neutral-200 dark:border-neutral-600 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-base font-medium text-neutral-900 dark:text-neutral-100">
+                        {t.descriptionPosition}
+                      </h3>
+                      <input
+                        type="checkbox"
+                        id="enable_description"
+                        checked={formData.design_settings.layout.description_position.enabled !== false}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          design_settings: {
+                            ...prev.design_settings,
+                            layout: {
+                              ...prev.design_settings.layout,
+                              description_position: {
+                                ...prev.design_settings.layout.description_position,
+                                enabled: e.target.checked
+                              }
+                            }
+                          }
+                        }))}
+                        className="w-4 h-4 text-[#990000] bg-white dark:bg-neutral-800 border-neutral-300 dark:border-neutral-600 rounded focus:ring-[#990000] focus:ring-2"
+                      />
+                    </div>
+                    {formData.design_settings.layout.description_position.enabled !== false && (
+                      <div className="space-y-4">
+                        {/* Description Color */}
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            Renk
+                          </label>
+                          <input
+                            type="color"
+                            value={formData.design_settings.colors.description}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                colors: {
+                                  ...prev.design_settings.colors,
+                                  description: e.target.value
+                                }
+                              }
+                            }))}
+                            className="w-20 h-10 border border-neutral-300 dark:border-neutral-600 rounded cursor-pointer"
+                          />
+                        </div>
+                        
+                        {/* Description Font Size */}
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            {t.descriptionSize}
+                          </label>
+                          <input
+                            type="number"
+                            min="8"
+                            max="72"
+                            value={formData.design_settings.font_sizes.description}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                font_sizes: {
+                                  ...prev.design_settings.font_sizes,
+                                  description: Number(e.target.value)
+                                }
+                              }
+                            }))}
+                            className="w-20 px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                          />
+                        </div>
+
+                        {/* Text Alignment */}
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            Metin Hizalama
+                          </label>
+                          <select
+                            value={formData.design_settings.layout.description_position.align || 'center'}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                layout: {
+                                  ...prev.design_settings.layout,
+                                  description_position: {
+                                    ...prev.design_settings.layout.description_position,
+                                    align: e.target.value as 'left' | 'center' | 'right'
+                                  }
+                                }
+                              }
+                            }))}
+                            className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                          >
+                            <option value="left">Sol</option>
+                            <option value="center">Orta</option>
+                            <option value="right">Sağ</option>
+                          </select>
+                        </div>
+
+                        {/* Manual Position Inputs */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                              X Pozisyonu (Manuel)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={formData.design_settings.layout.description_position.x_manual || formData.design_settings.layout.description_position.x}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      description_position: {
+                                        ...prev.design_settings.layout.description_position,
+                                        x: value,
+                                        x_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                              Y Pozisyonu (Manuel)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={formData.design_settings.layout.description_position.y_manual || formData.design_settings.layout.description_position.y}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      description_position: {
+                                        ...prev.design_settings.layout.description_position,
+                                        y: value,
+                                        y_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                            />
+                          </div>
+                        </div>
+                        
+                        {/* Description Position */}
+                        <div className="space-y-3">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                {t.positionX}
+                              </label>
+                              <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                                {formData.design_settings.layout.description_position.x}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={formData.design_settings.layout.description_position.x}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      description_position: {
+                                        ...prev.design_settings.layout.description_position,
+                                        x: value,
+                                        x_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-lg appearance-none cursor-pointer slider"
+                            />
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                {t.positionY}
+                              </label>
+                              <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                                {formData.design_settings.layout.description_position.y}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={formData.design_settings.layout.description_position.y}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      description_position: {
+                                        ...prev.design_settings.layout.description_position,
+                                        y: value,
+                                        y_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-lg appearance-none cursor-pointer slider"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Course Name Element */}
+                  <div className="border border-neutral-200 dark:border-neutral-600 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-base font-medium text-neutral-900 dark:text-neutral-100">
+                        {t.courseNamePosition}
+                      </h3>
+                      <input
+                        type="checkbox"
+                        id="enable_course_name"
+                        checked={formData.design_settings.layout.course_name_position.enabled !== false}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          design_settings: {
+                            ...prev.design_settings,
+                            layout: {
+                              ...prev.design_settings.layout,
+                              course_name_position: {
+                                ...prev.design_settings.layout.course_name_position,
+                                enabled: e.target.checked
+                              }
+                            }
+                          }
+                        }))}
+                        className="w-4 h-4 text-[#990000] bg-white dark:bg-neutral-800 border-neutral-300 dark:border-neutral-600 rounded focus:ring-[#990000] focus:ring-2"
+                      />
+                    </div>
+                    {formData.design_settings.layout.course_name_position.enabled !== false && (
+                      <div className="space-y-4">
+                        {/* Course Name Color */}
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            Renk
+                          </label>
+                          <input
+                            type="color"
+                            value={formData.design_settings.colors.course_name}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                colors: {
+                                  ...prev.design_settings.colors,
+                                  course_name: e.target.value
+                                }
+                              }
+                            }))}
+                            className="w-20 h-10 border border-neutral-300 dark:border-neutral-600 rounded cursor-pointer"
+                          />
+                        </div>
+                        
+                        {/* Course Name Font Size */}
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            {t.courseNameSize}
+                          </label>
+                          <input
+                            type="number"
+                            min="8"
+                            max="72"
+                            value={formData.design_settings.font_sizes.course_name}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                font_sizes: {
+                                  ...prev.design_settings.font_sizes,
+                                  course_name: Number(e.target.value)
+                                }
+                              }
+                            }))}
+                            className="w-20 px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                          />
+                        </div>
+
+                        {/* Text Alignment */}
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            Metin Hizalama
+                          </label>
+                          <select
+                            value={formData.design_settings.layout.course_name_position.align || 'left'}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                layout: {
+                                  ...prev.design_settings.layout,
+                                  course_name_position: {
+                                    ...prev.design_settings.layout.course_name_position,
+                                    align: e.target.value as 'left' | 'center' | 'right'
+                                  }
+                                }
+                              }
+                            }))}
+                            className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                          >
+                            <option value="left">Sol</option>
+                            <option value="center">Orta</option>
+                            <option value="right">Sağ</option>
+                          </select>
+                        </div>
+
+                        {/* Manual Position Inputs */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                              X Pozisyonu (Manuel)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={formData.design_settings.layout.course_name_position.x_manual || formData.design_settings.layout.course_name_position.x}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      course_name_position: {
+                                        ...prev.design_settings.layout.course_name_position,
+                                        x: value,
+                                        x_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                              Y Pozisyonu (Manuel)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={formData.design_settings.layout.course_name_position.y_manual || formData.design_settings.layout.course_name_position.y}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      course_name_position: {
+                                        ...prev.design_settings.layout.course_name_position,
+                                        y: value,
+                                        y_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Course Name Position */}
+                        <div className="space-y-3">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                {t.positionX}
+                              </label>
+                              <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                                {formData.design_settings.layout.course_name_position.x}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={formData.design_settings.layout.course_name_position.x}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      course_name_position: {
+                                        ...prev.design_settings.layout.course_name_position,
+                                        x: value,
+                                        x_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-lg appearance-none cursor-pointer slider"
+                            />
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                {t.positionY}
+                              </label>
+                              <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                                {formData.design_settings.layout.course_name_position.y}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={formData.design_settings.layout.course_name_position.y}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      course_name_position: {
+                                        ...prev.design_settings.layout.course_name_position,
+                                        y: value,
+                                        y_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-lg appearance-none cursor-pointer slider"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Institution Element */}
+                  <div className="border border-neutral-200 dark:border-neutral-600 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-base font-medium text-neutral-900 dark:text-neutral-100">
+                        {t.institutionPosition}
+                      </h3>
+                      <input
+                        type="checkbox"
+                        id="enable_institution"
+                        checked={formData.design_settings.layout.institution_position.enabled !== false}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          design_settings: {
+                            ...prev.design_settings,
+                            layout: {
+                              ...prev.design_settings.layout,
+                              institution_position: {
+                                ...prev.design_settings.layout.institution_position,
+                                enabled: e.target.checked
+                              }
+                            }
+                          }
+                        }))}
+                        className="w-4 h-4 text-[#990000] bg-white dark:bg-neutral-800 border-neutral-300 dark:border-neutral-600 rounded focus:ring-[#990000] focus:ring-2"
+                      />
+                    </div>
+                    {formData.design_settings.layout.institution_position.enabled !== false && (
+                      <div className="space-y-4">
+                        {/* Institution Color */}
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            Renk
+                          </label>
+                          <input
+                            type="color"
+                            value={formData.design_settings.colors.text}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                colors: {
+                                  ...prev.design_settings.colors,
+                                  text: e.target.value
+                                }
+                              }
+                            }))}
+                            className="w-20 h-10 border border-neutral-300 dark:border-neutral-600 rounded cursor-pointer"
+                          />
+                        </div>
+                        
+                        {/* Institution Font Size */}
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            {t.signatureSize}
+                          </label>
+                          <input
+                            type="number"
+                            min="8"
+                            max="72"
+                            value={formData.design_settings.font_sizes.signature}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                font_sizes: {
+                                  ...prev.design_settings.font_sizes,
+                                  signature: Number(e.target.value)
+                                }
+                              }
+                            }))}
+                            className="w-20 px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                          />
+                        </div>
+
+                        {/* Text Alignment */}
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            Metin Hizalama
+                          </label>
+                          <select
+                            value={formData.design_settings.layout.institution_position.align || 'left'}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                layout: {
+                                  ...prev.design_settings.layout,
+                                  institution_position: {
+                                    ...prev.design_settings.layout.institution_position,
+                                    align: e.target.value as 'left' | 'center' | 'right'
+                                  }
+                                }
+                              }
+                            }))}
+                            className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                          >
+                            <option value="left">Sol</option>
+                            <option value="center">Orta</option>
+                            <option value="right">Sağ</option>
+                          </select>
+                        </div>
+
+                        {/* Manual Position Inputs */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                              X Pozisyonu (Manuel)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={formData.design_settings.layout.institution_position.x_manual || formData.design_settings.layout.institution_position.x}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      institution_position: {
+                                        ...prev.design_settings.layout.institution_position,
+                                        x: value,
+                                        x_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                              Y Pozisyonu (Manuel)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={formData.design_settings.layout.institution_position.y_manual || formData.design_settings.layout.institution_position.y}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      institution_position: {
+                                        ...prev.design_settings.layout.institution_position,
+                                        y: value,
+                                        y_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                            />
+                          </div>
+                        </div>
+                        
+                        {/* Institution Position */}
+                        <div className="space-y-3">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                {t.positionX}
+                              </label>
+                              <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                                {formData.design_settings.layout.institution_position.x}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={formData.design_settings.layout.institution_position.x}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      institution_position: {
+                                        ...prev.design_settings.layout.institution_position,
+                                        x: value,
+                                        x_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-lg appearance-none cursor-pointer slider"
+                            />
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                {t.positionY}
+                              </label>
+                              <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                                {formData.design_settings.layout.institution_position.y}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={formData.design_settings.layout.institution_position.y}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      institution_position: {
+                                        ...prev.design_settings.layout.institution_position,
+                                        y: value,
+                                        y_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-lg appearance-none cursor-pointer slider"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Date Element */}
+                  <div className="border border-neutral-200 dark:border-neutral-600 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-base font-medium text-neutral-900 dark:text-neutral-100">
+                        {t.datePosition}
+                      </h3>
+                      <input
+                        type="checkbox"
+                        id="enable_date"
+                        checked={formData.design_settings.layout.date_position.enabled !== false}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          design_settings: {
+                            ...prev.design_settings,
+                            layout: {
+                              ...prev.design_settings.layout,
+                              date_position: {
+                                ...prev.design_settings.layout.date_position,
+                                enabled: e.target.checked
+                              }
+                            }
+                          }
+                        }))}
+                        className="w-4 h-4 text-[#990000] bg-white dark:bg-neutral-800 border-neutral-300 dark:border-neutral-600 rounded focus:ring-[#990000] focus:ring-2"
+                      />
+                    </div>
+                    {formData.design_settings.layout.date_position.enabled !== false && (
+                      <div className="space-y-4">
+                        {/* Date Color */}
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            Renk
+                          </label>
+                          <input
+                            type="color"
+                            value={formData.design_settings.colors.date}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                colors: {
+                                  ...prev.design_settings.colors,
+                                  date: e.target.value
+                                }
+                              }
+                            }))}
+                            className="w-20 h-10 border border-neutral-300 dark:border-neutral-600 rounded cursor-pointer"
+                          />
+                        </div>
+                        
+                        {/* Date Font Size */}
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            {t.dateSize}
+                          </label>
+                          <input
+                            type="number"
+                            min="8"
+                            max="72"
+                            value={formData.design_settings.font_sizes.date}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                font_sizes: {
+                                  ...prev.design_settings.font_sizes,
+                                  date: Number(e.target.value)
+                                }
+                              }
+                            }))}
+                            className="w-20 px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                          />
+                        </div>
+
+                        {/* Text Alignment */}
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            Metin Hizalama
+                          </label>
+                          <select
+                            value={formData.design_settings.layout.date_position.align || 'left'}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                layout: {
+                                  ...prev.design_settings.layout,
+                                  date_position: {
+                                    ...prev.design_settings.layout.date_position,
+                                    align: e.target.value as 'left' | 'center' | 'right'
+                                  }
+                                }
+                              }
+                            }))}
+                            className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                          >
+                            <option value="left">Sol</option>
+                            <option value="center">Orta</option>
+                            <option value="right">Sağ</option>
+                          </select>
+                        </div>
+
+                        {/* Manual Position Inputs */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                              X Pozisyonu (Manuel)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={formData.design_settings.layout.date_position.x_manual || formData.design_settings.layout.date_position.x}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      date_position: {
+                                        ...prev.design_settings.layout.date_position,
+                                        x: value,
+                                        x_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                              Y Pozisyonu (Manuel)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={formData.design_settings.layout.date_position.y_manual || formData.design_settings.layout.date_position.y}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      date_position: {
+                                        ...prev.design_settings.layout.date_position,
+                                        y: value,
+                                        y_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                            />
+                          </div>
+                        </div>
+                        
+                        {/* Date Position */}
+                        <div className="space-y-3">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                {t.positionX}
+                              </label>
+                              <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                                {formData.design_settings.layout.date_position.x}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={formData.design_settings.layout.date_position.x}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      date_position: {
+                                        ...prev.design_settings.layout.date_position,
+                                        x: value,
+                                        x_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-lg appearance-none cursor-pointer slider"
+                            />
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                {t.positionY}
+                              </label>
+                              <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                                {formData.design_settings.layout.date_position.y}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={formData.design_settings.layout.date_position.y}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      date_position: {
+                                        ...prev.design_settings.layout.date_position,
+                                        y: value,
+                                        y_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-lg appearance-none cursor-pointer slider"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Certificate Number Element */}
+                  <div className="border border-neutral-200 dark:border-neutral-600 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-base font-medium text-neutral-900 dark:text-neutral-100">
+                        {t.certificateNoPosition}
+                      </h3>
+                      <input
+                        type="checkbox"
+                        id="enable_certificate_no"
+                        checked={formData.design_settings.layout.certificate_no_position.enabled !== false}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          design_settings: {
+                            ...prev.design_settings,
+                            layout: {
+                              ...prev.design_settings.layout,
+                              certificate_no_position: {
+                                ...prev.design_settings.layout.certificate_no_position,
+                                enabled: e.target.checked
+                              }
+                            }
+                          }
+                        }))}
+                        className="w-4 h-4 text-[#990000] bg-white dark:bg-neutral-800 border-neutral-300 dark:border-neutral-600 rounded focus:ring-[#990000] focus:ring-2"
+                      />
+                    </div>
+                    {formData.design_settings.layout.certificate_no_position.enabled !== false && (
+                      <div className="space-y-4">
+                        {/* Certificate Number Color */}
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            Renk
+                          </label>
+                          <input
+                            type="color"
+                            value={formData.design_settings.colors.text}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                colors: {
+                                  ...prev.design_settings.colors,
+                                  text: e.target.value
+                                }
+                              }
+                            }))}
+                            className="w-20 h-10 border border-neutral-300 dark:border-neutral-600 rounded cursor-pointer"
+                          />
+                        </div>
+                        
+                        {/* Certificate Number Font Size */}
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            {t.signatureSize}
+                          </label>
+                          <input
+                            type="number"
+                            min="8"
+                            max="72"
+                            value={formData.design_settings.font_sizes.signature}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                font_sizes: {
+                                  ...prev.design_settings.font_sizes,
+                                  signature: Number(e.target.value)
+                                }
+                              }
+                            }))}
+                            className="w-20 px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                          />
+                        </div>
+
+                        {/* Text Alignment */}
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            Metin Hizalama
+                          </label>
+                          <select
+                            value={formData.design_settings.layout.certificate_no_position.align || 'right'}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                layout: {
+                                  ...prev.design_settings.layout,
+                                  certificate_no_position: {
+                                    ...prev.design_settings.layout.certificate_no_position,
+                                    align: e.target.value as 'left' | 'center' | 'right'
+                                  }
+                                }
+                              }
+                            }))}
+                            className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                          >
+                            <option value="left">Sol</option>
+                            <option value="center">Orta</option>
+                            <option value="right">Sağ</option>
+                          </select>
+                        </div>
+
+                        {/* Manual Position Inputs */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                              X Pozisyonu (Manuel)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={formData.design_settings.layout.certificate_no_position.x_manual || formData.design_settings.layout.certificate_no_position.x}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      certificate_no_position: {
+                                        ...prev.design_settings.layout.certificate_no_position,
+                                        x: value,
+                                        x_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                              Y Pozisyonu (Manuel)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={formData.design_settings.layout.certificate_no_position.y_manual || formData.design_settings.layout.certificate_no_position.y}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      certificate_no_position: {
+                                        ...prev.design_settings.layout.certificate_no_position,
+                                        y: value,
+                                        y_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                            />
+                          </div>
+                        </div>
+                        
+                        {/* Certificate Number Position */}
+                        <div className="space-y-3">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                {t.positionX}
+                              </label>
+                              <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                                {formData.design_settings.layout.certificate_no_position.x}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={formData.design_settings.layout.certificate_no_position.x}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      certificate_no_position: {
+                                        ...prev.design_settings.layout.certificate_no_position,
+                                        x: value,
+                                        x_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-lg appearance-none cursor-pointer slider"
+                            />
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                {t.positionY}
+                              </label>
+                              <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                                {formData.design_settings.layout.certificate_no_position.y}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={formData.design_settings.layout.certificate_no_position.y}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      certificate_no_position: {
+                                        ...prev.design_settings.layout.certificate_no_position,
+                                        y: value,
+                                        y_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-lg appearance-none cursor-pointer slider"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Signature Element */}
+                  <div className="border border-neutral-200 dark:border-neutral-600 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-base font-medium text-neutral-900 dark:text-neutral-100">
+                        {t.signaturePosition}
+                      </h3>
+                      <input
+                        type="checkbox"
+                        id="enable_signature"
+                        checked={formData.design_settings.layout.signature_position.enabled !== false}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          design_settings: {
+                            ...prev.design_settings,
+                            layout: {
+                              ...prev.design_settings.layout,
+                              signature_position: {
+                                ...prev.design_settings.layout.signature_position,
+                                enabled: e.target.checked
+                              }
+                            }
+                          }
+                        }))}
+                        className="w-4 h-4 text-[#990000] bg-white dark:bg-neutral-800 border-neutral-300 dark:border-neutral-600 rounded focus:ring-[#990000] focus:ring-2"
+                      />
+                    </div>
+                    {formData.design_settings.layout.signature_position.enabled !== false && (
+                      <div className="space-y-4">
+                        {/* Signature Color */}
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            Renk
+                          </label>
+                          <input
+                            type="color"
+                            value={formData.design_settings.colors.text}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                colors: {
+                                  ...prev.design_settings.colors,
+                                  text: e.target.value
+                                }
+                              }
+                            }))}
+                            className="w-20 h-10 border border-neutral-300 dark:border-neutral-600 rounded cursor-pointer"
+                          />
+                        </div>
+                        
+                        {/* Signature Font Size */}
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            {t.signatureSize}
+                          </label>
+                          <input
+                            type="number"
+                            min="8"
+                            max="72"
+                            value={formData.design_settings.font_sizes.signature}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                font_sizes: {
+                                  ...prev.design_settings.font_sizes,
+                                  signature: Number(e.target.value)
+                                }
+                              }
+                            }))}
+                            className="w-20 px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                          />
+                        </div>
+
+                        {/* Text Alignment */}
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            Metin Hizalama
+                          </label>
+                          <select
+                            value={formData.design_settings.layout.signature_position.align || 'center'}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                layout: {
+                                  ...prev.design_settings.layout,
+                                  signature_position: {
+                                    ...prev.design_settings.layout.signature_position,
+                                    align: e.target.value as 'left' | 'center' | 'right'
+                                  }
+                                }
+                              }
+                            }))}
+                            className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                          >
+                            <option value="left">Sol</option>
+                            <option value="center">Orta</option>
+                            <option value="right">Sağ</option>
+                          </select>
+                        </div>
+
+                        {/* Manual Position Inputs */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                              X Pozisyonu (Manuel)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={formData.design_settings.layout.signature_position.x_manual || formData.design_settings.layout.signature_position.x}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      signature_position: {
+                                        ...prev.design_settings.layout.signature_position,
+                                        x: value,
+                                        x_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                              Y Pozisyonu (Manuel)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={formData.design_settings.layout.signature_position.y_manual || formData.design_settings.layout.signature_position.y}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      signature_position: {
+                                        ...prev.design_settings.layout.signature_position,
+                                        y: value,
+                                        y_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                            />
+                          </div>
+                        </div>
+                        
+                        {/* Signature Position */}
+                        <div className="space-y-3">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                {t.positionX}
+                              </label>
+                              <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                                {formData.design_settings.layout.signature_position.x}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={formData.design_settings.layout.signature_position.x}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      signature_position: {
+                                        ...prev.design_settings.layout.signature_position,
+                                        x: value,
+                                        x_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-lg appearance-none cursor-pointer slider"
+                            />
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                {t.positionY}
+                              </label>
+                              <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                                {formData.design_settings.layout.signature_position.y}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={formData.design_settings.layout.signature_position.y}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      signature_position: {
+                                        ...prev.design_settings.layout.signature_position,
+                                        y: value,
+                                        y_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-lg appearance-none cursor-pointer slider"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex space-x-4">
+              <Link
+                href={`/${locale}/certificates/templates`}
+                className="flex-1 px-6 py-3 text-neutral-700 dark:text-neutral-300 bg-neutral-200 dark:bg-neutral-700 hover:bg-neutral-300 dark:hover:bg-neutral-600 rounded-lg transition-colors text-center font-medium"
+              >
+                {t.cancel}
+              </Link>
+              <button
+                type="submit"
+                disabled={saving || isUploading}
+                className="flex-1 px-6 py-3 bg-[#990000] hover:bg-[#880000] text-white rounded-lg transition-colors font-medium flex items-center justify-center disabled:opacity-50"
+              >
+                {saving ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    {t.saving}
+                  </>
+                ) : isUploading ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    Dosya Yükleniyor...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-5 h-5 mr-2" />
+                    {t.save}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Right Column - Preview */}
+          <div className="lg:sticky lg:top-8 lg:h-fit">
+            <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 flex items-center">
+                  <Eye className="w-5 h-5 mr-2 text-[#990000]" />
+                  {t.previewTemplate}
+                </h2>
+                <button
+                  type="button"
+                  onClick={generatePreview}
+                  disabled={isGeneratingPreview || !formData.background_image}
+                  className="px-3 py-1 text-sm bg-[#990000] hover:bg-[#880000] text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isGeneratingPreview ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    'Yenile'
+                  )}
+                </button>
+              </div>
+              
+              {/* Certificate Preview */}
+              <div className="relative aspect-[4/3] bg-neutral-100 dark:bg-neutral-700 rounded-lg overflow-hidden border-2 border-dashed border-neutral-300 dark:border-neutral-600">
+                {formData.background_image ? (
+                  <div className="w-full h-full relative">
+                    {/* Canvas Preview */}
+                    <canvas
+                      ref={canvasRef}
+                      className="w-full h-full object-contain"
+                      style={{ display: previewCanvas ? 'block' : 'none' }}
+                    />
+                    
+                    {/* Loading state */}
+                    {isGeneratingPreview && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
+                        <div className="text-white text-center">
+                          <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                          <p className="text-sm">Önizleme oluşturuluyor...</p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Fallback image if canvas fails */}
+                    {!previewCanvas && !isGeneratingPreview && (
+                      <NextImage 
+                        src={formData.background_image} 
+                        alt="Preview"
+                        width={400}
+                        height={300}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    )}
+                  </div>
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-neutral-500 dark:text-neutral-400">
+                    <div className="text-center">
+                      {/* eslint-disable-next-line jsx-a11y/alt-text */}
+                      <Image className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">Arka plan görseli yükleyin</p>
+                    </div>
+                  </div>
+                )}
+                
+              </div>
+              
+              {/* Preview Info */}
+              <div className="mt-4 text-xs text-neutral-500 dark:text-neutral-400 space-y-1">
+                <p><strong>Şablon:</strong> {formData.name || 'Şablon Adı'}</p>
+                <p><strong>Kurs:</strong> {t.sampleCourse}</p>
+                <p><strong>Kuruluş:</strong> {organizations.find(org => org.slug === formData.organization_slug)?.name || 'Kuruluş'}</p>
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}

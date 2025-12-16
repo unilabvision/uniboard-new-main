@@ -1,0 +1,72 @@
+import { 
+  DollarSign, 
+  BarChart3, 
+  Star, 
+  Home,
+  Link2
+} from 'lucide-react';
+
+export const influencerSidebarContent = {
+  tr: {
+    title: "Influencer Panel",
+    items: [
+      {
+        name: "Ana Sayfa",
+        href: "/",
+        icon: Home
+      },
+      {
+        name: "Satışlarım",
+        href: "/sales",
+        icon: DollarSign
+      },
+      {
+        name: "Performans",
+        href: "/analytics",
+        icon: BarChart3
+      },
+      {
+        name: "Kampanyalarım",
+        href: "/campaigns",
+        icon: Star
+      },
+      {
+        name: "Dokümanlarım",
+        href: "/docs",
+        icon: Link2
+      },
+      
+    ]
+  },
+  en: {
+    title: "Influencer Panel",
+    items: [
+       {
+        name: "Home",
+        href: "/",
+        icon: Home
+      },
+      {
+        name: "My Sales",
+        href: "/sales",
+        icon: DollarSign
+      },
+      {
+        name: "Performance",
+        href: "/analytics",
+        icon: BarChart3
+      },
+      {
+        name: "My Campaigns", 
+        href: "/campaigns",
+        icon: Star
+      },
+      {
+        name: "Docs",
+        href: "/docs",
+        icon: Link2
+      },
+      
+    ]
+  }
+};

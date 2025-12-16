@@ -1,0 +1,695 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #ffffff;
+  --foreground: #141414;
+  --primary: #a90013; /* Main accent color - dark red */
+  --secondary: #ffdee2; /* Secondary color - light pink */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #141414;
+    --foreground: #ffdee2;
+    --primary: #a90013; /* Main accent color stays the same in dark mode */
+    --secondary: #ffdee2; /* Secondary color stays the same in dark mode */
+  }
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-arimo), Arial, Helvetica, sans-serif;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+/* Dark mode overrides */
+.dark {
+  --background: #141414;
+  --foreground: #ffdee2;
+  --primary: #a90013;
+  --secondary: #ffdee2;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 100vh;
+  }
+}
+
+@keyframes fadeRight {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+.animate-slideDown {
+  animation: slideDown 0.4s ease-out forwards;
+}
+
+.animate-fadeRight {
+  animation: fadeRight 0.4s ease-out forwards;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+
+/* globals.css dosyasına eklenecek animasyon stilleri */
+
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-20px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes pulse-slow {
+  0% {
+    opacity: 0.3;
+    transform: scale(0.95);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 0.3;
+    transform: scale(0.95);
+  }
+}
+
+@keyframes blob {
+  0% {
+    transform: scale(1) translate(0px, 0px);
+  }
+  33% {
+    transform: scale(1.1) translate(20px, -20px);
+  }
+  66% {
+    transform: scale(0.9) translate(-20px, 20px);
+  }
+  100% {
+    transform: scale(1) translate(0px, 0px);
+  }
+}
+
+@keyframes fade-in {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scroll-down {
+  0% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-pulse {
+  animation: pulse 4s ease-in-out infinite;
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 8s ease-in-out infinite;
+}
+
+.animate-blob {
+  animation: blob 10s ease-in-out infinite;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.8s ease-out forwards;
+}
+
+.animate-fade-in-delayed {
+  opacity: 0;
+  animation: fade-in 0.8s ease-out forwards;
+  animation-delay: 0.3s;
+}
+
+.animate-fade-in-delayed-more {
+  opacity: 0;
+  animation: fade-in 0.8s ease-out forwards;
+  animation-delay: 0.6s;
+}
+
+.animate-scroll-down {
+  animation: scroll-down 2s ease-in-out infinite;
+}
+
+/* Add these styles to your globals.css file */
+
+/* Typography improvements */
+.prose {
+  /* Improve paragraph spacing */
+  --prose-p-spacing: 1.5rem;
+  --prose-li-spacing: 0.5rem;
+}
+
+.prose p {
+  margin-top: 0;
+  margin-bottom: var(--prose-p-spacing);
+  line-height: 1.8;
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+  color: #1f2937; /* text-neutral-800 in light mode */
+  margin-top: 2em;
+  margin-bottom: 1em;
+  font-family: var(--font-syne), Arial, Helvetica, sans-serif;
+}
+
+.dark .prose h1, 
+.dark .prose h2, 
+.dark .prose h3, 
+.dark .prose h4, 
+.dark .prose h5, 
+.dark .prose h6 {
+  color: #f3f4f6; /* text-neutral-100 in dark mode */
+  font-family: var(--font-syne), Arial, Helvetica, sans-serif;
+}
+
+.prose ul, .prose ol {
+  margin-top: 1em;
+  margin-bottom: 1em;
+}
+
+.prose li {
+  margin-top: var(--prose-li-spacing);
+  margin-bottom: var(--prose-li-spacing);
+}
+
+.prose a {
+  color: #a90013; /* Main brand color */
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.prose a:hover {
+  color: #8a0010; /* Darker shade of brand color */
+  text-decoration: underline;
+}
+
+.dark .prose a {
+  color: #ffdee2; /* Light brand color for dark mode */
+}
+
+.dark .prose a:hover {
+  color: #ffced5; /* Lighter shade for dark mode */
+}
+
+/* Make text more readable in light mode */
+.prose {
+  color: #374151; /* text-neutral-700 */
+}
+
+.dark .prose {
+  color: #d1d5db; /* text-neutral-300 */
+}
+
+/* Blog content specific styles */
+.blog-content p {
+  margin-bottom: 1.5rem;
+}
+
+.blog-content h2 {
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  font-family: var(--font-syne), Arial, Helvetica, sans-serif;
+}
+
+.blog-content h3 {
+  margin-top: 1.75rem;
+  margin-bottom: 0.75rem;
+  font-family: var(--font-syne), Arial, Helvetica, sans-serif;
+}
+
+/* Add HTML content styling */
+.html-content p {
+  margin-bottom: 1.5rem;
+  color: #374151; /* text-neutral-700 */
+}
+
+.dark .html-content p {
+  color: #d1d5db; /* text-neutral-300 */
+}
+
+/* Add these styles to your globals.css file */
+
+/* Rich Text Content Styles - for proper HTML rendering in blog content */
+.rich-text-content h1 {
+  font-size: 2.25rem;
+  font-weight: 500;
+  margin-top: 2.5rem;
+  margin-bottom: 1.5rem;
+  color: #1f2937; /* text-neutral-800 */
+  font-family: var(--font-syne), Arial, Helvetica, sans-serif;
+}
+
+.rich-text-content h2 {
+  font-size: 1.875rem;
+  font-weight: 400;
+  margin-top: 2.25rem;
+  margin-bottom: 1.25rem;
+  color: #1f2937; /* text-neutral-800 */
+  font-family: var(--font-syne), Arial, Helvetica, sans-serif;
+}
+
+.rich-text-content h3 {
+  font-size: 1.5rem;
+  font-weight: 400;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  color: #1f2937; /* text-neutral-800 */
+  font-family: var(--font-syne), Arial, Helvetica, sans-serif;
+}
+
+.rich-text-content h4 {
+  font-size: 1.25rem;
+  font-weight: 400;
+  margin-top: 1.75rem;
+  margin-bottom: 0.75rem;
+  color: #1f2937; /* text-neutral-800 */
+  font-family: var(--font-syne), Arial, Helvetica, sans-serif;
+}
+
+.rich-text-content h5 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  color: #1f2937; /* text-neutral-800 */
+  font-family: var(--font-syne), Arial, Helvetica, sans-serif;
+}
+
+.rich-text-content h6 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  color: #1f2937; /* text-neutral-800 */
+  font-family: var(--font-syne), Arial, Helvetica, sans-serif;
+}
+
+.rich-text-content p {
+  margin-bottom: 1.5rem;
+  line-height: 1.8;
+  color: #374151; /* text-neutral-700 */
+}
+
+.rich-text-content a {
+  color: #a90013; /* Brand primary color */
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s;
+  /* Add these properties to fix link overflow on mobile */
+  overflow-wrap: break-word;
+  word-wrap: break-word; /* For older browsers */
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.rich-text-content a:hover {
+  text-decoration: underline;
+  color: #8a0010; /* Darker brand color */
+}
+
+.rich-text-content ul, 
+.rich-text-content ol {
+  margin-top: 1rem;
+  margin-bottom: 1.5rem;
+  padding-left: 1.5rem;
+}
+
+.rich-text-content ul {
+  list-style-type: disc;
+}
+
+.rich-text-content ol {
+  list-style-type: decimal;
+}
+
+.rich-text-content li {
+  margin-bottom: 0.5rem;
+  color: #374151; /* text-neutral-700 */
+}
+
+.rich-text-content blockquote {
+  margin: 1.5rem 0;
+  padding: 0.75rem 1.5rem;
+  border-left: 4px solid #a90013; /* Brand primary color */
+  background-color: #f9fafb; /* bg-gray-50 */
+  font-style: italic;
+  color: #4b5563; /* text-neutral-600 */
+}
+
+.rich-text-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.375rem; /* rounded-md */
+  margin: 1.5rem 0;
+}
+
+.rich-text-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+}
+
+.rich-text-content th {
+  background-color: #f3f4f6; /* bg-gray-100 */
+  font-weight: 600;
+  text-align: left;
+  padding: 0.75rem;
+  border: 1px solid #e5e7eb; /* border-gray-200 */
+}
+
+.rich-text-content td {
+  padding: 0.75rem;
+  border: 1px solid #e5e7eb; /* border-gray-200 */
+}
+
+.rich-text-content code {
+  font-family: var(--font-geist-mono, monospace);
+  background-color: #f3f4f6; /* bg-gray-100 */
+  padding: 0.2rem 0.4rem;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  color: #1f2937; /* text-neutral-800 */
+}
+
+/* Rich text content'te strong ve b etiketleri için güncelleme */
+.rich-text-content strong,
+.rich-text-content b {
+  font-weight: 550; /* semibold - zaten doğru */
+  color: #1f2937; /* text-neutral-800 - light mode */
+}
+
+/* Dark mode için strong ve b etiketleri */
+.dark .rich-text-content strong,
+.dark .rich-text-content b {
+  color: #f3f4f6; /* text-neutral-100 - dark mode */
+}
+
+.rich-text-content pre {
+  background-color: #1f2937; /* bg-neutral-800 */
+  color: #f9fafb; /* text-gray-50 */
+  padding: 1rem;
+  border-radius: 0.375rem;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+}
+
+.rich-text-content pre code {
+  background-color: transparent;
+  color: inherit;
+  padding: 0;
+  border-radius: 0;
+}
+
+/* Dark mode overrides */
+.dark .rich-text-content h1,
+.dark .rich-text-content h2,
+.dark .rich-text-content h3,
+.dark .rich-text-content h4,
+.dark .rich-text-content h5,
+.dark .rich-text-content h6 {
+  color: #f3f4f6; /* text-neutral-100 in dark mode */
+  font-family: var(--font-syne), Arial, Helvetica, sans-serif;
+}
+
+.dark .rich-text-content p,
+.dark .rich-text-content li {
+  color: #d1d5db; /* text-neutral-300 in dark mode */
+}
+
+.dark .rich-text-content a {
+  color: #ffdee2; /* Light brand color for dark mode */
+}
+
+.dark .rich-text-content a:hover {
+  color: #ffced5; /* Lighter shade for dark mode */
+}
+
+.dark .rich-text-content blockquote {
+  background-color: #374151; /* bg-neutral-700 */
+  border-left-color: #ffdee2; /* Light brand color */
+  color: #e5e7eb; /* text-neutral-200 */
+}
+
+.dark .rich-text-content code {
+  background-color: #374151; /* bg-neutral-700 */
+  color: #f3f4f6; /* text-neutral-100 */
+}
+
+.dark .rich-text-content pre {
+  background-color: #111827; /* bg-neutral-900 */
+}
+
+.dark .rich-text-content th {
+  background-color: #374151; /* bg-neutral-700 */
+  border-color: #4b5563; /* border-neutral-600 */
+}
+
+.dark .rich-text-content td {
+  border-color: #4b5563; /* border-neutral-600 */
+}
+
+/* Special layout styles */
+.rich-text-content .image-caption {
+  text-align: center;
+  color: #6b7280; /* text-neutral-500 */
+  font-size: 0.875rem;
+  margin-top: -0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.rich-text-content .note-box {
+  background-color: #fffbeb; /* bg-amber-50 */
+  border-left: 4px solid #f59e0b; /* border-amber-500 */
+  padding: 1rem;
+  margin: 1.5rem 0;
+  border-radius: 0.25rem;
+}
+
+.dark .rich-text-content .note-box {
+  background-color: rgba(245, 158, 11, 0.1); /* bg-amber-500/10 */
+}
+
+.rich-text-content .warning-box {
+  background-color: #fef2f2; /* bg-red-50 */
+  border-left: 4px solid #ef4444; /* border-red-500 */
+  padding: 1rem;
+  margin: 1.5rem 0;
+  border-radius: 0.25rem;
+}
+
+.dark .rich-text-content .warning-box {
+  background-color: rgba(239, 68, 68, 0.1); /* bg-red-500/10 */
+}
+
+.rich-text-content .tip-box {
+  background-color: #f0fdf4; /* bg-green-50 */
+  border-left: 4px solid #22c55e; /* border-green-500 */
+  padding: 1rem;
+  margin: 1.5rem 0;
+  border-radius: 0.25rem;
+}
+
+.dark .rich-text-content .tip-box {
+  background-color: rgba(34, 197, 94, 0.1); /* bg-green-500/10 */
+}
+
+.dna-helix-large {
+  transform: scale(2); /* Adjust scale as needed */
+}
+
+/* CSS dosyanıza ekleyebilirsiniz */
+@media (prefers-reduced-motion: reduce) {
+  .transition-all,
+  .transition-transform,
+  .transition-opacity {
+    transition: none !important;
+  }
+}
+
+/* GPU hızlandırması için */
+.gpu-accelerated {
+  transform: translateZ(0);
+  will-change: transform, opacity;
+}
+
+/* globals.css dosyasına ekleyin */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.6s ease-out;
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.8s ease-out;
+}
+
+/* Custom Slider Styles */
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 4px;
+  background: #e5e7eb; /* neutral-200 */
+  outline: none;
+  transition: all 0.2s ease-in-out;
+}
+
+.dark .slider {
+  background: #374151; /* neutral-700 */
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #990000; /* Brand color */
+  cursor: pointer;
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease-in-out;
+}
+
+.slider::-webkit-slider-thumb:hover {
+  background: #cc0000;
+  transform: scale(1.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.slider::-webkit-slider-thumb:active {
+  transform: scale(0.95);
+}
+
+.slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #990000; /* Brand color */
+  cursor: pointer;
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease-in-out;
+}
+
+.slider::-moz-range-thumb:hover {
+  background: #cc0000;
+  transform: scale(1.1);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.slider::-moz-range-thumb:active {
+  transform: scale(0.95);
+}
+
+.dark .slider::-webkit-slider-thumb {
+  border-color: #1f2937; /* neutral-800 */
+}
+
+.dark .slider::-moz-range-thumb {
+  border-color: #1f2937; /* neutral-800 */
+}
+
+/* Focus states for accessibility */
+.slider:focus {
+  box-shadow: 0 0 0 3px rgba(153, 0, 0, 0.1);
+}
+
+.slider:focus::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px rgba(153, 0, 0, 0.3);
+}
+
+.slider:focus::-moz-range-thumb {
+  box-shadow: 0 0 0 3px rgba(153, 0, 0, 0.3);
+}
