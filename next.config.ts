@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Avoid "workspace root" warnings on Windows when Next detects other lockfiles outside the repo.
+  // This also makes Vercel output tracing deterministic.
+  outputFileTracingRoot: __dirname,
   // Server external packages (moved from experimental)
   serverExternalPackages: [],
   images: {
