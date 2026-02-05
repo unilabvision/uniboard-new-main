@@ -10,6 +10,7 @@ interface Module {
   description_en: string;
   icon: string;
   is_active: boolean;
+  is_super_admin?: boolean;
 }
 
 interface UseUserModulesReturn {
@@ -17,6 +18,8 @@ interface UseUserModulesReturn {
   loading: boolean;
   error: string | null;
   refetch: () => void;
+  /** Kullanıcı süper admin ise true - tüm modüllere erişim */
+  isSuperAdmin: boolean;
 }
 
 export function useUserModules(): UseUserModulesReturn {
@@ -24,6 +27,7 @@ export function useUserModules(): UseUserModulesReturn {
   const [modules, setModules] = useState<Module[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   const fetchModules = useCallback(async () => {
     if (!user || !isLoaded) {
@@ -59,6 +63,7 @@ export function useUserModules(): UseUserModulesReturn {
       }
       
       setModules(data.modules || []);
+      setIsSuperAdmin(data.isSuperAdmin ?? (data.modules || []).some((m: Module) => m.is_super_admin === true));
       
     } catch (err: unknown) {
       console.error('💥 useUserModules error:', err);
@@ -82,6 +87,7 @@ export function useUserModules(): UseUserModulesReturn {
     modules,
     loading,
     error,
-    refetch
+    refetch,
+    isSuperAdmin,
   };
 }

@@ -31,7 +31,7 @@ export default function InfluencerLayout({ children, params }: DashboardLayoutPr
   const [mounted, setMounted] = useState(false);
   const [hasInfluencerAccess, setHasInfluencerAccess] = useState<boolean | null>(null);
   
-  const { modules, loading, error } = useUserModules();
+  const { modules, loading, error, isSuperAdmin } = useUserModules();
 
   // Resolve params
   useEffect(() => {
@@ -53,8 +53,8 @@ export default function InfluencerLayout({ children, params }: DashboardLayoutPr
         return;
       }
       
-      // Check if user has influencer module access
-      const hasInfluencer = modules.some(module => module.key === 'influencer');
+      // Check if user has influencer module access (süper admin her modüle erişebilir)
+      const hasInfluencer = isSuperAdmin || modules.some(module => module.key === 'influencer');
       setHasInfluencerAccess(hasInfluencer);
       
       console.log('🔍 Influencer access check:', {
@@ -65,7 +65,7 @@ export default function InfluencerLayout({ children, params }: DashboardLayoutPr
     };
     
     checkInfluencerAccess();
-  }, [modules, loading, error]);
+  }, [modules, loading, error, isSuperAdmin]);
 
   // Listen for sidebar minimize state changes
   useEffect(() => {

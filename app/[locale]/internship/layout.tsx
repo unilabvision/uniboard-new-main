@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import GlobalDashboardSidebar from '../../components/GlobalDashboardSidebar';
 import { useUserModules } from '../../hooks/useUserModules';
 
-interface CertificatesLayoutProps {
+interface InternshipLayoutProps {
   children: React.ReactNode;
   params: Promise<{
     locale: string;
@@ -25,11 +25,11 @@ declare global {
   }
 }
 
-export default function CertificatesLayout({ children, params }: CertificatesLayoutProps) {
+export default function InternshipLayout({ children, params }: InternshipLayoutProps) {
   const [isMinimized, setIsMinimized] = useState(false);
   const [locale, setLocale] = useState<string>('');
   const [mounted, setMounted] = useState(false);
-  const [hasCertificatesAccess, setHasCertificatesAccess] = useState<boolean | null>(null);
+  const [hasInternshipAccess, setHasInternshipAccess] = useState<boolean | null>(null);
   
   const { modules, loading, error, isSuperAdmin } = useUserModules();
 
@@ -43,28 +43,28 @@ export default function CertificatesLayout({ children, params }: CertificatesLay
     resolveParams();
   }, [params]);
 
-  // Check certificates module access
+  // Check internship module access
   useEffect(() => {
-    const checkCertificatesAccess = () => {
+    const checkInternshipAccess = () => {
       if (loading) return;
       
       if (error) {
-        setHasCertificatesAccess(false);
+        setHasInternshipAccess(false);
         return;
       }
       
-      // Check if user has certificates module access (süper admin her modüle erişebilir)
-      const hasCertificates = isSuperAdmin || modules.some(module => module.key === 'certificates');
-      setHasCertificatesAccess(hasCertificates);
+      // Check if user has internship module access (süper admin her modüle erişebilir)
+      const hasInternship = isSuperAdmin || modules.some(module => module.key === 'internship');
+      setHasInternshipAccess(hasInternship);
       
-      console.log('🔍 Certificates access check:', {
+      console.log('🔍 Internship access check:', {
         modulesCount: modules.length,
         modules: modules.map(m => m.key),
-        hasCertificates
+        hasInternship
       });
     };
     
-    checkCertificatesAccess();
+    checkInternshipAccess();
   }, [modules, loading, error, isSuperAdmin]);
 
   // Listen for sidebar minimize state changes
@@ -86,7 +86,7 @@ export default function CertificatesLayout({ children, params }: CertificatesLay
   }, []);
 
   // Loading state
-  if (!mounted || loading || hasCertificatesAccess === null) {
+  if (!mounted || loading || hasInternshipAccess === null) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-900 dark:to-neutral-800 flex items-center justify-center">
         <div className="text-center">
@@ -100,7 +100,7 @@ export default function CertificatesLayout({ children, params }: CertificatesLay
   }
 
   // Access denied state
-  if (hasCertificatesAccess === false) {
+  if (hasInternshipAccess === false) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-900 dark:to-neutral-800 flex items-center justify-center py-12">
         <div className="max-w-md mx-auto text-center px-6">
@@ -119,8 +119,8 @@ export default function CertificatesLayout({ children, params }: CertificatesLay
           {/* Açıklama */}
           <p className="text-neutral-600 dark:text-neutral-400 mb-6 leading-relaxed">
             {locale === 'tr' 
-              ? 'Sertifika modülüne erişim yetkiniz bulunmamaktadır. Erişim için lütfen yöneticinizle iletişime geçin.'
-              : 'You do not have access to the Certificates module. Please contact your administrator for access.'
+              ? 'Staj başvuruları modülüne erişim yetkiniz bulunmamaktadır. Erişim için lütfen yöneticinizle iletişime geçin.'
+              : 'You do not have access to the Internship Applications module. Please contact your administrator for access.'
             }
           </p>
 
@@ -135,12 +135,12 @@ export default function CertificatesLayout({ children, params }: CertificatesLay
               </span>
             </div>
             <div className="text-yellow-700 dark:text-yellow-300 font-medium">
-              Certificates Dashboard
+              {locale === 'tr' ? 'Staj Başvuruları Paneli' : 'Internship Applications Panel'}
             </div>
             <div className="text-sm text-yellow-600 dark:text-yellow-400 mt-1">
               {locale === 'tr' 
-                ? 'Sertifika oluşturma ve yönetimi'
-                : 'Certificate creation and management'
+                ? 'Staj başvurularını görüntüleme ve yönetme'
+                : 'View and manage internship applications'
               }
             </div>
           </div>
@@ -175,7 +175,7 @@ export default function CertificatesLayout({ children, params }: CertificatesLay
             <div className="mt-8 text-xs text-neutral-500 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-800 p-3 rounded">
               <div>Debug Info:</div>
               <div>Available modules: {modules.map(m => m.key).join(', ') || 'None'}</div>
-              <div>Has certificates access: {hasCertificatesAccess?.toString()}</div>
+              <div>Has internship access: {hasInternshipAccess?.toString()}</div>
               <div>Loading: {loading.toString()}</div>
               <div>Error: {error || 'None'}</div>
             </div>

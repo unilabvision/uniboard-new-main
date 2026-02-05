@@ -17,7 +17,7 @@ export default function SettingsLayout({ children, params }: DashboardLayoutProp
   const [mounted, setMounted] = useState(false);
   const [hasSettingsAccess, setHasSettingsAccess] = useState<boolean | null>(null);
   
-  const { modules, loading, error } = useUserModules();
+  const { modules, loading, error, isSuperAdmin } = useUserModules();
 
   // Resolve params
   useEffect(() => {
@@ -39,8 +39,8 @@ export default function SettingsLayout({ children, params }: DashboardLayoutProp
         return;
       }
       
-      // Settings modülüne erişim yetkisi olup olmadığını kontrol et
-      const hasSettings = modules.some(module => 
+      // Settings modülüne erişim yetkisi (süper admin her modüle erişebilir)
+      const hasSettings = isSuperAdmin || modules.some(module => 
         module.key === 'settings' || 
         module.key === 'admin'
       );
@@ -58,7 +58,7 @@ export default function SettingsLayout({ children, params }: DashboardLayoutProp
     };
     
     checkSettingsAccess();
-  }, [modules, loading, error]);
+  }, [modules, loading, error, isSuperAdmin]);
 
   // Listen for sidebar minimize state changes
   useEffect(() => {

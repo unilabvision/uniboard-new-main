@@ -31,7 +31,7 @@ export default function LMSLayout({ children, params }: LMSLayoutProps) {
   const [mounted, setMounted] = useState(false);
   const [hasLMSAccess, setHasLMSAccess] = useState<boolean | null>(null);
   
-  const { modules, loading, error } = useUserModules();
+  const { modules, loading, error, isSuperAdmin } = useUserModules();
 
   // Resolve params
   useEffect(() => {
@@ -53,8 +53,8 @@ export default function LMSLayout({ children, params }: LMSLayoutProps) {
         return;
       }
       
-      // Check if user has LMS module access
-      const hasLMS = modules.some(module => module.key === 'lms-2');
+      // Check if user has LMS module access (süper admin her modüle erişebilir)
+      const hasLMS = isSuperAdmin || modules.some(module => module.key === 'lms-2');
       setHasLMSAccess(hasLMS);
       
       console.log('🔍 LMS access check:', {
@@ -65,7 +65,7 @@ export default function LMSLayout({ children, params }: LMSLayoutProps) {
     };
     
     checkLMSAccess();
-  }, [modules, loading, error]);
+  }, [modules, loading, error, isSuperAdmin]);
 
   // Listen for sidebar minimize state changes
   useEffect(() => {

@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { useUser, useClerk } from '@clerk/nextjs';
 import { useUserModules } from '../hooks/useUserModules';
 import { getIconComponent } from '@/utils/iconMapper';
-import { GraduationCap, BarChart3, Target, Lock, LogOut, HelpCircle, LucideIcon } from 'lucide-react';
+import { GraduationCap, BarChart3, Target, Lock, LogOut, HelpCircle, LucideIcon, Shield } from 'lucide-react';
 import ThemeSwitcher from '@/app/components/ThemeSwitcher'; // Theme switcher import
 
 interface HomePageProps {
@@ -356,7 +356,7 @@ const PublicHomePage = ({ locale }: { locale: string }) => {
 
 // Giriş yapmış kullanıcılar için dashboard
 const DashboardContent = ({ locale }: { locale: string }) => {
-  const { modules, loading, error } = useUserModules();
+  const { modules, loading, error, isSuperAdmin } = useUserModules();
   const { signOut } = useClerk(); // signOut fonksiyonunu useClerk'den alıyoruz
   const [headerVisible, setHeaderVisible] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -517,9 +517,17 @@ const DashboardContent = ({ locale }: { locale: string }) => {
             
             {/* Title and Subtitle */}
             <div className="text-left">
-              <h1 className="text-3xl font-medium text-neutral-900 dark:text-neutral-100 mb-2">
-                {t.welcomeBack}
-              </h1>
+              <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-3xl font-medium text-neutral-900 dark:text-neutral-100">
+                  {t.welcomeBack}
+                </h1>
+                {isSuperAdmin && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                    <Shield className="w-3.5 h-3.5" />
+                    {locale === 'tr' ? 'Süper Admin' : 'Super Admin'}
+                  </span>
+                )}
+              </div>
               <p className="text-neutral-600 dark:text-neutral-400">
                 {modules.length} {t.moduleCount}
               </p>

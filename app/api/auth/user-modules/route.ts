@@ -67,8 +67,8 @@ export async function GET() {
           is_active
         )
       `)
-      .eq('clerk_user_id', userId)  // DÜZELTME: user_id yerine clerk_user_id
-      .eq('is_enabled', true);      // DÜZELTME: is_active yerine is_enabled
+      .eq('clerk_user_id', userId)
+      .eq('is_enabled', true);
     
     if (userModulesError) {
       console.error('❌ User modules query error:', userModulesError);
@@ -76,6 +76,51 @@ export async function GET() {
         error: 'Database query error',
         details: userModulesError.message
       }, { status: 500 });
+    }
+
+    // Super admin kontrolü: user_module_access.is_super_admin = true olan kayıt var mı?
+    const isSuperAdmin = (userModules ?? []).some(
+      (uma: { is_super_admin?: boolean }) => uma.is_super_admin === true
+    );
+
+    let modules: Array<{
+      key: string;
+      name_tr: string;
+      name_en: string;
+      description_tr: string;
+      description_en: string;
+      icon: string;
+      is_active: boolean;
+      is_super_admin?: boolean;
+    }>;
+
+    if (isSuperAdmin) {
+      // Süper admin: Tüm aktif modülleri getir
+      const { data: allModules, error: allModulesError } = await supabase
+        .from('modules')
+        .select('key, name_tr, name_en, description_tr, description_en, icon, is_active')
+        .eq('is_active', true);
+
+      if (allModulesError) {
+        console.error('❌ Super admin modules query error:', allModulesError);
+        modules = [];
+      } else {
+        modules = (allModules ?? []).map((m) => ({ ...m, is_super_admin: true }));
+      }
+    } else {
+      // Normal kullanıcı: Sadece kendi erişimli modülleri
+      modules = (userModules ?? [])
+        .filter((item: { modules?: { is_active: boolean } | null }) => item.modules && item.modules.is_active)
+        .map((item: { modules: Record<string, unknown> }) => ({ ...item.modules })) as Array<{
+          key: string;
+          name_tr: string;
+          name_en: string;
+          description_tr: string;
+          description_en: string;
+          icon: string;
+          is_active: boolean;
+          is_super_admin?: boolean;
+        }>;
     }
 
     // 5. Debug bilgileri (sadece development'ta)
@@ -108,21 +153,18 @@ export async function GET() {
       }
     }
 
-    // 6. Modül verilerini işle
-    const modules = userModules
-      ?.filter(item => item.modules && item.modules.is_active)
-      ?.map(item => item.modules) || [];
-
     if (isDev) {
       console.log('✅ Processed modules:', modules.length);
-      console.log('Module details:', modules.map(m => ({ key: m.key, name_tr: m.name_tr, name_en: m.name_en })));
+      console.log('isSuperAdmin:', isSuperAdmin);
+      console.log('Module details:', modules.map((m: { key: string }) => ({ key: m.key })));
     }
 
-    // 7. Response hazırla
+    // 6. Response hazırla
     const response = {
       success: true,
       userId,
       modules,
+      isSuperAdmin,
       totalCount: modules.length,
       ...(isDev && {
         debug: {
