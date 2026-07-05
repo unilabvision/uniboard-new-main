@@ -373,10 +373,7 @@ const DashboardContent = ({ locale }: { locale: string }) => {
   // İlk yükleme tamamlandığında initial loading'i kapat
   useEffect(() => {
     if (!loading) {
-      const timer = setTimeout(() => {
-        setInitialLoading(false);
-      }, 800);
-      return () => clearTimeout(timer);
+      setInitialLoading(false);
     }
   }, [loading]);
 

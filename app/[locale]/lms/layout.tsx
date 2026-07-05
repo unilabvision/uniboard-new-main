@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import GlobalDashboardSidebar from '../../components/GlobalDashboardSidebar';
 import { useUserModules } from '../../hooks/useUserModules';
 
@@ -32,6 +32,16 @@ export default function LMSLayout({ children, params }: LMSLayoutProps) {
   const [hasLMSAccess, setHasLMSAccess] = useState<boolean | null>(null);
   
   const { modules, loading, error, isSuperAdmin } = useUserModules();
+  const isInitialModuleLoad = loading && modules.length === 0;
+
+  const resolvedLMSAccess = useMemo(() => {
+    if (isInitialModuleLoad) return null;
+    if (error) return false;
+
+    return isSuperAdmin || modules.some(
+      module => module.key === 'lms' || module.key === 'students' || module.key === 'courses'
+    );
+  }, [isInitialModuleLoad, error, isSuperAdmin, modules]);
 
   // Resolve params
   useEffect(() => {
@@ -43,31 +53,10 @@ export default function LMSLayout({ children, params }: LMSLayoutProps) {
     resolveParams();
   }, [params]);
 
-  // Check LMS module access
+  // Sync resolved access for debug panel compatibility
   useEffect(() => {
-    const checkLMSAccess = () => {
-      if (loading) return;
-      
-      if (error) {
-        setHasLMSAccess(false);
-        return;
-      }
-      
-      // Check if user has LMS module access (süper admin her modüle erişebilir)
-      const hasLMS = isSuperAdmin || modules.some(
-        module => module.key === 'lms' || module.key === 'students'
-      );
-      setHasLMSAccess(hasLMS);
-      
-      console.log('🔍 LMS access check:', {
-        modulesCount: modules.length,
-        modules: modules.map(m => m.key),
-        hasLMS
-      });
-    };
-    
-    checkLMSAccess();
-  }, [modules, loading, error, isSuperAdmin]);
+    setHasLMSAccess(resolvedLMSAccess);
+  }, [resolvedLMSAccess]);
 
   // Listen for sidebar minimize state changes
   useEffect(() => {
@@ -87,8 +76,8 @@ export default function LMSLayout({ children, params }: LMSLayoutProps) {
     };
   }, []);
 
-  // Loading state
-  if (!mounted || loading || hasLMSAccess === null) {
+  // Loading state — sadece ilk modül yüklemesinde tam ekran spinner
+  if (!mounted || isInitialModuleLoad || resolvedLMSAccess === null) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-900 dark:to-neutral-800 flex items-center justify-center">
         <div className="text-center">
@@ -102,7 +91,7 @@ export default function LMSLayout({ children, params }: LMSLayoutProps) {
   }
 
   // Access denied state
-  if (hasLMSAccess === false) {
+  if (resolvedLMSAccess === false) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-900 dark:to-neutral-800 flex items-center justify-center py-12">
         <div className="max-w-md mx-auto text-center px-6">

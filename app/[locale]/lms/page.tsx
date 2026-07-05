@@ -73,13 +73,6 @@ interface Course {
   total_duration?: number;
 }
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  organizationSlugs?: string[];
-}
-
 // Localized texts
 const texts = {
   tr: {
@@ -626,8 +619,7 @@ const Pagination = ({
 // Main Component
 export default function LMSPage({ searchParams }: { searchParams?: Promise<{ type?: string }> }) {
   const [courses, setCourses] = useState<Course[]>([]);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [coursesLoading, setCoursesLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState('all');
@@ -671,72 +663,17 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
     setCurrentPage(1);
   }, [searchQuery, selectedType, selectedLevel, selectedStatus, viewMode, sortBy]);
 
-  // Set current user
-  useEffect(() => {
-    const getCurrentUser = async () => {
-      if (!isLoaded) return;
-      
-      if (!clerkUser) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        // Initialize basic user info
-        setCurrentUser({
-          id: clerkUser.id,
-          name: clerkUser.fullName || clerkUser.firstName || 'Kullanıcı',
-          email: clerkUser.emailAddresses[0]?.emailAddress || '',
-          organizationSlugs: []
-        });
-        
-        // Fetch user's organization access from the database
-        const { data, error } = await supabase
-          .from('user_module_access')
-          .select(`
-            *,
-            organizations:organization_id (
-              slug
-            )
-          `)
-          .eq('clerk_user_id', clerkUser.id)
-          .eq('module_key', 'lms')
-          .eq('is_enabled', true);
-        
-        if (error) {
-          console.error('Error fetching user module access:', error);
-          return;
-        }
-        
-        // Extract organization slugs from the join result
-        const orgSlugs = data
-          ?.filter(item => item.organizations?.slug)
-          .map(item => item.organizations.slug) || [];
-        
-        // Update current user with organization slugs
-        setCurrentUser(prev => ({
-          ...(prev || {
-            id: clerkUser.id,
-            name: clerkUser.fullName || clerkUser.firstName || 'Kullanıcı',
-            email: clerkUser.emailAddresses[0]?.emailAddress || ''
-          }),
-          organizationSlugs: orgSlugs
-        }));
-      } catch (error) {
-        console.error('Error getting user profile:', error);
-      }
-    };
-
-    getCurrentUser();
-  }, [clerkUser, isLoaded]);
-
   // Fetch courses data
   useEffect(() => {
     const fetchCourses = async () => {
-      if (!currentUser) return;
+      if (!clerkUser?.id || !isLoaded) {
+        if (isLoaded && !clerkUser) {
+          setCoursesLoading(false);
+        }
+        return;
       
       try {
-        setLoading(true);
+        setCoursesLoading(true);
         
         // Fetch courses with sections and lessons count
         const { data: coursesData, error: coursesError } = await supabase
@@ -802,12 +739,12 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
         console.error('Error fetching courses:', error);
         setError(error instanceof Error ? error.message : 'An error occurred');
       } finally {
-        setLoading(false);
+        setCoursesLoading(false);
       }
     };
     
     fetchCourses();
-  }, [currentUser]);
+  }, [clerkUser?.id, isLoaded]);
 
   // Filter data based on search and filters
   const getFilteredData = () => {
@@ -947,42 +884,12 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
     }
   };
 
-  // Loading state
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 py-8 sm:py-12 overflow-x-hidden">
-        <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-20 2xl:px-24 w-full break-words">
-          <div className="animate-pulse">
-            <div className="h-8 bg-neutral-200 dark:bg-neutral-700 rounded w-64 mb-4"></div>
-            <div className="h-4 bg-neutral-200 dark:bg-neutral-700 rounded w-96 mb-8"></div>
-            
-            <div className="flex space-x-4 mb-8">
-              {[...Array(2)].map((_, i) => (
-                <div key={i} className="h-10 bg-neutral-200 dark:bg-neutral-700 rounded w-32"></div>
-              ))}
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {[...Array(8)].map((_, i) => (
-                <div key={i} className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden">
-                  <div className="h-48 bg-neutral-200 dark:bg-neutral-700"></div>
-                  <div className="p-4">
-                    <div className="h-5 bg-neutral-200 dark:bg-neutral-700 rounded w-full mb-2"></div>
-                    <div className="h-4 bg-neutral-200 dark:bg-neutral-700 rounded w-3/4 mb-4"></div>
-                    <div className="h-4 bg-neutral-200 dark:bg-neutral-700 rounded w-full mb-2"></div>
-                    <div className="h-4 bg-neutral-200 dark:bg-neutral-700 rounded w-2/3"></div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+  // Auth check
+  if (!isLoaded) {
+    return null;
   }
 
-  // Auth check
-  if (!clerkUser || !currentUser) {
+  if (!clerkUser) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-lg text-red-600">Lütfen giriş yapınız.</div>
@@ -1120,7 +1027,21 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
         </div>
 
         {/* Content */}
-        {courses.length === 0 ? (
+        {coursesLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 animate-pulse">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden">
+                <div className="h-48 bg-neutral-200 dark:bg-neutral-700"></div>
+                <div className="p-4">
+                  <div className="h-5 bg-neutral-200 dark:bg-neutral-700 rounded w-full mb-2"></div>
+                  <div className="h-4 bg-neutral-200 dark:bg-neutral-700 rounded w-3/4 mb-4"></div>
+                  <div className="h-4 bg-neutral-200 dark:bg-neutral-700 rounded w-full mb-2"></div>
+                  <div className="h-4 bg-neutral-200 dark:bg-neutral-700 rounded w-2/3"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : courses.length === 0 ? (
           <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-8 text-center">
             <div className="w-16 h-16 bg-neutral-100 dark:bg-neutral-700 rounded-full mx-auto mb-4 flex items-center justify-center">
               <BookOpen className="w-8 h-8 text-neutral-400 dark:text-neutral-500" />

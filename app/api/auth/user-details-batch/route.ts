@@ -1,6 +1,58 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
 
+type UserDetails = {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  username: string | null;
+  emailAddresses: Array<{ emailAddress: string }>;
+  imageUrl: string | null;
+};
+
+function clerkUserToDetails(user: {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  username: string | null;
+  emailAddresses: Array<{ emailAddress: string }>;
+  imageUrl: string;
+}): UserDetails {
+  return {
+    id: user.id,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    username: user.username,
+    emailAddresses: user.emailAddresses,
+    imageUrl: user.imageUrl,
+  };
+}
+
+/** Clerk getUserList accepts up to 100 user IDs per request. */
+async function fetchClerkUsersBatch(userIds: string[]): Promise<UserDetails[]> {
+  if (userIds.length === 0) return [];
+
+  const clerk = await clerkClient();
+  const results: UserDetails[] = [];
+
+  for (let i = 0; i < userIds.length; i += 100) {
+    const chunk = userIds.slice(i, i + 100);
+    try {
+      const { data } = await clerk.users.getUserList({
+        userId: chunk,
+        limit: 100,
+      });
+      for (const user of data) {
+        results.push(clerkUserToDetails(user));
+      }
+    } catch (error) {
+      console.error('Error fetching Clerk user batch:', error);
+    }
+  }
+
+  return results;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { userIds } = await request.json();
@@ -16,45 +68,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ users: {} });
     }
 
-    // Limit batch size to prevent overwhelming the API
-    const limitedUserIds = userIds.slice(0, 100);
+    const limitedUserIds = [...new Set(userIds as string[])].slice(0, 100);
+    const clerkUsers = await fetchClerkUsersBatch(limitedUserIds);
 
-    // Fetch user details from Clerk in batch
-    const clerk = await clerkClient();
-    const users = await Promise.all(
-      limitedUserIds.map(async (userId: string) => {
-        try {
-          const user = await clerk.users.getUser(userId);
-          return {
-            id: user.id,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            username: user.username,
-            emailAddresses: user.emailAddresses,
-            imageUrl: user.imageUrl
-          };
-        } catch (error) {
-          console.error(`Error fetching user ${userId}:`, error);
-          return {
-            id: userId,
-            firstName: null,
-            lastName: null,
-            username: null,
-            emailAddresses: [],
-            imageUrl: null
-          };
-        }
-      })
-    );
-
-    // Convert to map format for easier lookup
-    const usersMap: Record<string, unknown> = {};
-    users.forEach(user => {
+    const usersMap: Record<string, UserDetails> = {};
+    clerkUsers.forEach((user) => {
       usersMap[user.id] = user;
     });
 
-    return NextResponse.json({ users: usersMap });
-
+    return NextResponse.json({
+      users: usersMap,
+      meta: {
+        total: limitedUserIds.length,
+        fromClerk: clerkUsers.length,
+        missing: limitedUserIds.length - clerkUsers.length,
+      },
+    });
   } catch (error) {
     console.error('Error fetching batch user details:', error);
     return NextResponse.json(

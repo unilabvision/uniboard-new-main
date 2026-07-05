@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   BookOpen, Award, Clock, 
   CheckCircle, Users,
@@ -37,7 +37,7 @@ const fetchMultipleClerkUsers = async (userIds: string[]) => {
           fullName: userData.firstName && userData.lastName 
             ? `${userData.firstName} ${userData.lastName}` 
             : userData.firstName || userData.lastName || userData.username || `Kullanıcı ${userId.substring(0, 8)}`,
-          email: userData.emailAddresses?.[0]?.emailAddress || 'email@example.com',
+          email: userData.emailAddresses?.[0]?.emailAddress || '',
           imageUrl: userData.imageUrl || null
         });
       });
@@ -53,7 +53,7 @@ const fetchMultipleClerkUsers = async (userIds: string[]) => {
     if (!userDetailsMap.has(userId)) {
       userDetailsMap.set(userId, {
         fullName: `Kullanıcı ${userId.substring(0, 8)}`,
-        email: 'email@example.com',
+        email: '',
         imageUrl: null
       });
     }
@@ -245,19 +245,24 @@ const ProgressCircle = ({ percentage, size = 40 }: { percentage: number; size?: 
 // Course Overview Card Component
 const CourseOverviewCard = ({ 
   course, 
-  // locale, 
-  // t,
-  onClick
+  isSelected = false,
+  onClick,
+  onMouseEnter,
 }: { 
   course: CourseOverview;
-  locale?: string;
-  t?: typeof texts.tr;
+  isSelected?: boolean;
   onClick: () => void;
+  onMouseEnter?: () => void;
 }) => {
   return (
     <div 
-      className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4 hover:shadow-lg transition-all duration-300 cursor-pointer"
+      className={`bg-white dark:bg-neutral-800 rounded-lg border p-4 hover:shadow-lg transition-all duration-300 cursor-pointer ${
+        isSelected
+          ? 'border-[#990000] ring-2 ring-[#990000]/20'
+          : 'border-neutral-200 dark:border-neutral-700'
+      }`}
       onClick={onClick}
+      onMouseEnter={onMouseEnter}
     >
       <div className="flex items-start space-x-4">
         {/* Course Thumbnail */}
@@ -469,10 +474,14 @@ export default function ProgressAnalyticsPage() {
   const [coursesOverview, setCoursesOverview] = useState<CourseOverview[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
   const [studentsProgress, setStudentsProgress] = useState<StudentProgress[]>([]);
+  const [studentsLoading, setStudentsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [courseSearchQuery, setCourseSearchQuery] = useState('');
+  const studentsCacheRef = useRef<Map<string, StudentProgress[]>>(new Map());
+  const fetchAbortRef = useRef<AbortController | null>(null);
+  const selectedCourseRef = useRef<string | null>(null);
   
   // Clerk user hook
   const { user: clerkUser, isLoaded } = useUser();
@@ -512,155 +521,90 @@ export default function ProgressAnalyticsPage() {
           setCoursesOverview([]);
           return;
         }
-        
-        // For each course, get progress statistics
-        const coursesWithStats = await Promise.all(
-          coursesData.map(async (course) => {
-            // Get all lessons for this course
-            const { data: lessonsData, error: lessonsError } = await supabase
-              .from('myuni_course_lessons')
-              .select(`
-                id,
-                myuni_course_sections!inner (
-                  course_id
-                )
-              `)
-              .eq('myuni_course_sections.course_id', course.id);
-            
-            if (lessonsError) {
-              console.error('Error fetching lessons:', lessonsError);
-              return null;
-            }
-            
-            const totalLessons = lessonsData?.length || 0;
-            const lessonIds = lessonsData?.map(lesson => lesson.id) || [];
-            
-            // Get enrollments for this course
-            const { data: enrollmentsData, error: enrollmentsError } = await supabase
-              .from('myuni_enrollments')
-              .select(`
-                user_id,
-                enrolled_at,
-                progress_percentage,
-                is_active
-              `)
-              .eq('course_id', course.id)
-              .eq('is_active', true);
-            
-            if (enrollmentsError) {
-              console.error('Error fetching enrollments:', enrollmentsError);
-              return null;
-            }
-            
-            const totalStudents = enrollmentsData?.length || 0;
-            
-            if (totalStudents === 0) {
-              return {
-                course_id: course.id,
-                course_title: course.title,
-                course_slug: course.slug,
-                course_thumbnail: course.thumbnail_url,
-                instructor_name: course.instructor_name,
-                total_lessons: totalLessons,
-                total_students: 0,
-                students_completed: 0,
-                students_in_progress: 0,
-                students_not_started: 0,
-                avg_completion_percentage: 0,
-                avg_quiz_score: null,
-                total_watch_time: 0,
-                last_activity: null
-              };
-            }
-            
-            // Get progress data for enrolled students if there are lessons
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            let progressData: any[] = [];
-            if (lessonIds.length > 0) {
-              const { data: pData, error: progressError } = await supabase
-                .from('myuni_user_progress')
-                .select(`
-                  user_id,
-                  is_completed,
-                  watch_time_seconds,
-                  quiz_score,
-                  updated_at
-                `)
-                .in('lesson_id', lessonIds)
-                .in('user_id', enrollmentsData.map(e => e.user_id));
-              
-              if (!progressError) {
-                progressData = pData || [];
-              }
-            }
-            
-            // Calculate statistics based on enrollments and progress
-            const studentProgressMap = new Map();
-            let totalWatchTime = 0;
-            const quizScores: number[] = [];
-            let lastActivity: string | null = null;
-            
-            // Initialize all enrolled students
-            enrollmentsData.forEach((enrollment) => {
-              studentProgressMap.set(enrollment.user_id, {
-                completedLessons: 0,
-                enrolled_at: enrollment.enrolled_at,
-                progress_percentage_from_enrollment: enrollment.progress_percentage || 0
-              });
-            });
-            
-            // Add progress data
-            progressData.forEach((progress) => {
-              const userId = progress.user_id;
-              
-              if (studentProgressMap.has(userId)) {
-                const userProgress = studentProgressMap.get(userId);
-                
-                if (progress.is_completed) {
-                  userProgress.completedLessons += 1;
-                }
-                
-                totalWatchTime += progress.watch_time_seconds || 0;
-                
-                if (progress.quiz_score !== null) {
-                  quizScores.push(progress.quiz_score);
-                }
-                
-                if (!lastActivity || progress.updated_at > lastActivity) {
-                  lastActivity = progress.updated_at;
-                }
-              }
-            });
-            
-            let studentsCompleted = 0;
-            let studentsInProgress = 0;
-            let studentsNotStarted = 0;
-            let totalCompletionPercentage = 0;
-            
-            studentProgressMap.forEach((userProgress) => {
-              const completionPercentage = totalLessons > 0 
-                ? (userProgress.completedLessons / totalLessons) * 100 
-                : userProgress.progress_percentage_from_enrollment;
-              
-              totalCompletionPercentage += completionPercentage;
-              
-              if (completionPercentage === 100) {
-                studentsCompleted += 1;
-              } else if (completionPercentage > 0) {
-                studentsInProgress += 1;
-              } else {
-                studentsNotStarted += 1;
-              }
-            });
-            
-            const avgCompletionPercentage = totalStudents > 0 
-              ? totalCompletionPercentage / totalStudents 
-              : 0;
-            
-            const avgQuizScore = quizScores.length > 0
-              ? quizScores.reduce((sum, score) => sum + score, 0) / quizScores.length
-              : null;
-            
+
+        const courseIds = coursesData.map((course) => course.id);
+
+        const [lessonsResult, enrollmentsResult] = await Promise.all([
+          supabase
+            .from('myuni_course_lessons')
+            .select(`
+              id,
+              myuni_course_sections!inner (
+                course_id
+              )
+            `)
+            .in('myuni_course_sections.course_id', courseIds),
+          supabase
+            .from('myuni_enrollments')
+            .select('course_id, user_id, enrolled_at, progress_percentage, is_active')
+            .in('course_id', courseIds)
+            .eq('is_active', true),
+        ]);
+
+        if (lessonsResult.error) throw lessonsResult.error;
+        if (enrollmentsResult.error) throw enrollmentsResult.error;
+
+        const lessonsByCourse = new Map<string, string[]>();
+        (lessonsResult.data || []).forEach((lesson) => {
+          const section = Array.isArray(lesson.myuni_course_sections)
+            ? lesson.myuni_course_sections[0]
+            : lesson.myuni_course_sections;
+          const courseId = section?.course_id;
+          if (!courseId) return;
+          const list = lessonsByCourse.get(courseId) || [];
+          list.push(lesson.id);
+          lessonsByCourse.set(courseId, list);
+        });
+
+        const enrollmentsByCourse = new Map<string, Array<{
+          user_id: string;
+          enrolled_at: string | null;
+          progress_percentage: number | null;
+        }>>();
+        (enrollmentsResult.data || []).forEach((enrollment) => {
+          const list = enrollmentsByCourse.get(enrollment.course_id) || [];
+          list.push(enrollment);
+          enrollmentsByCourse.set(enrollment.course_id, list);
+        });
+
+        const allLessonIds = [...new Set((lessonsResult.data || []).map((lesson) => lesson.id))];
+        const allUserIds = [...new Set((enrollmentsResult.data || []).map((enrollment) => enrollment.user_id))];
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let allProgressData: any[] = [];
+        if (allLessonIds.length > 0 && allUserIds.length > 0) {
+          const { data: progressData, error: progressError } = await supabase
+            .from('myuni_user_progress')
+            .select('user_id, lesson_id, is_completed, watch_time_seconds, quiz_score, updated_at')
+            .in('lesson_id', allLessonIds)
+            .in('user_id', allUserIds);
+
+          if (!progressError) {
+            allProgressData = progressData || [];
+          }
+        }
+
+        const lessonToCourse = new Map<string, string>();
+        lessonsByCourse.forEach((lessonIds, courseId) => {
+          lessonIds.forEach((lessonId) => lessonToCourse.set(lessonId, courseId));
+        });
+
+        const progressByCourse = new Map<string, typeof allProgressData>();
+        allProgressData.forEach((progress) => {
+          const courseId = lessonToCourse.get(progress.lesson_id);
+          if (!courseId) return;
+          const list = progressByCourse.get(courseId) || [];
+          list.push(progress);
+          progressByCourse.set(courseId, list);
+        });
+
+        const coursesWithStats = coursesData.map((course) => {
+          const lessonIds = lessonsByCourse.get(course.id) || [];
+          const totalLessons = lessonIds.length;
+          const enrollmentsData = enrollmentsByCourse.get(course.id) || [];
+          const totalStudents = enrollmentsData.length;
+
+          if (totalStudents === 0) {
             return {
               course_id: course.id,
               course_title: course.title,
@@ -668,20 +612,99 @@ export default function ProgressAnalyticsPage() {
               course_thumbnail: course.thumbnail_url,
               instructor_name: course.instructor_name,
               total_lessons: totalLessons,
-              total_students: totalStudents,
-              students_completed: studentsCompleted,
-              students_in_progress: studentsInProgress,
-              students_not_started: studentsNotStarted,
-              avg_completion_percentage: avgCompletionPercentage,
-              avg_quiz_score: avgQuizScore,
-              total_watch_time: totalWatchTime,
-              last_activity: lastActivity
+              total_students: 0,
+              students_completed: 0,
+              students_in_progress: 0,
+              students_not_started: 0,
+              avg_completion_percentage: 0,
+              avg_quiz_score: null,
+              total_watch_time: 0,
+              last_activity: null,
             };
-          })
-        );
-        
-        const validCourses = coursesWithStats.filter(course => course !== null) as CourseOverview[];
-        setCoursesOverview(validCourses);
+          }
+
+          const progressData = progressByCourse.get(course.id) || [];
+          const studentProgressMap = new Map();
+          let totalWatchTime = 0;
+          const quizScores: number[] = [];
+          let lastActivity: string | null = null;
+
+          enrollmentsData.forEach((enrollment) => {
+            studentProgressMap.set(enrollment.user_id, {
+              completedLessons: 0,
+              enrolled_at: enrollment.enrolled_at,
+              progress_percentage_from_enrollment: enrollment.progress_percentage || 0,
+            });
+          });
+
+          progressData.forEach((progress) => {
+            const userId = progress.user_id;
+            if (!studentProgressMap.has(userId)) return;
+
+            const userProgress = studentProgressMap.get(userId);
+            if (progress.is_completed) {
+              userProgress.completedLessons += 1;
+            }
+
+            totalWatchTime += progress.watch_time_seconds || 0;
+
+            if (progress.quiz_score !== null) {
+              quizScores.push(progress.quiz_score);
+            }
+
+            if (!lastActivity || progress.updated_at > lastActivity) {
+              lastActivity = progress.updated_at;
+            }
+          });
+
+          let studentsCompleted = 0;
+          let studentsInProgress = 0;
+          let studentsNotStarted = 0;
+          let totalCompletionPercentage = 0;
+
+          studentProgressMap.forEach((userProgress) => {
+            const completionPercentage = totalLessons > 0
+              ? (userProgress.completedLessons / totalLessons) * 100
+              : userProgress.progress_percentage_from_enrollment;
+
+            totalCompletionPercentage += completionPercentage;
+
+            if (completionPercentage === 100) {
+              studentsCompleted += 1;
+            } else if (completionPercentage > 0) {
+              studentsInProgress += 1;
+            } else {
+              studentsNotStarted += 1;
+            }
+          });
+
+          const avgCompletionPercentage = totalStudents > 0
+            ? totalCompletionPercentage / totalStudents
+            : 0;
+
+          const avgQuizScore = quizScores.length > 0
+            ? quizScores.reduce((sum, score) => sum + score, 0) / quizScores.length
+            : null;
+
+          return {
+            course_id: course.id,
+            course_title: course.title,
+            course_slug: course.slug,
+            course_thumbnail: course.thumbnail_url,
+            instructor_name: course.instructor_name,
+            total_lessons: totalLessons,
+            total_students: totalStudents,
+            students_completed: studentsCompleted,
+            students_in_progress: studentsInProgress,
+            students_not_started: studentsNotStarted,
+            avg_completion_percentage: avgCompletionPercentage,
+            avg_quiz_score: avgQuizScore,
+            total_watch_time: totalWatchTime,
+            last_activity: lastActivity,
+          };
+        });
+
+        setCoursesOverview(coursesWithStats);
         
       } catch (error: unknown) {
         console.error('Error fetching courses overview:', error);
@@ -694,17 +717,30 @@ export default function ProgressAnalyticsPage() {
     fetchCoursesOverview();
   }, [clerkUser, isLoaded]);
 
-  // Fetch students progress for selected course
   useEffect(() => {
-    const fetchStudentsProgress = async () => {
-      if (!selectedCourse) {
-        setStudentsProgress([]);
-        return;
+    selectedCourseRef.current = selectedCourse;
+  }, [selectedCourse]);
+
+  // Fetch students progress for selected course
+  const loadStudentsProgress = useCallback(async (courseId: string, options?: { silent?: boolean }) => {
+    const cached = studentsCacheRef.current.get(courseId);
+    if (cached) {
+      if (!options?.silent || selectedCourseRef.current === courseId) {
+        setStudentsProgress(cached);
+        setStudentsLoading(false);
       }
-      
-      try {
-        // Get all enrollments for the selected course
-        const { data: enrollmentsData, error: enrollmentsError } = await supabase
+      return;
+    } else if (!options?.silent) {
+      setStudentsLoading(true);
+    }
+
+    fetchAbortRef.current?.abort();
+    const abortController = new AbortController();
+    fetchAbortRef.current = abortController;
+
+    try {
+      const [enrollmentsResult, lessonsResult] = await Promise.all([
+        supabase
           .from('myuni_enrollments')
           .select(`
             user_id,
@@ -712,20 +748,9 @@ export default function ProgressAnalyticsPage() {
             progress_percentage,
             is_active
           `)
-          .eq('course_id', selectedCourse)
-          .eq('is_active', true);
-        
-        if (enrollmentsError) {
-          throw enrollmentsError;
-        }
-        
-        if (!enrollmentsData || enrollmentsData.length === 0) {
-          setStudentsProgress([]);
-          return;
-        }
-        
-        // Get all lessons for the selected course
-        const { data: lessonsData, error: lessonsError } = await supabase
+          .eq('course_id', courseId)
+          .eq('is_active', true),
+        supabase
           .from('myuni_course_lessons')
           .select(`
             id,
@@ -736,152 +761,191 @@ export default function ProgressAnalyticsPage() {
               course_id
             )
           `)
-          .eq('myuni_course_sections.course_id', selectedCourse);
-        
-        if (lessonsError) {
-          throw lessonsError;
+          .eq('myuni_course_sections.course_id', courseId),
+      ]);
+
+      if (abortController.signal.aborted) return;
+
+      if (enrollmentsResult.error) throw enrollmentsResult.error;
+      if (lessonsResult.error) throw lessonsResult.error;
+
+      const enrollmentsData = enrollmentsResult.data;
+      const lessonsData = lessonsResult.data;
+
+      if (!enrollmentsData || enrollmentsData.length === 0) {
+        studentsCacheRef.current.set(courseId, []);
+        if (!options?.silent || selectedCourseRef.current === courseId) {
+          setStudentsProgress([]);
         }
-        
-        const lessonIds = lessonsData?.map(lesson => lesson.id) || [];
-        const totalLessons = lessonIds.length;
-        
-        // Get progress data for enrolled students
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let progressData: any[] = [];
-        if (lessonIds.length > 0) {
-          const { data: pData, error: progressError } = await supabase
-            .from('myuni_user_progress')
-            .select(`
-              user_id,
-              lesson_id,
-              is_completed,
-              watch_time_seconds,
-              quiz_score,
-              updated_at
-            `)
-            .in('lesson_id', lessonIds)
-            .in('user_id', enrollmentsData.map(e => e.user_id));
-          
-          if (!progressError) {
-            progressData = pData || [];
+        return;
+      }
+
+      const lessonIds = lessonsData?.map(lesson => lesson.id) || [];
+      const totalLessons = lessonIds.length;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let progressData: any[] = [];
+      if (lessonIds.length > 0) {
+        const { data: pData, error: progressError } = await supabase
+          .from('myuni_user_progress')
+          .select(`
+            user_id,
+            lesson_id,
+            is_completed,
+            watch_time_seconds,
+            quiz_score,
+            updated_at
+          `)
+          .in('lesson_id', lessonIds)
+          .in('user_id', enrollmentsData.map(e => e.user_id));
+
+        if (abortController.signal.aborted) return;
+
+        if (!progressError) {
+          progressData = pData || [];
+        }
+      }
+
+      const userIds = enrollmentsData.map(e => e.user_id);
+      const userDetailsMap = await fetchMultipleClerkUsers(userIds);
+
+      if (abortController.signal.aborted) return;
+
+      const userProgressMap = new Map();
+
+      enrollmentsData.forEach((enrollment) => {
+        const userDetails = userDetailsMap.get(enrollment.user_id) || {
+          fullName: `Kullanıcı ${enrollment.user_id.substring(0, 8)}`,
+          email: '',
+          imageUrl: null
+        };
+
+        userProgressMap.set(enrollment.user_id, {
+          user_id: enrollment.user_id,
+          user_name: userDetails.fullName,
+          user_email: userDetails.email,
+          user_image: userDetails.imageUrl,
+          enrolled_at: enrollment.enrolled_at,
+          total_lessons: totalLessons,
+          completed_lessons: 0,
+          total_watch_time: 0,
+          quiz_scores: [],
+          last_activity: enrollment.enrolled_at,
+          current_lesson: null,
+          current_section: null,
+          progress_percentage_from_enrollment: enrollment.progress_percentage || 0
+        });
+      });
+
+      progressData.forEach((progress) => {
+        const userId = progress.user_id;
+
+        if (userProgressMap.has(userId)) {
+          const userProgress = userProgressMap.get(userId);
+
+          if (progress.is_completed) {
+            userProgress.completed_lessons += 1;
+          } else {
+            const currentLesson = lessonsData?.find(lesson => lesson.id === progress.lesson_id);
+            if (currentLesson && currentLesson.myuni_course_sections) {
+              userProgress.current_lesson = currentLesson.title;
+              userProgress.current_section = Array.isArray(currentLesson.myuni_course_sections) && currentLesson.myuni_course_sections.length > 0
+                ? currentLesson.myuni_course_sections[0].title
+                : undefined;
+            }
+          }
+
+          userProgress.total_watch_time += progress.watch_time_seconds || 0;
+
+          if (progress.quiz_score !== null) {
+            userProgress.quiz_scores.push(progress.quiz_score);
+          }
+
+          if (!userProgress.last_activity || progress.updated_at > userProgress.last_activity) {
+            userProgress.last_activity = progress.updated_at;
           }
         }
-        
-        // Create a map for each enrolled user
-        const userProgressMap = new Map();
-        
-        // Get all unique user IDs for batch fetching user details
-        const userIds = enrollmentsData.map(e => e.user_id);
-        const userDetailsMap = await fetchMultipleClerkUsers(userIds);
-        
-        // Initialize all enrolled students with real user data
-        enrollmentsData.forEach((enrollment) => {
-          const userDetails = userDetailsMap.get(enrollment.user_id) || {
-            fullName: `Kullanıcı ${enrollment.user_id.substring(0, 8)}`,
-            email: 'email@example.com',
-            imageUrl: null
-          };
-          
-          userProgressMap.set(enrollment.user_id, {
-            user_id: enrollment.user_id,
-            user_name: userDetails.fullName,
-            user_email: userDetails.email,
-            user_image: userDetails.imageUrl,
-            enrolled_at: enrollment.enrolled_at,
-            total_lessons: totalLessons,
-            completed_lessons: 0,
-            total_watch_time: 0,
-            quiz_scores: [],
-            last_activity: enrollment.enrolled_at,
-            current_lesson: null,
-            current_section: null,
-            progress_percentage_from_enrollment: enrollment.progress_percentage || 0
-          });
-        });
-        
-        // Add progress data for users who have started
-        progressData.forEach((progress) => {
-          const userId = progress.user_id;
-          
-          if (userProgressMap.has(userId)) {
-            const userProgress = userProgressMap.get(userId);
-            
-            if (progress.is_completed) {
-              userProgress.completed_lessons += 1;
-            } else {
-              // Find the lesson details for current lesson
-              const currentLesson = lessonsData?.find(lesson => lesson.id === progress.lesson_id);
-              if (currentLesson && currentLesson.myuni_course_sections) {
-                userProgress.current_lesson = currentLesson.title;
-                userProgress.current_section = Array.isArray(currentLesson.myuni_course_sections) && currentLesson.myuni_course_sections.length > 0
-                  ? currentLesson.myuni_course_sections[0].title
-                  : undefined;
-              }
-            }
-            
-            userProgress.total_watch_time += progress.watch_time_seconds || 0;
-            
-            if (progress.quiz_score !== null) {
-              userProgress.quiz_scores.push(progress.quiz_score);
-            }
-            
-            if (!userProgress.last_activity || progress.updated_at > userProgress.last_activity) {
-              userProgress.last_activity = progress.updated_at;
-            }
-          }
-        });
-        
-        // Convert to array and calculate final stats
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const studentsArray = Array.from(userProgressMap.values()).map((student: any) => {
-          const completionPercentage = student.total_lessons > 0 
-            ? (student.completed_lessons / student.total_lessons) * 100 
-            : student.progress_percentage_from_enrollment;
-          
-          let enrollmentStatus: 'enrolled' | 'in_progress' | 'completed' | 'not_started' = 'enrolled';
-          
-          if (completionPercentage === 100) {
-            enrollmentStatus = 'completed';
-          } else if (completionPercentage > 0) {
-            enrollmentStatus = 'in_progress';
-          } else if (student.completed_lessons === 0 && student.total_watch_time === 0) {
-            enrollmentStatus = 'not_started';
-          }
-          
-          return {
-            user_id: student.user_id,
-            user_name: student.user_name,
-            user_email: student.user_email,
-            user_image: student.user_image,
-            enrolled_at: student.enrolled_at,
-            total_lessons: student.total_lessons,
-            completed_lessons: student.completed_lessons,
-            completion_percentage: completionPercentage,
-            total_watch_time: student.total_watch_time,
-            avg_quiz_score: student.quiz_scores.length > 0
-              ? student.quiz_scores.reduce((sum: number, score: number) => sum + score, 0) / student.quiz_scores.length
-              : null,
-            last_activity: student.last_activity,
-            current_lesson: student.current_lesson,
-            current_section: student.current_section,
-            enrollment_status: enrollmentStatus
-          };
-        });
-        
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const studentsArray = Array.from(userProgressMap.values()).map((student: any) => {
+        const completionPercentage = student.total_lessons > 0
+          ? (student.completed_lessons / student.total_lessons) * 100
+          : student.progress_percentage_from_enrollment;
+
+        let enrollmentStatus: 'enrolled' | 'in_progress' | 'completed' | 'not_started' = 'enrolled';
+
+        if (completionPercentage === 100) {
+          enrollmentStatus = 'completed';
+        } else if (completionPercentage > 0) {
+          enrollmentStatus = 'in_progress';
+        } else if (student.completed_lessons === 0 && student.total_watch_time === 0) {
+          enrollmentStatus = 'not_started';
+        }
+
+        return {
+          user_id: student.user_id,
+          user_name: student.user_name,
+          user_email: student.user_email,
+          user_image: student.user_image,
+          enrolled_at: student.enrolled_at,
+          total_lessons: student.total_lessons,
+          completed_lessons: student.completed_lessons,
+          completion_percentage: completionPercentage,
+          total_watch_time: student.total_watch_time,
+          avg_quiz_score: student.quiz_scores.length > 0
+            ? student.quiz_scores.reduce((sum: number, score: number) => sum + score, 0) / student.quiz_scores.length
+            : null,
+          last_activity: student.last_activity,
+          current_lesson: student.current_lesson,
+          current_section: student.current_section,
+          enrollment_status: enrollmentStatus
+        };
+      });
+
+      studentsCacheRef.current.set(courseId, studentsArray);
+      if (!options?.silent || selectedCourseRef.current === courseId) {
         setStudentsProgress(studentsArray);
-        
-      } catch (error: unknown) {
-        console.error('Error fetching students progress:', error);
+      }
+    } catch (error: unknown) {
+      if (abortController.signal.aborted) return;
+      console.error('Error fetching students progress:', error);
+      if (!options?.silent) {
         setError(error instanceof Error ? error.message : 'An error occurred');
       }
-    };
-    
-    fetchStudentsProgress();
-  }, [selectedCourse]);
+    } finally {
+      if (!abortController.signal.aborted && !options?.silent) {
+        setStudentsLoading(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!selectedCourse) {
+      setStudentsProgress([]);
+      setStudentsLoading(false);
+      return;
+    }
+
+    loadStudentsProgress(selectedCourse);
+  }, [selectedCourse, loadStudentsProgress]);
 
   // Handle course selection
   const handleCourseSelect = (courseId: string) => {
+    setSearchQuery('');
     setSelectedCourse(courseId);
+
+    const cached = studentsCacheRef.current.get(courseId);
+    if (cached) {
+      setStudentsProgress(cached);
+      setStudentsLoading(false);
+    }
+  };
+
+  const handleCourseHover = (courseId: string) => {
+    if (!studentsCacheRef.current.has(courseId)) {
+      loadStudentsProgress(courseId, { silent: true });
+    }
   };
 
   // Handle student details view
@@ -1000,7 +1064,9 @@ export default function ProgressAnalyticsPage() {
                 <CourseOverviewCard
                   key={course.course_id}
                   course={course}
+                  isSelected={selectedCourse === course.course_id}
                   onClick={() => handleCourseSelect(course.course_id)}
+                  onMouseEnter={() => handleCourseHover(course.course_id)}
                 />
               ))}
             </div>
@@ -1034,7 +1100,24 @@ export default function ProgressAnalyticsPage() {
               </div>
             </div>
 
-            {filteredStudents.length === 0 ? (
+            {studentsLoading ? (
+              <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden animate-pulse">
+                <div className="px-4 py-3 border-b border-neutral-200 dark:border-neutral-700">
+                  <div className="h-4 bg-neutral-200 dark:bg-neutral-700 rounded w-48" />
+                </div>
+                <div className="divide-y divide-neutral-200 dark:divide-neutral-700">
+                  {[...Array(5)].map((_, i) => (
+                    <div key={i} className="px-4 py-4 flex items-center space-x-4">
+                      <div className="w-10 h-10 rounded-full bg-neutral-200 dark:bg-neutral-700" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 bg-neutral-200 dark:bg-neutral-700 rounded w-40" />
+                        <div className="h-3 bg-neutral-200 dark:bg-neutral-700 rounded w-56" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : filteredStudents.length === 0 ? (
               <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-8 text-center">
                 <div className="w-16 h-16 bg-neutral-100 dark:bg-neutral-700 rounded-full mx-auto mb-4 flex items-center justify-center">
                   <Users className="w-8 h-8 text-neutral-400 dark:text-neutral-500" />

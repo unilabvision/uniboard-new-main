@@ -22,25 +22,45 @@ interface UseUserModulesReturn {
   isSuperAdmin: boolean;
 }
 
+type ModulesCache = {
+  userId: string;
+  modules: Module[];
+  isSuperAdmin: boolean;
+  fetchedAt: number;
+};
+
+const CACHE_TTL_MS = 5 * 60 * 1000;
+let modulesCache: ModulesCache | null = null;
+
+function getCachedModules(userId: string): ModulesCache | null {
+  if (!modulesCache || modulesCache.userId !== userId) return null;
+  if (Date.now() - modulesCache.fetchedAt > CACHE_TTL_MS) return null;
+  return modulesCache;
+}
+
 export function useUserModules(): UseUserModulesReturn {
   const { user, isLoaded } = useUser();
-  const [modules, setModules] = useState<Module[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const cached = user?.id ? getCachedModules(user.id) : null;
 
-  const fetchModules = useCallback(async () => {
+  const [modules, setModules] = useState<Module[]>(cached?.modules ?? []);
+  const [loading, setLoading] = useState(!cached);
+  const [error, setError] = useState<string | null>(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(cached?.isSuperAdmin ?? false);
+
+  const fetchModules = useCallback(async (options?: { silent?: boolean }) => {
     if (!user || !isLoaded) {
       setLoading(false);
       return;
     }
 
+    const hasCache = !!getCachedModules(user.id);
+
     try {
-      setLoading(true);
+      if (!options?.silent && !hasCache) {
+        setLoading(true);
+      }
       setError(null);
-      
-      console.log('🔄 Fetching modules for user:', user.id);
-      
+
       const response = await fetch('/api/auth/user-modules', {
         method: 'GET',
         headers: {
@@ -50,24 +70,29 @@ export function useUserModules(): UseUserModulesReturn {
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('❌ API Error Response:', errorData);
         throw new Error(errorData.details || errorData.error || `HTTP ${response.status}`);
       }
 
       const data = await response.json();
-      console.log('✅ API Response:', data);
-      
-      // Debug bilgileri (sadece development'ta)
-      if (process.env.NODE_ENV === 'development' && data.debug) {
-        console.log('🐛 Debug Info:', data.debug);
-      }
-      
-      setModules(data.modules || []);
-      setIsSuperAdmin(data.isSuperAdmin ?? (data.modules || []).some((m: Module) => m.is_super_admin === true));
-      
+      const nextModules = data.modules || [];
+      const nextIsSuperAdmin =
+        data.isSuperAdmin ??
+        nextModules.some((m: Module) => m.is_super_admin === true);
+
+      modulesCache = {
+        userId: user.id,
+        modules: nextModules,
+        isSuperAdmin: nextIsSuperAdmin,
+        fetchedAt: Date.now(),
+      };
+
+      setModules(nextModules);
+      setIsSuperAdmin(nextIsSuperAdmin);
     } catch (err: unknown) {
-      console.error('💥 useUserModules error:', err);
-      setError((err as Error).message || 'Modüller yüklenirken bir hata oluştu');
+      console.error('useUserModules error:', err);
+      if (!hasCache) {
+        setError((err as Error).message || 'Modüller yüklenirken bir hata oluştu');
+      }
     } finally {
       setLoading(false);
     }
@@ -78,9 +103,18 @@ export function useUserModules(): UseUserModulesReturn {
   };
 
   useEffect(() => {
-    if (isLoaded) {
-      fetchModules();
+    if (!isLoaded) return;
+
+    if (!user) {
+      modulesCache = null;
+      setModules([]);
+      setIsSuperAdmin(false);
+      setLoading(false);
+      return;
     }
+
+    const hasCache = !!getCachedModules(user.id);
+    fetchModules({ silent: hasCache });
   }, [user, isLoaded, fetchModules]);
 
   return {
