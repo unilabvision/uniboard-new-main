@@ -671,7 +671,8 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
           setCoursesLoading(false);
         }
         return;
-      
+      }
+
       try {
         setCoursesLoading(true);
         
