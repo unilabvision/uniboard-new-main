@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { useUser, useClerk } from '@clerk/nextjs';
 import { useUserModules } from '../hooks/useUserModules';
 import { getIconComponent } from '@/utils/iconMapper';
+import { getModuleHref } from '@/utils/moduleRoutes';
 import { GraduationCap, BarChart3, Target, Lock, LogOut, HelpCircle, LucideIcon, Shield } from 'lucide-react';
 import ThemeSwitcher from '@/app/components/ThemeSwitcher'; // Theme switcher import
 
@@ -544,7 +545,7 @@ const DashboardContent = ({ locale }: { locale: string }) => {
                   title={locale === 'tr' ? module.name_tr : module.name_en}
                   description={locale === 'tr' ? module.description_tr : module.description_en}
                   icon={IconComponent}
-                  href={`/${locale}/${module.key}`}
+                  href={getModuleHref(locale, module.key)}
                   delay={index}
                 />
               );

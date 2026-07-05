@@ -54,7 +54,9 @@ export default function LMSLayout({ children, params }: LMSLayoutProps) {
       }
       
       // Check if user has LMS module access (süper admin her modüle erişebilir)
-      const hasLMS = isSuperAdmin || modules.some(module => module.key === 'lms');
+      const hasLMS = isSuperAdmin || modules.some(
+        module => module.key === 'lms' || module.key === 'students'
+      );
       setHasLMSAccess(hasLMS);
       
       console.log('🔍 LMS access check:', {

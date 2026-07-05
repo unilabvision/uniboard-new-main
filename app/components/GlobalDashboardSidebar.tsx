@@ -20,6 +20,7 @@ import {
   Award
 } from 'lucide-react';
 import { useUser, useClerk } from '@clerk/nextjs';
+import { getModuleHref } from '@/utils/moduleRoutes';
 
 interface ModuleContent {
   title: string;
@@ -454,7 +455,7 @@ export default function GlobalDashboardSidebar({ locale, modules }: SidebarProps
                 {modules.map((module) => (
                   <Link
                     key={module.key}
-                    href={`/${locale}/${module.key}`}
+                    href={getModuleHref(locale, module.key)}
                     onClick={() => setIsOpen(false)}
                     className="group relative flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100"
                   >
