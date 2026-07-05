@@ -30,6 +30,8 @@ const isPublicRoute = createRouteMatcher([
   '/en/help(.*)',
   '/en/about(.*)',
   '/tr/kariyer(.*)',
+  '/en/career(.*)',
+  '/en/careers(.*)',
   '/tr/login(.*)', // Auth routes
   '/en/login(.*)', // Auth routes
   '/tr/sign-up(.*)', // Auth routes
@@ -188,6 +190,8 @@ const isValidRoute = createRouteMatcher([
   '/tr/watch(.*)', // Course watching pages
   '/en/watch(.*)', // Course watching pages
   '/tr/kariyer(.*)',
+  '/en/career(.*)',
+  '/en/careers(.*)',
   '/en/career(.*)',
   '/tr/iletisim(.*)',
   '/en/contact(.*)',

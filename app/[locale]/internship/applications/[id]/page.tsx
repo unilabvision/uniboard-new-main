@@ -23,8 +23,13 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useUser } from '@clerk/nextjs';
+import { useUserModules } from '@/app/hooks/useUserModules';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { getCvDownloadUrl } from '../../utils/cvDownload';
+import ApplicationMatchPanel from '../../components/ApplicationMatchPanel';
+import { internshipDb } from '@/app/lib/internship/config';
+import { reviewerPermissions } from '@/app/lib/internship/permissions';
+import type { InternshipReviewer } from '@/app/types/internship';
 
 // Supabase client
 const supabase = createClientComponentClient({
@@ -136,7 +141,8 @@ const texts = {
     score: "Puan",
     submittedAt: "Başvuru Tarihi",
     source: "Kaynak",
-    reasonPlaceholder: "Durum değişikliği sebebi (opsiyonel)..."
+    reasonPlaceholder: "Durum değişikliği sebebi (opsiyonel)...",
+    noPermission: "Bu işlem için yetkiniz yok"
   },
   en: {
     backToList: "Back to Applications",
@@ -190,7 +196,8 @@ const texts = {
     score: "Score",
     submittedAt: "Submitted At",
     source: "Source",
-    reasonPlaceholder: "Reason for status change (optional)..."
+    reasonPlaceholder: "Reason for status change (optional)...",
+    noPermission: "You do not have permission for this action"
   }
 };
 
@@ -278,8 +285,11 @@ export default function ApplicationDetailPage({ params }: { params: Promise<{ lo
   const [notes, setNotes] = useState('');
   const [savingNotes, setSavingNotes] = useState(false);
   const [downloadingCv, setDownloadingCv] = useState(false);
+  const [reviewer, setReviewer] = useState<InternshipReviewer | null>(null);
   
   const { user: clerkUser, isLoaded } = useUser();
+  const { isSuperAdmin } = useUserModules();
+  const perms = reviewerPermissions(reviewer, isSuperAdmin);
 
   // Fetch data
   useEffect(() => {
@@ -328,10 +338,20 @@ export default function ApplicationDetailPage({ params }: { params: Promise<{ lo
           .select('*')
           .eq('application_id', id)
           .order('created_at', { ascending: false });
-        
+
         if (historyError) throw historyError;
         setStatusHistory(historyData || []);
-        
+
+        const { data: reviewerData } = await supabase
+          .from(internshipDb.reviewers)
+          .select(
+            'id, clerk_id, email, name, role, is_active, can_vote, can_change_status, can_add_notes, created_at, updated_at'
+          )
+          .eq('clerk_id', clerkUser.id)
+          .maybeSingle();
+
+        setReviewer((reviewerData as InternshipReviewer) || null);
+
       } catch (err) {
         console.error('Error fetching data:', err);
         setError(err instanceof Error ? err.message : 'An error occurred');
@@ -345,7 +365,7 @@ export default function ApplicationDetailPage({ params }: { params: Promise<{ lo
 
   // Handle vote submission
   const handleSubmitVote = async () => {
-    if (!clerkUser || !selectedVote) return;
+    if (!clerkUser || !selectedVote || !perms.canVote) return;
     
     try {
       setSubmittingVote(true);
@@ -399,7 +419,7 @@ export default function ApplicationDetailPage({ params }: { params: Promise<{ lo
 
   // Handle status change
   const handleStatusChange = async () => {
-    if (!clerkUser || !newStatus || newStatus === application?.status) return;
+    if (!clerkUser || !newStatus || newStatus === application?.status || !perms.canChangeStatus) return;
     
     try {
       setChangingStatus(true);
@@ -454,7 +474,7 @@ export default function ApplicationDetailPage({ params }: { params: Promise<{ lo
 
   // Handle notes save
   const handleSaveNotes = async () => {
-    if (!clerkUser) return;
+    if (!clerkUser || !perms.canAddNotes) return;
     
     try {
       setSavingNotes(true);
@@ -551,8 +571,8 @@ export default function ApplicationDetailPage({ params }: { params: Promise<{ lo
   }
 
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-5xl mx-auto">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 py-8 px-4 sm:px-6 lg:px-8 overflow-x-hidden">
+      <div className="max-w-7xl mx-auto w-full min-w-0">
         {/* Back Link */}
         <Link 
           href={`/${locale}/internship/applications`}
@@ -582,9 +602,9 @@ export default function ApplicationDetailPage({ params }: { params: Promise<{ lo
           </span>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 items-start">
           {/* Left Column - Main Info */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-6 min-w-0 order-2 lg:order-1">
             {/* Personal & Contact Info */}
             <div className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">
               <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-4">
@@ -713,8 +733,8 @@ export default function ApplicationDetailPage({ params }: { params: Promise<{ lo
             </div>
           </div>
 
-          {/* Right Column - Actions */}
-          <div className="space-y-6">
+          {/* Right Column - Actions (sayfa ile birlikte scroll, lg'de sticky) */}
+          <aside className="space-y-6 min-w-0 order-1 lg:order-2 lg:sticky lg:top-6 lg:self-start w-full">
             {/* CV */}
             <div className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">
               <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-4">
@@ -760,6 +780,7 @@ export default function ApplicationDetailPage({ params }: { params: Promise<{ lo
             </div>
 
             {/* Status Change */}
+            {perms.canChangeStatus && (
             <div className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">
               <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-4">
                 {t.changeStatus}
@@ -792,8 +813,10 @@ export default function ApplicationDetailPage({ params }: { params: Promise<{ lo
                 </button>
               </div>
             </div>
+            )}
 
             {/* Voting */}
+            {perms.canVote && (
             <div className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">
               <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-4">
                 {t.yourVote}
@@ -852,6 +875,7 @@ export default function ApplicationDetailPage({ params }: { params: Promise<{ lo
                 </button>
               </div>
             </div>
+            )}
 
             {/* Admin Notes */}
             <div className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">
@@ -859,7 +883,7 @@ export default function ApplicationDetailPage({ params }: { params: Promise<{ lo
                 <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
                   {t.adminNotes}
                 </h2>
-                {!editingNotes && (
+                {perms.canAddNotes && !editingNotes && (
                   <button
                     onClick={() => setEditingNotes(true)}
                     className="p-1.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 rounded transition-colors"
@@ -869,7 +893,7 @@ export default function ApplicationDetailPage({ params }: { params: Promise<{ lo
                 )}
               </div>
               
-              {editingNotes ? (
+              {editingNotes && perms.canAddNotes ? (
                 <div className="space-y-3">
                   <textarea
                     value={notes}
@@ -903,6 +927,12 @@ export default function ApplicationDetailPage({ params }: { params: Promise<{ lo
                 </p>
               )}
             </div>
+
+            <ApplicationMatchPanel
+              applicationId={id}
+              locale={locale}
+              position={application.position ?? ''}
+            />
 
             {/* Status History */}
             <div className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">
@@ -948,7 +978,7 @@ export default function ApplicationDetailPage({ params }: { params: Promise<{ lo
                 </div>
               )}
             </div>
-          </div>
+          </aside>
         </div>
       </div>
     </div>

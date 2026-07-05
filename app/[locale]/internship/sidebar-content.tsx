@@ -1,4 +1,4 @@
-import { 
+import {
   Home,
   Users,
   FileText,
@@ -7,108 +7,48 @@ import {
   UserCheck,
   Clock,
   CheckCircle,
-  XCircle
+  XCircle,
+  Building2,
+  Briefcase,
+  Sparkles,
+  Shield,
 } from 'lucide-react';
 
 export const internshipSidebarContent = {
   tr: {
-    title: "Staj Başvuruları",
+    title: 'Staj & Kariyer',
     items: [
-      {
-        name: "Dashboard",
-        href: "/",
-        icon: Home
-      },
-      {
-        name: "Tüm Başvurular",
-        href: "/applications",
-        icon: Users
-      },
-      {
-        name: "Bekleyenler",
-        href: "/applications?status=pending",
-        icon: Clock
-      },
-      {
-        name: "İncelemede",
-        href: "/applications?status=under_review",
-        icon: FileText
-      },
-      {
-        name: "Kabul Edilenler",
-        href: "/applications?status=accepted",
-        icon: CheckCircle
-      },
-      {
-        name: "Reddedilenler",
-        href: "/applications?status=rejected",
-        icon: XCircle
-      },
-      {
-        name: "Reviewer Yönetimi",
-        href: "/reviewers",
-        icon: UserCheck
-      },
-      {
-        name: "İstatistikler",
-        href: "/stats",
-        icon: BarChart3
-      },
-      {
-        name: "Ayarlar",
-        href: "/settings",
-        icon: Settings
-      }
-    ]
+      { name: 'Dashboard', href: '/', icon: Home },
+      { name: 'Tüm Başvurular', href: '/applications', icon: Users },
+      { name: 'Bekleyenler', href: '/applications?status=pending', icon: Clock },
+      { name: 'İncelemede', href: '/applications?status=under_review', icon: FileText },
+      { name: 'Kabul Edilenler', href: '/applications?status=accepted', icon: CheckCircle },
+      { name: 'Reddedilenler', href: '/applications?status=rejected', icon: XCircle },
+      { name: 'Kariyer & Fırsatlar', href: '/jobs', icon: Briefcase },
+      { name: 'İK Özeti', href: '/hr', icon: Building2 },
+      { name: 'AI Eşleştirme', href: '/matching', icon: Sparkles },
+      { name: 'Reviewer Yönetimi', href: '/reviewers', icon: UserCheck },
+      { name: 'İstatistikler', href: '/stats', icon: BarChart3 },
+      { name: 'Yetkilendirme', href: '/access', icon: Shield },
+      { name: 'Ayarlar', href: '/settings', icon: Settings },
+    ],
   },
   en: {
-    title: "Internship Applications",
+    title: 'Internship & Career',
     items: [
-      {
-        name: "Dashboard",
-        href: "/",
-        icon: Home
-      },
-      {
-        name: "All Applications",
-        href: "/applications",
-        icon: Users
-      },
-      {
-        name: "Pending",
-        href: "/applications?status=pending",
-        icon: Clock
-      },
-      {
-        name: "Under Review",
-        href: "/applications?status=under_review",
-        icon: FileText
-      },
-      {
-        name: "Accepted",
-        href: "/applications?status=accepted",
-        icon: CheckCircle
-      },
-      {
-        name: "Rejected",
-        href: "/applications?status=rejected",
-        icon: XCircle
-      },
-      {
-        name: "Reviewer Management",
-        href: "/reviewers",
-        icon: UserCheck
-      },
-      {
-        name: "Statistics",
-        href: "/stats",
-        icon: BarChart3
-      },
-      {
-        name: "Settings",
-        href: "/settings",
-        icon: Settings
-      }
-    ]
-  }
+      { name: 'Dashboard', href: '/', icon: Home },
+      { name: 'All Applications', href: '/applications', icon: Users },
+      { name: 'Pending', href: '/applications?status=pending', icon: Clock },
+      { name: 'Under Review', href: '/applications?status=under_review', icon: FileText },
+      { name: 'Accepted', href: '/applications?status=accepted', icon: CheckCircle },
+      { name: 'Rejected', href: '/applications?status=rejected', icon: XCircle },
+      { name: 'Career & Opportunities', href: '/jobs', icon: Briefcase },
+      { name: 'HR Overview', href: '/hr', icon: Building2 },
+      { name: 'AI Matching', href: '/matching', icon: Sparkles },
+      { name: 'Reviewer Management', href: '/reviewers', icon: UserCheck },
+      { name: 'Statistics', href: '/stats', icon: BarChart3 },
+      { name: 'Access Control', href: '/access', icon: Shield },
+      { name: 'Settings', href: '/settings', icon: Settings },
+    ],
+  },
 };

@@ -109,6 +109,14 @@ export default function GlobalDashboardSidebar({ locale, modules }: SidebarProps
     (modules.some((m) => m.key === currentModule) ||
       (currentModule === 'analytics' && modules.some((m) => m.key === 'reports')) ||
       (currentModule === 'reports' && modules.some((m) => m.key === 'analytics')) ||
+      (currentModule === 'internship' &&
+        modules.some((m) =>
+          ['internship', 'staj', 'career', 'kariyer', 'careers'].includes(m.key)
+        )) ||
+      (['staj', 'career', 'kariyer', 'careers'].includes(currentModule) &&
+        modules.some((m) =>
+          ['internship', 'staj', 'career', 'kariyer', 'careers'].includes(m.key)
+        )) ||
       currentModule === 'settings');
 
   // Modül değiştiğinde sidebar content'ini yükle
@@ -201,6 +209,20 @@ export default function GlobalDashboardSidebar({ locale, modules }: SidebarProps
                 content = analyticsSidebarContent;
               } catch (error) {
                 console.error('Could not load analytics sidebar content', error);
+                content = null;
+              }
+              break;
+
+            case 'internship':
+            case 'staj':
+            case 'career':
+            case 'kariyer':
+            case 'careers':
+              try {
+                const { internshipSidebarContent } = await import('../../app/[locale]/internship/sidebar-content');
+                content = internshipSidebarContent;
+              } catch (error) {
+                console.error('Could not load internship sidebar content', error);
                 content = null;
               }
               break;

@@ -38,18 +38,80 @@ export interface CertificateFieldSuggestion {
   skills_label?: string;
 }
 
-export class GeminiService {
-  private model;
+export interface CertificateFieldSuggestion {
+  coursename?: string;
+  instructor?: string;
+  duration?: string;
+  certificate_title?: string;
+  completion_text?: string;
+  skills_label?: string;
+}
 
-  constructor() {
-    try {
-      // Use the new Gemini 2.0 Flash Lite model
-      this.model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
-      console.log('Gemini model initialized: gemini-2.0-flash-lite');
-    } catch (error) {
-      console.error('Failed to initialize Gemini model:', error);
-      throw error;
+/** July 2026+ — gemini-2.0-flash-lite shut down; try newer models first */
+const DEFAULT_GEMINI_MODELS = [
+  'gemini-3.1-flash-lite',
+  'gemini-3.5-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-2.5-flash',
+] as const;
+
+function resolveModelCandidates(): string[] {
+  const fromEnv = process.env.GEMINI_MODEL?.trim();
+  if (fromEnv) {
+    return [fromEnv, ...DEFAULT_GEMINI_MODELS.filter((m) => m !== fromEnv)];
+  }
+  return [...DEFAULT_GEMINI_MODELS];
+}
+
+function isModelNotFoundError(message: string): boolean {
+  return (
+    message.includes('models/gemini') ||
+    message.includes('404') ||
+    message.includes('not found') ||
+    message.includes('NOT_FOUND')
+  );
+}
+
+export class GeminiService {
+  private activeModelName: string | null = null;
+
+  private getModel(modelName: string) {
+    return genAI.getGenerativeModel({ model: modelName });
+  }
+
+  /** Try models in order until one succeeds */
+  private async generateContentWithFallback(
+    prompt: string,
+    maxOutputTokens: number
+  ): Promise<{ text: string; model: string }> {
+    const candidates = resolveModelCandidates();
+    let lastError: Error | null = null;
+
+    for (const modelName of candidates) {
+      try {
+        const model = this.getModel(modelName);
+        const result = await model.generateContent({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { maxOutputTokens },
+        });
+        const text = result.response.text();
+        this.activeModelName = modelName;
+        return { text, model: modelName };
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        lastError = error instanceof Error ? error : new Error(message);
+        if (isModelNotFoundError(message)) {
+          console.warn(`Gemini model unavailable: ${modelName}`);
+          continue;
+        }
+        throw lastError;
+      }
     }
+
+    console.error('All Gemini models failed:', candidates.join(', '));
+    throw new Error(
+      `Gemini model bulunamadı. Denenen: ${candidates.join(', ')}. GEMINI_MODEL env ile geçerli model belirtin.`
+    );
   }
 
   /**
@@ -57,53 +119,40 @@ export class GeminiService {
    */
   async generateText(prompt: string, maxTokens: number = 150): Promise<string> {
     try {
-      console.log('Gemini generateText called with:', { 
-        promptLength: prompt.length, 
-        maxTokens,
-        apiKeyExists: !!process.env.GEMINI_API_KEY 
-      });
-      
       if (!process.env.GEMINI_API_KEY) {
         throw new Error('GEMINI_API_KEY environment variable is missing');
       }
-      
-      // Simple string prompt for better compatibility
-      const result = await this.model.generateContent(prompt);
-      
-      const response = result.response;
-      const text = response.text();
-      
-      console.log('Gemini response received:', { 
-        textLength: text.length,
-        preview: text.substring(0, 50) + '...'
-      });
-      
+
+      const { text, model } = await this.generateContentWithFallback(prompt, maxTokens);
+      console.log('Gemini response:', { model, textLength: text.length });
       return text;
     } catch (error: unknown) {
       console.error('Gemini text generation error:', error);
-      
-      // Type guard for error with message property
       const errorMessage = error instanceof Error ? error.message : String(error);
-      
-      // Handle specific Gemini API errors
-      if (errorMessage.includes('models/gemini')) {
-        console.error('Model not found. Using: gemini-2.0-flash-lite');
-        throw new Error('Gemini model bulunamadı. Lütfen daha sonra tekrar deneyin.');
-      }
-      
+
       if (errorMessage.includes('API_KEY')) {
         throw new Error('Gemini API anahtarı geçersiz.');
       }
-      
-      if (errorMessage.includes('QUOTA_EXCEEDED')) {
+
+      if (errorMessage.includes('QUOTA_EXCEEDED') || errorMessage.includes('429')) {
         throw new Error('Gemini API kotası aşıldı. Lütfen daha sonra tekrar deneyin.');
       }
-      
+
       if (error instanceof Error) {
-        throw new Error(`Gemini API hatası: ${error.message}`);
+        throw error;
       }
       throw new Error('AI yanıtı oluşturulamadı');
     }
+  }
+
+  /** Aktif / son başarılı model adı */
+  getActiveModelName(): string | null {
+    return this.activeModelName;
+  }
+
+  private async generateWithCurrentModel(prompt: string, maxOutputTokens = 8192): Promise<string> {
+    const { text } = await this.generateContentWithFallback(prompt, maxOutputTokens);
+    return text;
   }
 
   /**
@@ -163,9 +212,7 @@ JSON formatında yanıt ver:
 Recipients array'inde ${dataRows.length} satıra yakın isim olmalı (boş satırlar hariç).
 `;
 
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
+      const text = await this.generateWithCurrentModel(prompt);
 
       // JSON'u parse et
       const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -243,9 +290,7 @@ Türkçe öneriler ver. JSON formatı:
 }
 `;
 
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
+      const text = await this.generateWithCurrentModel(prompt);
 
       // JSON'u parse et
       const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -312,9 +357,7 @@ JSON formatında yanıt ver:
 }
 `;
 
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
+      const text = await this.generateWithCurrentModel(prompt);
 
       // JSON'u parse et
       const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -372,9 +415,7 @@ JSON formatında yanıt ver:
 }
 `;
 
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
+      const text = await this.generateWithCurrentModel(prompt);
 
       // JSON'u parse et
       const jsonMatch = text.match(/\{[\s\S]*\}/);

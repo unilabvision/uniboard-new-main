@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import GlobalDashboardSidebar from '../../components/GlobalDashboardSidebar';
 import { useUserModules } from '../../hooks/useUserModules';
+import { hasPlatformInternshipAccess } from '@/app/lib/internship/permissions';
 
 interface InternshipLayoutProps {
   children: React.ReactNode;
@@ -32,8 +33,16 @@ export default function InternshipLayout({ children, params }: InternshipLayoutP
   const [hasInternshipAccess, setHasInternshipAccess] = useState<boolean | null>(null);
   
   const { modules, loading, error, isSuperAdmin } = useUserModules();
+  const isInitialModuleLoad = loading && modules.length === 0;
 
-  // Resolve params
+  const resolvedInternshipAccess = useMemo(() => {
+    if (isInitialModuleLoad) return null;
+    if (error) return false;
+    return hasPlatformInternshipAccess(
+      modules.map((m) => m.key),
+      isSuperAdmin
+    );
+  }, [isInitialModuleLoad, error, isSuperAdmin, modules]);
   useEffect(() => {
     const resolveParams = async () => {
       const resolvedParams = await params;
@@ -43,29 +52,9 @@ export default function InternshipLayout({ children, params }: InternshipLayoutP
     resolveParams();
   }, [params]);
 
-  // Check internship module access
   useEffect(() => {
-    const checkInternshipAccess = () => {
-      if (loading) return;
-      
-      if (error) {
-        setHasInternshipAccess(false);
-        return;
-      }
-      
-      // Check if user has internship module access (süper admin her modüle erişebilir)
-      const hasInternship = isSuperAdmin || modules.some(module => module.key === 'internship');
-      setHasInternshipAccess(hasInternship);
-      
-      console.log('🔍 Internship access check:', {
-        modulesCount: modules.length,
-        modules: modules.map(m => m.key),
-        hasInternship
-      });
-    };
-    
-    checkInternshipAccess();
-  }, [modules, loading, error, isSuperAdmin]);
+    setHasInternshipAccess(resolvedInternshipAccess);
+  }, [resolvedInternshipAccess]);
 
   // Listen for sidebar minimize state changes
   useEffect(() => {
@@ -86,7 +75,7 @@ export default function InternshipLayout({ children, params }: InternshipLayoutP
   }, []);
 
   // Loading state
-  if (!mounted || loading || hasInternshipAccess === null) {
+  if (!mounted || isInitialModuleLoad || resolvedInternshipAccess === null) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-900 dark:to-neutral-800 flex items-center justify-center">
         <div className="text-center">
@@ -100,7 +89,7 @@ export default function InternshipLayout({ children, params }: InternshipLayoutP
   }
 
   // Access denied state
-  if (hasInternshipAccess === false) {
+  if (resolvedInternshipAccess === false) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-900 dark:to-neutral-800 flex items-center justify-center py-12">
         <div className="max-w-md mx-auto text-center px-6">
@@ -202,11 +191,10 @@ export default function InternshipLayout({ children, params }: InternshipLayoutP
       <GlobalDashboardSidebar locale={locale} modules={modulesWithCategory} />
       
       {/* Main Content with proper margin to account for fixed sidebar */}
-      <div className={`flex-1 transition-all duration-300 ${
+      <div className={`flex-1 min-w-0 transition-all duration-300 ${
         isMinimized ? 'lg:ml-16' : 'lg:ml-64'
       }`}>
-        {/* Content */}
-        <main className="min-h-screen">
+        <main className="min-h-screen w-full min-w-0 overflow-x-hidden">
           {children}
         </main>
       </div>
