@@ -3,6 +3,8 @@ const modulePathOverrides: Record<string, string> = {
   students: 'lms/progress',
   student: 'lms/progress',
   courses: 'lms',
+  analytics: 'analytics',
+  reports: 'analytics',
 };
 
 export const getModuleHref = (locale: string, moduleKey: string) => {

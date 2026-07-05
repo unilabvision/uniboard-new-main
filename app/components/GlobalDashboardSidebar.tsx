@@ -104,7 +104,12 @@ export default function GlobalDashboardSidebar({ locale, modules }: SidebarProps
   }
   
   
-  const isInModule = currentModule && (modules.some(m => m.key === currentModule) || currentModule === 'settings');
+  const isInModule =
+    !!currentModule &&
+    (modules.some((m) => m.key === currentModule) ||
+      (currentModule === 'analytics' && modules.some((m) => m.key === 'reports')) ||
+      (currentModule === 'reports' && modules.some((m) => m.key === 'analytics')) ||
+      currentModule === 'settings');
 
   // Modül değiştiğinde sidebar content'ini yükle
   useEffect(() => {
@@ -188,15 +193,17 @@ export default function GlobalDashboardSidebar({ locale, modules }: SidebarProps
                 content = null;
               }
               break;
-              
-            // case 'education':
-            //   const { educationSidebarContent } = await import('@/app/[locale]/dashboard/education/sidebar-content');
-            //   content = educationSidebarContent;
-            //   break;
-            // case 'analytics':
-            //   const { analyticsSidebarContent } = await import('@/app/[locale]/dashboard/analytics/sidebar-content');
-            //   content = analyticsSidebarContent;
-            //   break;
+
+            case 'analytics':
+            case 'reports':
+              try {
+                const { analyticsSidebarContent } = await import('../../app/[locale]/analytics/sidebar-content');
+                content = analyticsSidebarContent;
+              } catch (error) {
+                console.error('Could not load analytics sidebar content', error);
+                content = null;
+              }
+              break;
             // case 'sales':
             //   const { salesSidebarContent } = await import('@/app/[locale]/dashboard/sales/sidebar-content');
             //   content = salesSidebarContent;
