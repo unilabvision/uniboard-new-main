@@ -29,6 +29,10 @@ import { getCvDownloadUrl } from '../../utils/cvDownload';
 import ApplicationMatchPanel from '../../components/ApplicationMatchPanel';
 import { internshipDb } from '@/app/lib/internship/config';
 import { reviewerPermissions } from '@/app/lib/internship/permissions';
+import {
+  formatApplicationGrade,
+  formatApplicationSource,
+} from '@/app/lib/internship/displayLabels';
 import type { InternshipReviewer } from '@/app/types/internship';
 
 // Supabase client
@@ -105,7 +109,7 @@ const texts = {
     noCV: "CV yüklenmemiş",
     status: "Durum",
     changeStatus: "Durumu Değiştir",
-    adminNotes: "Admin Notları",
+    adminNotes: "Yönetici Notları",
     addNote: "Not Ekle",
     saveNote: "Notu Kaydet",
     cancelNote: "İptal",
@@ -160,7 +164,7 @@ const texts = {
     noCV: "No CV uploaded",
     status: "Status",
     changeStatus: "Change Status",
-    adminNotes: "Admin Notes",
+    adminNotes: "Manager Notes",
     addNote: "Add Note",
     saveNote: "Save Note",
     cancelNote: "Cancel",
@@ -636,7 +640,9 @@ export default function ApplicationDetailPage({ params }: { params: Promise<{ lo
                   <Briefcase className="w-5 h-5 text-neutral-400" />
                   <div>
                     <p className="text-xs text-neutral-500 dark:text-neutral-400">Sınıf</p>
-                    <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">{application.grade}</p>
+                    <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                      {formatApplicationGrade(application.grade, locale)}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 p-3 bg-neutral-50 dark:bg-neutral-900/50 rounded-lg">
@@ -650,7 +656,9 @@ export default function ApplicationDetailPage({ params }: { params: Promise<{ lo
                   <User className="w-5 h-5 text-neutral-400" />
                   <div>
                     <p className="text-xs text-neutral-500 dark:text-neutral-400">{t.source}</p>
-                    <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">{application.source || 'website'}</p>
+                    <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                      {formatApplicationSource(application.source, locale)}
+                    </p>
                   </div>
                 </div>
               </div>

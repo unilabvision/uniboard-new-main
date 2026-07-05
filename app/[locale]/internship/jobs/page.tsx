@@ -9,6 +9,12 @@ import {
   getCareerTagLabel,
   getOpportunityTitle,
 } from '@/app/lib/internship/config';
+import {
+  formatOpportunityFallback,
+  formatLoadError,
+  formatWorkMode,
+  formatApplicationStatus,
+} from '@/app/lib/internship/displayLabels';
 import type {
   CareerTag,
   Opportunity,
@@ -53,10 +59,10 @@ export default function InternshipJobsPage({
     locale === 'tr'
       ? {
           title: 'Kariyer & Fırsatlar',
-          subtitle: 'myuni_opportunities · myuni_career_tags · başvurular',
+          subtitle: 'Açık fırsatlar, kariyer etiketleri ve başvurular',
           tags: 'Kariyer etiketleri',
           opportunities: 'Açık fırsatlar',
-          tagLinks: 'Fırsat–etiket bağları',
+          tagLinks: 'Etiket eşleştirmeleri',
           opportunityApps: 'Fırsat başvuruları',
           email: 'E-posta',
           status: 'Durum',
@@ -77,10 +83,10 @@ export default function InternshipJobsPage({
         }
       : {
           title: 'Career & Opportunities',
-          subtitle: 'myuni_opportunities · myuni_career_tags · applications',
+          subtitle: 'Open opportunities, career tags and applications',
           tags: 'Career tags',
           opportunities: 'Open opportunities',
-          tagLinks: 'Opportunity–tag links',
+          tagLinks: 'Tag assignments',
           opportunityApps: 'Opportunity applications',
           email: 'Email',
           status: 'Status',
@@ -131,21 +137,21 @@ export default function InternshipJobsPage({
       supabase.from(internshipDb.applications).select('position'),
     ]);
 
-    if (tagsRes.error) errs.push(tagsRes.error.message);
+    if (tagsRes.error) errs.push(formatLoadError(locale));
     else setCareerTags((tagsRes.data || []) as CareerTag[]);
 
-    if (oppsRes.error) errs.push(oppsRes.error.message);
+    if (oppsRes.error) errs.push(formatLoadError(locale));
     else setOpportunities((oppsRes.data || []) as Opportunity[]);
 
-    if (linksRes.error) errs.push(linksRes.error.message);
+    if (linksRes.error) errs.push(formatLoadError(locale));
     else setTagLinks((linksRes.data || []) as OpportunityCareerTagLink[]);
 
-    if (oppRes.error) errs.push(oppRes.error.message);
+    if (oppRes.error) errs.push(formatLoadError(locale));
     else setOpportunityApps((oppRes.data || []) as OpportunityApplication[]);
 
     if (!internRes.error) setInternshipApps(internRes.data || []);
 
-    setErrors(errs);
+    setErrors([...new Set(errs)]);
     setLoading(false);
   };
 
@@ -171,7 +177,7 @@ export default function InternshipJobsPage({
       const title = getOpportunityTitle(opp, locale);
       if (title !== '—') return title;
     }
-    return `${id.slice(0, 8)}…`;
+    return formatOpportunityFallback(locale);
   };
 
   const linksWithLabels = useMemo(
@@ -259,7 +265,7 @@ export default function InternshipJobsPage({
                           </td>
                           <td className="py-2 pr-4">{opp.company_name || '—'}</td>
                           <td className="py-2 pr-4">{opp.location || '—'}</td>
-                          <td className="py-2 pr-4">{opp.work_mode || '—'}</td>
+                          <td className="py-2 pr-4">{formatWorkMode(opp.work_mode, locale)}</td>
                           <td className="py-2 pr-4 text-neutral-500">
                             {opp.application_deadline
                               ? formatDate(opp.application_deadline)
@@ -296,7 +302,6 @@ export default function InternshipJobsPage({
                   {careerTags.map((tag) => (
                     <span
                       key={tag.id}
-                      title={tag.slug}
                       className="px-3 py-1 rounded-full bg-[#990000]/10 text-[#990000] text-sm"
                     >
                       {getCareerTagLabel(tag, locale)}
@@ -360,7 +365,7 @@ export default function InternshipJobsPage({
                           <td className="py-2 pr-4">{row.applicant_email}</td>
                           <td className="py-2 pr-4">
                             <span className={`px-2 py-0.5 rounded text-xs ${statusColor(row.status)}`}>
-                              {row.status}
+                              {formatApplicationStatus(row.status, locale)}
                             </span>
                           </td>
                           <td className="py-2 pr-4">{opportunityLabel(row.opportunity_id)}</td>

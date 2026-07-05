@@ -27,7 +27,7 @@ export const internshipSidebarContent = {
       { name: 'Kariyer & Fırsatlar', href: '/jobs', icon: Briefcase },
       { name: 'İK Özeti', href: '/hr', icon: Building2 },
       { name: 'AI Eşleştirme', href: '/matching', icon: Sparkles },
-      { name: 'Reviewer Yönetimi', href: '/reviewers', icon: UserCheck },
+      { name: 'Değerlendirici Yönetimi', href: '/reviewers', icon: UserCheck },
       { name: 'İstatistikler', href: '/stats', icon: BarChart3 },
       { name: 'Yetkilendirme', href: '/access', icon: Shield },
       { name: 'Ayarlar', href: '/settings', icon: Settings },

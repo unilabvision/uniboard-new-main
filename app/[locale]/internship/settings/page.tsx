@@ -2,38 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Shield, Database, ArrowRight } from 'lucide-react';
-import { internshipDb } from '@/app/lib/internship/config';
-
-const TABLE_GROUPS = [
-  {
-    title_tr: 'Staj başvuru hattı',
-    title_en: 'Internship pipeline',
-    tables: [
-      internshipDb.applications,
-      internshipDb.votes,
-      internshipDb.statusHistory,
-      internshipDb.reviewers,
-      internshipDb.formConfigs,
-      internshipDb.formFields,
-    ],
-  },
-  {
-    title_tr: 'Kariyer / fırsat hattı',
-    title_en: 'Career / opportunity pipeline',
-    tables: [
-      internshipDb.opportunities,
-      internshipDb.opportunityApplications,
-      internshipDb.opportunityAppStatusHistory,
-      internshipDb.opportunityCourses,
-      internshipDb.applicationsGeneric,
-      internshipDb.applicationStatusHistory,
-      internshipDb.careerTags,
-      internshipDb.opportunityCareerTags,
-      internshipDb.courseCareerTags,
-    ],
-  },
-] as const;
+import { Shield, ArrowRight } from 'lucide-react';
 
 export default function InternshipSettingsPage({
   params,
@@ -52,40 +21,21 @@ export default function InternshipSettingsPage({
     <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 py-8 px-4 sm:px-8">
       <div className="max-w-3xl mx-auto">
         <h1 className="text-2xl font-bold">
-          {tr ? 'Veritabanı & Yetki' : 'Database & Access'}
+          {tr ? 'Ayarlar' : 'Settings'}
         </h1>
         <p className="text-neutral-600 dark:text-neutral-400 mt-1 mb-8">
-          {tr
-            ? 'Supabase\'de kurulu tablolar — yeni tablo eklenmez'
-            : 'Tables configured in Supabase — no new tables added'}
+          {tr ? 'Staj & Kariyer modülü ayarları' : 'Internship & Career module settings'}
         </p>
-
-        {TABLE_GROUPS.map((group) => (
-          <section
-            key={group.title_en}
-            className="bg-white dark:bg-neutral-800 rounded-lg border p-6 mb-6"
-          >
-            <h2 className="font-semibold flex items-center gap-2 mb-3">
-              <Database className="w-5 h-5 text-[#990000]" />
-              {tr ? group.title_tr : group.title_en}
-            </h2>
-            <ul className="font-mono text-sm space-y-1 text-neutral-700 dark:text-neutral-300">
-              {group.tables.map((table) => (
-                <li key={table}>{table}</li>
-              ))}
-            </ul>
-          </section>
-        ))}
 
         <section className="bg-white dark:bg-neutral-800 rounded-lg border p-6">
           <h2 className="font-semibold flex items-center gap-2 mb-2">
             <Shield className="w-5 h-5 text-[#990000]" />
-            {tr ? 'Erişim' : 'Access'}
+            {tr ? 'Erişim & Yetkilendirme' : 'Access & Permissions'}
           </h2>
           <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-4">
             {tr
-              ? 'Platform: user_module_access → internship. Kullanıcı daveti için Yetkilendirme sayfasını kullanın.'
-              : 'Platform: user_module_access → internship. Use Access Control to invite users.'}
+              ? 'Modüle erişim vermek ve kullanıcı daveti göndermek için Yetkilendirme sayfasını kullanın.'
+              : 'Use Access Control to grant module access and invite users.'}
           </p>
           <Link
             href={`/${locale}/internship/access`}

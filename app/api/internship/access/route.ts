@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { internshipDb } from '@/app/lib/internship/config';
 import {
   isEmailQuery,
@@ -15,10 +16,7 @@ import {
   requireInternshipAccessManager,
 } from './_helpers';
 
-async function grantModuleAccess(
-  supabase: ReturnType<typeof import('@supabase/supabase-js').createClient>,
-  clerkUserId: string
-) {
+async function grantModuleAccess(supabase: SupabaseClient, clerkUserId: string) {
   const { data: existing } = await supabase
     .from('user_module_access')
     .select('id')
@@ -45,7 +43,7 @@ async function grantModuleAccess(
 }
 
 async function upsertReviewer(
-  supabase: ReturnType<typeof import('@supabase/supabase-js').createClient>,
+  supabase: SupabaseClient,
   clerkUserId: string,
   email: string,
   name: string

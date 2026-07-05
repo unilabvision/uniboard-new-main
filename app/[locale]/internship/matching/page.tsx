@@ -61,7 +61,7 @@ export default function InternshipMatchingPage({
           </h2>
           <ol className="text-sm text-neutral-600 dark:text-neutral-400 space-y-2 list-decimal list-inside">
             <li>{tr ? 'Aday metninden beceri ve deneyim profili çıkarılır' : 'Extract skills & experience from application text'}</li>
-            <li>{tr ? 'Pozisyon + myuni_career_tags ile ilan profili oluşturulur' : 'Build job profile from position + career tags'}</li>
+            <li>{tr ? 'Pozisyon ve kariyer etiketleriyle ilan profili oluşturulur' : 'Build job profile from position and career tags'}</li>
             <li>{tr ? 'Etiket ön eşleştirmesi + nihai skor, mülakat soruları, İK adımları' : 'Keyword pre-match + final score, interview Qs, HR actions'}</li>
           </ol>
         </div>

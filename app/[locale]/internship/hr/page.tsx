@@ -31,23 +31,33 @@ export default function InternshipHrPage({
     locale === 'tr'
       ? {
           title: 'İK Özeti',
-          subtitle: 'Mevcut Supabase tablolarından birleşik görünüm',
+          subtitle: 'Staj, fırsat ve değerlendirme verilerinin özeti',
           byPosition: 'Staj pozisyonları',
           bySchool: 'Okullar',
-          bySource: 'Kaynak (source)',
-          reviewers: 'Aktif oylayanlar (votes)',
-          stats: 'Tablo özetleri',
+          bySource: 'Kaynak',
+          reviewers: 'Aktif değerlendiriciler',
+          stats: 'Kayıt özeti',
+          statInternshipApps: 'Staj başvuruları',
+          statOpportunityApps: 'Fırsat başvuruları',
+          statReviewers: 'Değerlendiriciler',
+          statCareerTags: 'Kariyer etiketleri',
+          statFormConfigs: 'Form yapılandırmaları',
           refresh: 'Yenile',
           count: 'kayıt',
         }
       : {
           title: 'HR Overview',
-          subtitle: 'Unified view from existing Supabase tables',
+          subtitle: 'Summary of internship, opportunity and review data',
           byPosition: 'Internship positions',
           bySchool: 'Schools',
-          bySource: 'Source field',
-          reviewers: 'Active voters',
-          stats: 'Table summaries',
+          bySource: 'Source',
+          reviewers: 'Active reviewers',
+          stats: 'Record summary',
+          statInternshipApps: 'Internship applications',
+          statOpportunityApps: 'Opportunity applications',
+          statReviewers: 'Reviewers',
+          statCareerTags: 'Career tags',
+          statFormConfigs: 'Form configurations',
           refresh: 'Refresh',
           count: 'records',
         };
@@ -123,11 +133,11 @@ export default function InternshipHrPage({
   }, [votes]);
 
   const tableStats = [
-    { label: internshipDb.applications, value: internshipApps.length },
-    { label: internshipDb.opportunityApplications, value: opportunityApps.length },
-    { label: internshipDb.reviewers, value: reviewerCount },
-    { label: internshipDb.careerTags, value: careerTagCount },
-    { label: internshipDb.formConfigs, value: formConfigCount },
+    { label: t.statInternshipApps, value: internshipApps.length },
+    { label: t.statOpportunityApps, value: opportunityApps.length },
+    { label: t.statReviewers, value: reviewerCount },
+    { label: t.statCareerTags, value: careerTagCount },
+    { label: t.statFormConfigs, value: formConfigCount },
   ];
 
   return (
@@ -159,7 +169,7 @@ export default function InternshipHrPage({
                   className="bg-white dark:bg-neutral-800 rounded-lg border p-4 text-center"
                 >
                   <p className="text-2xl font-bold text-[#990000]">{row.value}</p>
-                  <p className="text-xs text-neutral-500 mt-1 font-mono truncate">{row.label}</p>
+                  <p className="text-xs text-neutral-500 mt-1 truncate">{row.label}</p>
                 </div>
               ))}
             </section>

@@ -60,12 +60,12 @@ export default function InternshipAccessPage({
   const t = tr
     ? {
         title: 'Yetkilendirme',
-        subtitle: 'Clerk kullanıcılarını isim veya e-posta ile arayın',
+        subtitle: 'Kullanıcıları isim veya e-posta ile arayın',
         placeholder: 'İsim veya e-posta yazın…',
-        hint: 'Yalnızca isim veya e-posta (string). Kullanıcı ID veya UUID girmeyin.',
+        hint: 'En az 2 karakter yazarak aramaya başlayın.',
         invite: 'Erişim Ver & Davet Gönder',
         inviting: 'Gönderiliyor…',
-        reviewer: 'Reviewer olarak ekle (oy, durum, not)',
+        reviewer: 'Değerlendirici olarak ekle (oy, durum, not)',
         current: 'Mevcut erişimler',
         empty: 'Henüz kayıt yok',
         revoke: 'Kaldır',
@@ -73,12 +73,13 @@ export default function InternshipAccessPage({
         clear: 'Temizle',
         invalidQuery: 'Geçersiz arama — yalnızca isim veya e-posta kullanın.',
         noResults: 'Sonuç bulunamadı',
+        superAdmin: 'Süper yönetici',
       }
     : {
         title: 'Access Control',
-        subtitle: 'Search Clerk users by name or email',
+        subtitle: 'Search users by name or email',
         placeholder: 'Type name or email…',
-        hint: 'Name or email only (string). Do not enter user IDs or UUIDs.',
+        hint: 'Start typing at least 2 characters to search.',
         invite: 'Grant Access & Send Invite',
         inviting: 'Sending…',
         reviewer: 'Add as reviewer (vote, status, notes)',
@@ -89,6 +90,7 @@ export default function InternshipAccessPage({
         clear: 'Clear',
         invalidQuery: 'Invalid search — use name or email only.',
         noResults: 'No results found',
+        superAdmin: 'Super admin',
       };
 
   useEffect(() => {
@@ -426,7 +428,7 @@ export default function InternshipAccessPage({
                     </div>
                     {m.is_super_admin && (
                       <span className="text-xs px-2 py-0.5 rounded bg-[#990000]/10 text-[#990000] shrink-0">
-                        admin
+                        {t.superAdmin}
                       </span>
                     )}
                   </div>

@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { UserCheck, RefreshCw, Mail, Shield, Check, X } from 'lucide-react';
+import { UserCheck, RefreshCw, Mail, Check, X } from 'lucide-react';
 import { useUser } from '@clerk/nextjs';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { internshipDb } from '@/app/lib/internship/config';
+import { formatReviewerRole } from '@/app/lib/internship/displayLabels';
 import type { InternshipReviewer } from '@/app/types/internship';
 
 const supabase = createClientComponentClient({
@@ -41,9 +42,9 @@ export default function InternshipReviewersPage({
   const t =
     locale === 'tr'
       ? {
-          title: 'Reviewer Yönetimi',
-          subtitle: 'internship_reviewers tablosu',
-          empty: 'Reviewer kaydı yok',
+          title: 'Değerlendirici Yönetimi',
+          subtitle: 'Değerlendirme yetkisi olan kullanıcılar',
+          empty: 'Değerlendirici kaydı yok',
           refresh: 'Yenile',
           name: 'Ad',
           email: 'E-posta',
@@ -56,7 +57,7 @@ export default function InternshipReviewersPage({
         }
       : {
           title: 'Reviewer Management',
-          subtitle: 'internship_reviewers table',
+          subtitle: 'Users with review permissions',
           empty: 'No reviewers',
           refresh: 'Refresh',
           name: 'Name',
@@ -157,7 +158,7 @@ export default function InternshipReviewersPage({
                       </td>
                       <td className="px-4 py-3">
                         <span className="px-2 py-0.5 rounded bg-neutral-100 dark:bg-neutral-700 text-xs">
-                          {row.role}
+                          {formatReviewerRole(row.role, locale)}
                         </span>
                       </td>
                       <td className="px-4 py-3">
@@ -177,11 +178,6 @@ export default function InternshipReviewersPage({
             </table>
           </div>
         )}
-
-        <p className="mt-6 text-xs text-neutral-500 flex items-center gap-1">
-          <Shield className="w-3 h-3" />
-          clerk_id · can_vote · can_change_status · can_add_notes
-        </p>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import geminiService from '@/app/_services/geminiService';
 import {
   internshipDb,
@@ -13,7 +13,7 @@ import { runMatchAgent } from '@/app/lib/internship/matchAgent';
 import type { CareerTag, JobMatchInput } from '@/app/types/internship';
 
 async function fetchAllCareerTagLabels(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   locale: string
 ): Promise<string[]> {
   const { data } = await supabase
@@ -23,7 +23,7 @@ async function fetchAllCareerTagLabels(
 }
 
 async function fetchOpportunityTagKeywords(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   opportunityId: string,
   locale: string
 ): Promise<string[]> {

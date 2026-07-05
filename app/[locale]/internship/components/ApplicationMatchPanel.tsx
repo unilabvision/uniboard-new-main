@@ -62,7 +62,7 @@ export default function ApplicationMatchPanel({
   const t = tr
     ? {
         title: 'AI Agent — Aday Eşleştirme',
-        subtitle: '3 aşamalı otonom analiz · myuni_career_tags + başvuru',
+        subtitle: '3 aşamalı otonom analiz · kariyer etiketleri ve başvuru',
         required: 'Zorunlu anahtar kelimeler',
         preferred: 'Tercih edilen kelimeler',
         analyze: 'Agent Analizini Başlat',
@@ -74,7 +74,7 @@ export default function ApplicationMatchPanel({
         strengths: 'Güçlü Yönler',
         risks: 'Dikkat',
         positionHint: 'Pozisyon',
-        tagsFromDb: 'Kariyer etiketleri (tıkla ekle)',
+        tagsHint: 'Kariyer etiketleri (tıkla ekle)',
         agentTrace: 'Agent adımları',
         reasoning: 'Agent gerekçesi',
         interview: 'Önerilen mülakat soruları',
@@ -103,7 +103,7 @@ export default function ApplicationMatchPanel({
         strengths: 'Strengths',
         risks: 'Risks',
         positionHint: 'Position',
-        tagsFromDb: 'Career tags (click to add)',
+        tagsHint: 'Career tags (click to add)',
         agentTrace: 'Agent steps',
         reasoning: 'Agent reasoning',
         interview: 'Suggested interview questions',
@@ -241,7 +241,7 @@ export default function ApplicationMatchPanel({
 
       {careerTags.length > 0 && (
         <div className="mb-4">
-          <p className="text-xs text-neutral-500 mb-2">{t.tagsFromDb}</p>
+          <p className="text-xs text-neutral-500 mb-2">{t.tagsHint}</p>
           <div className="flex flex-wrap gap-1">
             {careerTags.map((tag) => (
               <button
