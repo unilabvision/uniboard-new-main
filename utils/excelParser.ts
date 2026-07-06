@@ -416,6 +416,57 @@ export class ExcelParser {
     return null;
   }
 
+  static normalizeEmail(value: unknown): string | undefined {
+    const email = String(value ?? '').trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return undefined;
+    }
+    return email;
+  }
+
+  /**
+   * İsim ve e-posta sütunlarından alıcı listesi oluşturur
+   */
+  static buildRecipientsWithEmails(
+    data: any[][],
+    options: {
+      nameColumn?: number;
+      firstNameColumn?: number;
+      lastNameColumn?: number;
+      emailColumn?: number | null;
+    }
+  ): Array<{ name: string; email?: string }> {
+    if (!data || data.length < 2) return [];
+
+    const { nameColumn, firstNameColumn, lastNameColumn, emailColumn } = options;
+    const recipients: Array<{ name: string; email?: string }> = [];
+
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      if (!row) continue;
+
+      let name = '';
+      if (firstNameColumn !== undefined && lastNameColumn !== undefined) {
+        const fullName = `${String(row[firstNameColumn] || '').trim()} ${String(row[lastNameColumn] || '').trim()}`.trim();
+        name = fullName ? this.capitalizeName(fullName) : '';
+      } else if (nameColumn !== undefined) {
+        const rawName = row[nameColumn];
+        name = rawName ? this.capitalizeName(String(rawName)) : '';
+      }
+
+      if (!name) continue;
+
+      const email =
+        emailColumn !== undefined && emailColumn !== null
+          ? this.normalizeEmail(row[emailColumn])
+          : undefined;
+
+      recipients.push({ name, email });
+    }
+
+    return recipients;
+  }
+
   /**
    * Excel verilerini validasyondan geçirir
    */

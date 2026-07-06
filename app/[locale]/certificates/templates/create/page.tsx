@@ -12,6 +12,8 @@ import { generateDashboardCertificatePreview } from '@/utils/dashboardCertificat
 import FileUpload from '@/app/components/ui/FileUpload';
 import { uploadFileToSupabase, validateFile } from '@/app/_services/fileUploadService';
 import { certificatesSupabase as supabase } from '@/app/_services/certificatesSupabaseClient';
+import { getCertificateOrganizationSlugs } from '@/app/_services/organizationAccessService';
+import { useUserModules } from '@/app/hooks/useUserModules';
 
 // Types
 interface Organization {
@@ -315,6 +317,7 @@ export default function CreateTemplatePage() {
   
   // Clerk user hook and locale
   const { user: clerkUser, isLoaded } = useUser();
+  const { isSuperAdmin, loading: modulesLoading } = useUserModules();
   const locale = 'tr'; // You can get this from params or context
   const t = texts[locale] || texts.tr;
   
@@ -448,61 +451,29 @@ export default function CreateTemplatePage() {
   // Set current user
   useEffect(() => {
     const getCurrentUser = async () => {
-      if (!isLoaded) return;
-      
+      if (!isLoaded || modulesLoading) return;
+
       if (!clerkUser) {
         setLoading(false);
         return;
       }
 
       try {
-        // Initialize basic user info
+        const orgSlugs = await getCertificateOrganizationSlugs(clerkUser.id, isSuperAdmin);
+
         setCurrentUser({
           id: clerkUser.id,
           name: clerkUser.fullName || clerkUser.firstName || 'Kullanıcı',
           email: clerkUser.emailAddresses[0]?.emailAddress || '',
-          organizationSlugs: []
+          organizationSlugs: orgSlugs,
         });
-        
-        // Fetch user's organization access from the database
-        const { data, error } = await supabase
-          .from('user_module_access')
-          .select(`
-            *,
-            organizations:organization_id (
-              slug
-            )
-          `)
-          .eq('clerk_user_id', clerkUser.id)
-          .eq('module_key', 'certificates')
-          .eq('is_enabled', true);
-        
-        if (error) {
-          console.error('Error fetching user module access:', error);
-          return;
-        }
-        
-        // Extract organization slugs from the join result
-        const orgSlugs = data
-          ?.filter(item => item.organizations?.slug)
-          .map(item => item.organizations.slug) || [];
-        
-        // Update current user with organization slugs
-        setCurrentUser(prev => ({
-          ...(prev || {
-            id: clerkUser.id,
-            name: clerkUser.fullName || clerkUser.firstName || 'Kullanıcı',
-            email: clerkUser.emailAddresses[0]?.emailAddress || ''
-          }),
-          organizationSlugs: orgSlugs
-        }));
       } catch (error) {
         console.error('Error getting user profile:', error);
       }
     };
 
     getCurrentUser();
-  }, [clerkUser, isLoaded]);
+  }, [clerkUser, isLoaded, isSuperAdmin, modulesLoading]);
 
   // Fetch organizations
   useEffect(() => {
@@ -860,6 +831,15 @@ export default function CreateTemplatePage() {
                   </select>
                   {errors.organization_slug && (
                     <p className="text-red-500 text-sm mt-1">{errors.organization_slug}</p>
+                  )}
+                  {!loading && organizations.length === 0 && (
+                    <p className="text-sm text-yellow-600 dark:text-yellow-400 mt-2">
+                      Kuruluş bulunamadı.{' '}
+                      <Link href={`/${locale}/certificates/settings`} className="underline hover:text-yellow-700 dark:hover:text-yellow-300">
+                        Kurum ayarlarından
+                      </Link>{' '}
+                      ekleyin veya erişim talep edin.
+                    </p>
                   )}
                 </div>
 

@@ -37,8 +37,11 @@ export async function POST(request: NextRequest) {
           description: cert.description || ''
         };
 
-        const certificateUrl = cert.certificateurl || 
-          `https://certificates.myunilab.net/${cert.certificatenumber}`;
+        const certificateUrl =
+          cert.certificateurl ||
+          (cert.organization_slug
+            ? `https://certificates.myunilab.net/${cert.organization_slug}/${cert.certificatenumber}`
+            : `https://certificates.myunilab.net/${cert.certificatenumber}`);
 
         const organizationName = cert.organization || 'Kurum';
         console.log('Sending email - Organization name:', organizationName, 'Certificate:', cert);

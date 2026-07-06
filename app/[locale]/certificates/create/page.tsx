@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Award, Save, ArrowLeft, X, Check, AlertCircle, Info, RefreshCw, Users, User, ChevronDown, Eye, Sparkles, Wand2
 } from 'lucide-react';
@@ -428,6 +428,16 @@ const generateCertificateNumber = (organization?: Organization) => {
 
 const formatDate = (date: Date) => {
   return date.toISOString().split('T')[0];
+};
+
+const resolveOrganization = (
+  organizations: Organization[],
+  template: CertificateTemplate | null
+): Organization | undefined => {
+  if (template?.organization_slug) {
+    return organizations.find((org) => org.slug === template.organization_slug) ?? organizations[0];
+  }
+  return organizations[0];
 };
 
 // Form input component
@@ -887,6 +897,11 @@ export default function CreateCertificatePage() {
   const [error, setError] = useState<string | null>(null);
   const [createdCertificateNumber, setCreatedCertificateNumber] = useState<string | null>(null);
   const [isBulkCreation, setIsBulkCreation] = useState(false);
+  const activeOrganization = useMemo(
+    () => resolveOrganization(organizations, selectedTemplate),
+    [organizations, selectedTemplate]
+  );
+
   const [createdCertificates, setCreatedCertificates] = useState<Array<{
     id: number;
     fullname: string;
@@ -903,6 +918,7 @@ export default function CreateCertificatePage() {
   const [customEmailMessage, setCustomEmailMessage] = useState('');
   const [showEmailForm, setShowEmailForm] = useState(false);
   const [emailProgress, setEmailProgress] = useState({ sent: 0, total: 0, percentage: 0 });
+  const [autoSendEmails, setAutoSendEmails] = useState(true);
   const [generatingDescription, setGeneratingDescription] = useState(false);
   const [customPrompt, setCustomPrompt] = useState('');
   const [showCustomPrompt, setShowCustomPrompt] = useState(false);
@@ -997,18 +1013,26 @@ export default function CreateCertificatePage() {
   // Auto-select default template when templates are loaded
   useEffect(() => {
     if (templates.length > 0 && !selectedTemplate) {
-      // First try to find default template
       const defaultTemplate = templates.find(t => t.is_default);
       const templateToSelect = defaultTemplate || templates[0];
-      
+      const templateOrganization = resolveOrganization(organizations, templateToSelect);
+
       setSelectedTemplate(templateToSelect);
       if (isMultipleMode) {
-        setMultipleFormData(prev => ({ ...prev, template_id: templateToSelect.id }));
+        setMultipleFormData(prev => ({
+          ...prev,
+          template_id: templateToSelect.id,
+          organization_slug: templateOrganization?.slug || '',
+        }));
       } else {
-        setFormData(prev => ({ ...prev, template_id: templateToSelect.id }));
+        setFormData(prev => ({
+          ...prev,
+          template_id: templateToSelect.id,
+          organization_slug: templateOrganization?.slug || '',
+        }));
       }
     }
-  }, [templates, selectedTemplate, isMultipleMode]);
+  }, [templates, selectedTemplate, isMultipleMode, organizations]);
 
   // Handle AI recipients update
   const handleAIRecipientsUpdate = (recipients: string[]) => {
@@ -1019,19 +1043,111 @@ export default function CreateCertificatePage() {
   const handleRecipientsWithEmailsUpdate = (recipients: Array<{ name: string; email?: string }>) => {
     console.log('Received recipients with emails:', recipients);
     setRecipientsWithEmails(recipients);
-    // Also update aiRecipients for backward compatibility
-    setAiRecipients(recipients.map(r => r.name));
-    setMultipleFormData(prev => ({ 
-      ...prev, 
-      recipients: recipients.join(', ') 
+    setAiRecipients(recipients.map((r) => r.name));
+    setMultipleFormData((prev) => ({
+      ...prev,
+      recipients: recipients.map((r) => r.name).join(', '),
     }));
   };
 
+  const sendCertificateEmails = useCallback(
+    async (
+      certificatesToSend: Array<{
+        id: number;
+        fullname: string;
+        email?: string;
+        certificatenumber: string;
+        certificateurl: string;
+        coursename: string;
+        description?: string;
+        organization?: string;
+        organization_slug?: string;
+      }>,
+      message: string = ''
+    ) => {
+      const validCertificates = certificatesToSend.filter(
+        (cert) => cert.email && cert.email.trim() !== ''
+      );
+
+      if (validCertificates.length === 0) {
+        setEmailError(
+          locale === 'tr'
+            ? 'Gönderilecek geçerli e-posta adresi bulunamadı.'
+            : 'No valid email addresses found to send.'
+        );
+        return 0;
+      }
+
+      setSendingEmails(true);
+      setEmailError(null);
+      setShowEmailForm(true);
+      setEmailProgress({ sent: 0, total: validCertificates.length, percentage: 0 });
+
+      let sentCount = 0;
+      const errors: string[] = [];
+
+      for (const cert of validCertificates) {
+        try {
+          const response = await fetch('/api/certificates/send-emails', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              certificates: [cert],
+              customMessage: message,
+              locale,
+            }),
+          });
+
+          const result = await response.json();
+
+          if (result.success && result.sent > 0) {
+            sentCount++;
+          } else {
+            errors.push(`${cert.fullname}: ${result.error || 'Gönderilemedi'}`);
+          }
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : 'Hata';
+          errors.push(`${cert.fullname}: ${errorMessage}`);
+        }
+
+        const percentage = Math.round((sentCount / validCertificates.length) * 100);
+        setEmailProgress({
+          sent: sentCount,
+          total: validCertificates.length,
+          percentage,
+        });
+      }
+
+      if (sentCount > 0) {
+        setEmailSent(true);
+      } else {
+        setEmailError(
+          locale === 'tr'
+            ? 'Hiçbir e-posta gönderilemedi. Lütfen tekrar deneyin.'
+            : 'No emails were sent. Please try again.'
+        );
+      }
+
+      if (errors.length > 0) {
+        setEmailError(errors.slice(0, 3).join(' | '));
+      }
+
+      setSendingEmails(false);
+      return sentCount;
+    },
+    [locale]
+  );
+
   // Handle AI field suggestions
   const handleAIFieldSuggestions = (suggestions: Record<string, string>) => {
-    setMultipleFormData(prev => ({
+    const description = suggestions.description || suggestions.completion_text;
+
+    setMultipleFormData((prev) => ({
       ...prev,
-      ...suggestions
+      ...suggestions,
+      ...(description ? { description } : {}),
     }));
   };
 
@@ -1065,12 +1181,9 @@ export default function CreateCertificatePage() {
 
   // Handle generate certificate number button
   const handleGenerateNumber = () => {
-    // Use the first organization if available
-    const organization = organizations[0];
-    
     setFormData(prev => ({
       ...prev,
-      certificatenumber: generateCertificateNumber(organization)
+      certificatenumber: generateCertificateNumber(activeOrganization)
     }));
   };
 
@@ -1079,8 +1192,9 @@ export default function CreateCertificatePage() {
     const currentFormData = isMultipleMode ? multipleFormData : formData;
     const courseName = currentFormData.coursename;
     const instructor = currentFormData.instructor;
-    const organization = organizations[0];
-    
+    const organization = activeOrganization;
+    const duration = currentFormData.duration;
+
     if (!courseName.trim()) {
       setErrors(prev => ({ ...prev, coursename: 'Açıklama oluşturmak için önce etkinlik/kurs adını girin' }));
       return;
@@ -1088,90 +1202,45 @@ export default function CreateCertificatePage() {
 
     try {
       setGeneratingDescription(true);
-      
-      let prompt;
-      
-      if (customPrompt.trim()) {
-        // Use custom prompt with context
-        prompt = `Sertifika açıklaması oluştur. 
-        
-ETKİNLİK BİLGİLERİ:
-        - Etkinlik/Kurs adı: "${courseName}"
-        - Eğitmen/Organizatör: "${instructor || organization?.name || 'Kurum'}"
-        
-        ÖZEL TALİMAT:
-        ${customPrompt}
-        
-        GENEL KURALLAR:
-        - Türkçe olsun
-        - Profesyonel ve resmi dil kullan
-        - Maksimum 250 karakter
-        - Sadece açıklamayı döndür, başka bir şey ekleme`;
-      } else {
-        // Use default prompt
-        prompt = `Bir sertifika için kısa ve profesyonel açıklama yazısı oluştur. 
-        
-ETKİNLİK BİLGİLERİ:
-        - Etkinlik/Kurs adı: "${courseName}"
-        - Eğitmen/Organizatör: "${instructor || organization?.name || 'Kurum'}"
-        
-        KURALLLAR:
-        - Türkçe olsun
-        - Çok kısa ve öz olsun (maksimum 150 karakter)
-        - Profesyonel ve resmi dil kullan
-        - "hak kazanmıştır" veya "elde etmiştir" ile bitir
-        - 1-2 cümle olsun
-        - Gereksiz detaylardan kaçın
-        
-        Örnek formatlar:
-        - &quot;[Konu] alanında temel bilgi ve becerileri elde etmiştir.&quot;
-        - &quot;[Program] kapsamında gerekli yetkinlikleri kazanmış ve bu sertifikayı hak etmiştir.&quot;
-        - &quot;[Eğitim] sürecini başarıyla tamamlayarak ilgili becerileri elde etmiştir.&quot;
-        
-        Sadece açıklamayı döndür, başka bir şey ekleme:`;
-      }
-      
-      console.log('AI Description Request:', {
-        courseName,
-        instructor,
-        organization: organization?.name
-      });
-      
+
       const response = await fetch('/api/ai/gemini', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          prompt: prompt,
-          maxTokens: 150
+          action: 'generateDescription',
+          data: {
+            courseName,
+            instructor,
+            organization: organization?.name,
+            duration,
+            customPrompt: customPrompt.trim() || undefined,
+            language: currentFormData.language === 'en' ? 'en' : 'tr',
+          },
         }),
       });
-      
-      console.log('AI API Response Status:', response.status, response.statusText);
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.error('API Error:', response.status, response.statusText, errorData);
         throw new Error(errorData.error || 'AI yanıtı alınamadı');
       }
-      
+
       const data = await response.json();
-      
+
       if (!data.success) {
         throw new Error(data.error || 'AI yanıtı başarısız');
       }
-      
+
       const generatedDescription = data.response?.trim() || '';
-      
+
       if (generatedDescription) {
         if (isMultipleMode) {
           setMultipleFormData(prev => ({ ...prev, description: generatedDescription }));
         } else {
           setFormData(prev => ({ ...prev, description: generatedDescription }));
         }
-        
-        // Clear any existing description error
+
         if (errors.description) {
           setErrors(prev => {
             const newErrors = { ...prev };
@@ -1182,13 +1251,9 @@ ETKİNLİK BİLGİLERİ:
       }
     } catch (error) {
       console.error('AI açıklama oluşturma hatası:', error);
-      console.error('Error type:', typeof error);
-      console.error('Error message:', error instanceof Error ? error.message : 'Unknown error');
-      console.error('Full error:', error);
-      
-      setErrors(prev => ({ 
-        ...prev, 
-        description: `AI açıklaması oluşturulamadı: ${error instanceof Error ? error.message : 'Bilinmeyen hata'}` 
+      setErrors(prev => ({
+        ...prev,
+        description: `AI açıklaması oluşturulamadı: ${error instanceof Error ? error.message : 'Bilinmeyen hata'}`,
       }));
     } finally {
       setGeneratingDescription(false);
@@ -1227,10 +1292,9 @@ ETKİNLİK BİLGİLERİ:
       
       // Auto generate certificate number if missing
       if (!formData.certificatenumber) {
-        const organization = organizations[0];
         setFormData(prev => ({
           ...prev,
-          certificatenumber: generateCertificateNumber(organization)
+          certificatenumber: generateCertificateNumber(activeOrganization)
         }));
       }
     }
@@ -1250,33 +1314,37 @@ ETKİNLİK BİLGİLERİ:
       setError(null);
       
       if (isMultipleMode) {
-        // Handle multiple certificate creation
-        let recipients: string[] = [];
-        
-        // Use AI recipients if available, otherwise fall back to manual input
-        if (aiRecipients.length > 0) {
-          recipients = aiRecipients;
-        } else {
-          // Parse comma-separated names from manual input
+        const recipientEntries =
+          recipientsWithEmails.length > 0
+            ? recipientsWithEmails
+            : aiRecipients.map((name) => ({ name, email: undefined as string | undefined }));
+
+        let recipients = recipientEntries.map((entry) => entry.name);
+
+        if (recipients.length === 0) {
           recipients = multipleFormData.recipients
             .split(',')
-            .map(name => name.trim())
-            .filter(name => name.length > 0);
+            .map((name) => name.trim())
+            .filter((name) => name.length > 0);
         }
-        
+
         if (recipients.length === 0) {
           setError('Geçerli alıcı bulunamadı');
           return;
         }
-        
-        // Create certificates for all recipients (email will be matched after creation)
-        const certificatesToCreate = recipients.map(fullname => {
-          const organization = organizations[0];
+
+        const entriesForCreation =
+          recipientEntries.length > 0
+            ? recipientEntries
+            : recipients.map((name) => ({ name, email: undefined as string | undefined }));
+
+        const certificatesToCreate = entriesForCreation.map((entry) => {
+          const fullname = entry.name;
+          const organization = activeOrganization;
           const orgSlug = organization?.slug || '';
           const certificateNumber = generateCertificateNumber(organization);
           const certificateUrl = `https://certificates.myunilab.net/${orgSlug}/${certificateNumber}`;
-          
-          // Create certificate data (DO NOT include email - it's not in the database schema)
+
           const certificateBaseData = {
             coursename: multipleFormData.coursename,
             issuedate: multipleFormData.issuedate,
@@ -1291,9 +1359,9 @@ ETKİNLİK BİLGİLERİ:
             total_hours_label: multipleFormData.total_hours_label,
             completion_text: multipleFormData.completion_text,
             skills_label: multipleFormData.skills_label,
-            description: multipleFormData.description
+            description: multipleFormData.description,
           };
-          
+
           return {
             ...certificateBaseData,
             fullname,
@@ -1302,7 +1370,7 @@ ETKİNLİK BİLGİLERİ:
             certificateurl: certificateUrl,
             template_id: selectedTemplate?.id,
             created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
           };
         });
         
@@ -1336,40 +1404,40 @@ ETKİNLİK BİLGİLERİ:
         setIsBulkCreation(true);
         
         // Store certificates and match emails from recipientsWithEmails (from Excel upload)
-        console.log('Matching emails for certificates. recipientsWithEmails:', recipientsWithEmails);
-        console.log('Created certificates data:', data);
-        console.log('Organizations:', organizations);
-        console.log('Organization name:', organizations[0]?.name);
-        const certificatesData = data.map((cert: {
-          id: number;
-          fullname: string;
-          certificatenumber: string;
-          certificateurl: string;
-          coursename: string;
-          description?: string;
-          instructor?: string;
-        }) => {
-          // Find matching email from recipientsWithEmails (from Excel column selection)
-          const recipientWithEmail = recipientsWithEmails.find(r => r.name === cert.fullname);
-          const orgName = organizations[0]?.name || cert.instructor || 'Kurum';
-          console.log(`Certificate: ${cert.fullname}, Organization: ${orgName}, Found email: ${recipientWithEmail?.email || 'none'}`);
-          return {
+        const orgName = activeOrganization?.name || 'Kurum';
+        const certificatesData = data.map(
+          (
+            cert: {
+              id: number;
+              fullname: string;
+              certificatenumber: string;
+              certificateurl: string;
+              coursename: string;
+              description?: string;
+              instructor?: string;
+            },
+            index: number
+          ) => ({
             id: cert.id,
             fullname: cert.fullname || '',
-            email: recipientWithEmail?.email || undefined, // Email from Excel, not from database
+            email: entriesForCreation[index]?.email,
             certificatenumber: cert.certificatenumber,
             certificateurl: cert.certificateurl,
             coursename: cert.coursename,
             description: cert.description,
-            organization: orgName
-          };
-        });
-        console.log('Final certificates data with emails:', certificatesData);
+            organization: orgName,
+            organization_slug: activeOrganization?.slug || '',
+          })
+        );
         setCreatedCertificates(certificatesData);
+
+        if (autoSendEmails && certificatesData.some((cert) => cert.email?.trim())) {
+          await sendCertificateEmails(certificatesData, customEmailMessage);
+        }
         
       } else {
         // Handle single certificate creation
-        const orgSlug = organizations[0]?.slug || '';
+        const orgSlug = activeOrganization?.slug || '';
         const certificateUrl = `https://certificates.myunilab.net/${orgSlug}/${formData.certificatenumber}`;
         
         const certificateData = {
@@ -1407,7 +1475,7 @@ ETKİNLİK BİLGİLERİ:
         setCreatedCertificateNumber(formData.certificatenumber);
         
         // Get organization name
-        const orgName = organizations[0]?.name || formData.instructor || 'Kurum';
+        const orgName = activeOrganization?.name || formData.instructor || 'Kurum';
         console.log('Single certificate - Organization:', orgName, 'Organizations:', organizations);
         
         // Store single certificate
@@ -1656,79 +1724,20 @@ ETKİNLİK BİLGİLERİ:
                         <div className="flex items-center gap-3 pt-4 border-t border-neutral-200 dark:border-neutral-700">
                           <button
                             onClick={async () => {
-                              const certificatesToSend = createdCertificates.filter(cert => cert.email && cert.email.trim() !== '');
-                              
+                              const certificatesToSend = createdCertificates.filter(
+                                (cert) => cert.email && cert.email.trim() !== ''
+                              );
+
                               if (certificatesToSend.length === 0) {
-                                setEmailError(locale === 'tr' 
-                                  ? 'En az bir sertifika için e-posta adresi girmelisiniz.'
-                                  : 'You must enter at least one email address for certificates.');
+                                setEmailError(
+                                  locale === 'tr'
+                                    ? 'En az bir sertifika için e-posta adresi girmelisiniz.'
+                                    : 'You must enter at least one email address for certificates.'
+                                );
                                 return;
                               }
 
-                              setSendingEmails(true);
-                              setEmailError(null);
-                              setEmailProgress({ sent: 0, total: certificatesToSend.length, percentage: 0 });
-                              
-                              try {
-                                // Her email'i sırayla gönder ve progress'i güncelle
-                                let sentCount = 0;
-                                const errors: string[] = [];
-
-                                for (const cert of certificatesToSend) {
-                                  try {
-                                    const response = await fetch('/api/certificates/send-emails', {
-                                      method: 'POST',
-                                      headers: {
-                                        'Content-Type': 'application/json',
-                                      },
-                                      body: JSON.stringify({
-                                        certificates: [cert],
-                                        customMessage: customEmailMessage,
-                                        locale
-                                      }),
-                                      // Debug: log the certificate data being sent
-                                      // console.log('Sending certificate:', cert);
-                                    });
-
-                                    const result = await response.json();
-
-                                    if (result.success && result.sent > 0) {
-                                      sentCount++;
-                                    } else {
-                                      errors.push(`${cert.fullname}: ${result.error || 'Gönderilemedi'}`);
-                                    }
-                                  } catch (error: unknown) {
-                                    const errorMessage = error instanceof Error ? error.message : 'Hata';
-                                    errors.push(`${cert.fullname}: ${errorMessage}`);
-                                  }
-
-                                  // Progress güncelle
-                                  const percentage = Math.round((sentCount / certificatesToSend.length) * 100);
-                                  setEmailProgress({ 
-                                    sent: sentCount, 
-                                    total: certificatesToSend.length, 
-                                    percentage 
-                                  });
-                                }
-
-                                if (sentCount > 0) {
-                                  setEmailSent(true);
-                                  setShowEmailForm(false);
-                                } else {
-                                  setEmailError(locale === 'tr' 
-                                    ? 'Hiçbir e-posta gönderilemedi. Lütfen tekrar deneyin.'
-                                    : 'No emails were sent. Please try again.');
-                                }
-
-                                if (errors.length > 0) {
-                                  console.warn('Email sending errors:', errors);
-                                }
-                              } catch (error: unknown) {
-                                const errorMessage = error instanceof Error ? error.message : (locale === 'tr' ? 'Mail gönderme hatası' : 'Email sending error');
-                                setEmailError(errorMessage);
-                              } finally {
-                                setSendingEmails(false);
-                              }
+                              await sendCertificateEmails(certificatesToSend, customEmailMessage);
                             }}
                             disabled={sendingEmails || createdCertificates.filter(c => c.email && c.email.trim() !== '').length === 0}
                             className="flex-1 px-5 py-2.5 bg-[#990000] dark:bg-red-500 hover:bg-[#880000] dark:hover:bg-red-600 text-white font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1902,10 +1911,19 @@ ETKİNLİK BİLGİLERİ:
                 selectedTemplate={selectedTemplate}
                 onSelectTemplate={(template) => {
                   setSelectedTemplate(template);
+                  const templateOrganization = resolveOrganization(organizations, template);
                   if (isMultipleMode) {
-                    setMultipleFormData(prev => ({ ...prev, template_id: template?.id }));
+                    setMultipleFormData(prev => ({
+                      ...prev,
+                      template_id: template?.id,
+                      organization_slug: templateOrganization?.slug || '',
+                    }));
                   } else {
-                    setFormData(prev => ({ ...prev, template_id: template?.id }));
+                    setFormData(prev => ({
+                      ...prev,
+                      template_id: template?.id,
+                      organization_slug: templateOrganization?.slug || '',
+                    }));
                   }
                   // Clear template error when selecting a template
                   if (errors.template) {
@@ -1958,19 +1976,38 @@ ETKİNLİK BİLGİLERİ:
                     {/* Recipients Preview */}
                     {aiRecipients.length > 0 && (
                       <div className="mb-4 p-3 bg-neutral-50 dark:bg-neutral-700 rounded-lg border border-neutral-200 dark:border-neutral-600">
-                        <div className="flex items-center mb-2">
-                          <Check className="w-4 h-4 text-[#990000] dark:text-red-400 mr-2" />
-                          <h5 className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
-                            {aiRecipients.length} alıcı tespit edildi
-                          </h5>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center">
+                            <Check className="w-4 h-4 text-[#990000] dark:text-red-400 mr-2" />
+                            <h5 className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                              {aiRecipients.length} alıcı tespit edildi
+                            </h5>
+                          </div>
+                          {recipientsWithEmails.filter((r) => r.email).length > 0 && (
+                            <span className="text-xs text-green-600 dark:text-green-400">
+                              {recipientsWithEmails.filter((r) => r.email).length} e-posta eşleşti
+                            </span>
+                          )}
                         </div>
-                        <div className="max-h-24 overflow-y-auto">
-                          <div className="grid grid-cols-2 md:grid-cols-3 gap-1">
-                            {aiRecipients.slice(0, 9).map((recipient, index) => (
-                              <div key={index} className="text-xs text-neutral-600 dark:text-neutral-400 bg-white dark:bg-neutral-800 px-2 py-1 rounded border border-neutral-200 dark:border-neutral-600">
-                                {index + 1}. {recipient}
-                              </div>
-                            ))}
+                        <div className="max-h-32 overflow-y-auto">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            {(recipientsWithEmails.length > 0
+                              ? recipientsWithEmails
+                              : aiRecipients.map((name) => ({ name, email: undefined as string | undefined }))
+                            )
+                              .slice(0, 9)
+                              .map((recipient, index) => (
+                                <div key={index} className="text-xs text-neutral-600 dark:text-neutral-400 bg-white dark:bg-neutral-800 px-2 py-1.5 rounded border border-neutral-200 dark:border-neutral-600">
+                                  <div className="font-medium text-neutral-800 dark:text-neutral-200">
+                                    {index + 1}. {recipient.name}
+                                  </div>
+                                  {recipient.email && (
+                                    <div className="text-neutral-500 dark:text-neutral-500 mt-0.5 truncate">
+                                      {recipient.email}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
                             {aiRecipients.length > 9 && (
                               <div className="text-xs text-neutral-500 dark:text-neutral-500 italic px-2 py-1">
                                 ... ve {aiRecipients.length - 9} kişi daha
@@ -1980,6 +2017,26 @@ ETKİNLİK BİLGİLERİ:
                         </div>
                       </div>
                     )}
+
+                    <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={autoSendEmails}
+                          onChange={(e) => setAutoSendEmails(e.target.checked)}
+                          className="mt-1 w-4 h-4 text-[#990000] bg-white dark:bg-neutral-800 border-neutral-300 dark:border-neutral-600 rounded focus:ring-[#990000] focus:ring-2"
+                          disabled={submitting}
+                        />
+                        <div>
+                          <span className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                            Sertifikaları oluşturduktan sonra e-posta ile gönder
+                          </span>
+                          <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
+                            Excel dosyasındaki e-posta adreslerine her kişinin adıyla kişisel sertifika bağlantısı gönderilir.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
                   </>
                 ) : (
                   // Single mode inputs
@@ -2087,7 +2144,7 @@ ETKİNLİK BİLGİLERİ:
                   onChange={handleChange}
                   error={errors.description}
                   required
-                  rows={3}
+                  rows={5}
                   disabled={submitting}
                 />
                 
@@ -2231,7 +2288,7 @@ ETKİNLİK BİLGİLERİ:
                   <div>
                     <div className="text-xs text-neutral-500 dark:text-neutral-400">Kurum</div>
                     <div className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
-                      {organizations[0]?.name || 'Kurum Adı'}
+                      {activeOrganization?.name || 'Kurum Adı'}
                     </div>
                   </div>
                 </div>

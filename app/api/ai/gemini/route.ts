@@ -25,6 +25,9 @@ export async function POST(request: NextRequest) {
       
       case 'optimizeBulk':
         return await handleOptimizeBulk(data);
+
+      case 'generateDescription':
+        return await handleGenerateDescription(data);
       
       default:
         return NextResponse.json({
@@ -43,7 +46,7 @@ export async function POST(request: NextRequest) {
 
 async function handleDirectPrompt(data: { prompt: string; maxTokens?: number }) {
   try {
-    const { prompt, maxTokens = 150 } = data;
+    const { prompt, maxTokens = 1024 } = data;
     
     console.log('Gemini API Request:', { prompt: prompt.substring(0, 100) + '...', maxTokens });
     
@@ -67,6 +70,44 @@ async function handleDirectPrompt(data: { prompt: string; maxTokens?: number }) 
     return NextResponse.json({
       success: false,
       error: `AI yanıtı oluşturulamadı: ${error instanceof Error ? error.message : 'Bilinmeyen hata'}`
+    }, { status: 500 });
+  }
+}
+
+async function handleGenerateDescription(data: {
+  courseName: string;
+  instructor?: string;
+  organization?: string;
+  duration?: string;
+  customPrompt?: string;
+  language?: 'tr' | 'en';
+}) {
+  try {
+    if (!data.courseName?.trim()) {
+      return NextResponse.json(
+        { success: false, error: 'Kurs adı gerekli' },
+        { status: 400 }
+      );
+    }
+
+    const response = await GeminiService.generateCertificateDescription({
+      courseName: data.courseName.trim(),
+      instructor: data.instructor,
+      organization: data.organization,
+      duration: data.duration,
+      customPrompt: data.customPrompt,
+      language: data.language || 'tr',
+    });
+
+    return NextResponse.json({
+      success: true,
+      response,
+    });
+  } catch (error) {
+    console.error('Açıklama oluşturma hatası:', error);
+    return NextResponse.json({
+      success: false,
+      error: `AI açıklaması oluşturulamadı: ${error instanceof Error ? error.message : 'Bilinmeyen hata'}`,
     }, { status: 500 });
   }
 }

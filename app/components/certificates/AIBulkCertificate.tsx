@@ -144,9 +144,28 @@ export default function AIBulkCertificate({
           issues: validation.issues
         }
       };
+
+      const nameColumn =
+        analysis.suggestedMapping.nameColumn ??
+        ExcelParser.detectNameColumn(parseResult.data || []);
+      const emailColumn =
+        analysis.suggestedMapping.emailColumn ??
+        ExcelParser.detectEmailColumn(parseResult.data || []);
+      const recipientsWithEmails = ExcelParser.buildRecipientsWithEmails(parseResult.data || [], {
+        nameColumn,
+        emailColumn,
+      });
+
+      if (recipientsWithEmails.length > 0) {
+        analysis.recipients = recipientsWithEmails.map((recipient) => recipient.name);
+        finalRecipients = analysis.recipients;
+      }
       
       setAiAnalysis(analysis);
       onRecipientsUpdate(finalRecipients);
+      if (onRecipientsWithEmailsUpdate) {
+        onRecipientsWithEmailsUpdate(recipientsWithEmails);
+      }
 
     } catch (error) {
       console.error('Dosya analiz hatası:', error);
@@ -198,66 +217,34 @@ export default function AIBulkCertificate({
       return;
     }
 
-    const recipients: string[] = [];
-    const recipientsWithEmails: Array<{ name: string; email?: string }> = [];
+    const recipientsWithEmails = ExcelParser.buildRecipientsWithEmails(parsedData.data || [], {
+      nameColumn: columnMapping.name,
+      firstNameColumn: columnMapping.firstName,
+      lastNameColumn: columnMapping.lastName,
+      emailColumn: columnMapping.email,
+    });
+    const recipients = recipientsWithEmails.map((recipient) => recipient.name);
 
-    // Eğer ad ve soyad ayrı sütunlarda ise birleştir
-    if (columnMapping.firstName !== undefined && columnMapping.lastName !== undefined) {
-      const startRow = 1;
-      for (let i = startRow; i < parsedData.data!.length; i++) {
-        const row = parsedData.data![i];
-        if (row) {
-          const firstName = row[columnMapping.firstName!];
-          const lastName = row[columnMapping.lastName!];
-          
-          if (firstName || lastName) {
-            const fullName = `${String(firstName || '').trim()} ${String(lastName || '').trim()}`.trim();
-            if (fullName) {
-              const capitalizedName = ExcelParser.capitalizeName(fullName);
-              recipients.push(capitalizedName);
-              
-              // Email bilgisini de ekle
-              const email = columnMapping.email !== undefined ? row[columnMapping.email] : undefined;
-              recipientsWithEmails.push({
-                name: capitalizedName,
-                email: email ? String(email).trim() : undefined
-              });
-            }
-          }
-        }
-      }
-    } 
-    // Eğer tam isim sütunu seçilmişse onu kullan
-    else if (columnMapping.name !== undefined) {
-      const startRow = 1;
-      for (let i = startRow; i < parsedData.data!.length; i++) {
-        const row = parsedData.data![i];
-        if (row) {
-          const name = row[columnMapping.name!];
-          if (name) {
-            const capitalizedName = ExcelParser.capitalizeName(String(name));
-            recipients.push(capitalizedName);
-            
-            // Email bilgisini de ekle
-            const email = columnMapping.email !== undefined ? row[columnMapping.email] : undefined;
-            recipientsWithEmails.push({
-              name: capitalizedName,
-              email: email ? String(email).trim() : undefined
-            });
-          }
-        }
-      }
-    } else {
+    if (recipients.length === 0) {
       return;
     }
 
     onRecipientsUpdate(recipients);
     if (onRecipientsWithEmailsUpdate) {
-      console.log('Recipients with emails:', recipientsWithEmails);
-      console.log('Email column index:', columnMapping.email);
       onRecipientsWithEmailsUpdate(recipientsWithEmails);
     }
   };
+
+  // Excel yüklendiğinde e-posta sütununu otomatik tespit et
+  useEffect(() => {
+    if (parsedData && inputMethod === 'excel-manual') {
+      const detectedEmail = ExcelParser.detectEmailColumn(parsedData.data || []);
+      if (detectedEmail !== null && columnMapping.email === undefined) {
+        setColumnMapping((prev) => ({ ...prev, email: detectedEmail }));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parsedData, inputMethod]);
 
   // Sütun mapping değiştiğinde alıcıları güncelle (email sütunu dahil)
   useEffect(() => {
@@ -284,6 +271,9 @@ export default function AIBulkCertificate({
       .filter(name => name.length > 0);
     
     onRecipientsUpdate(recipients);
+    if (onRecipientsWithEmailsUpdate) {
+      onRecipientsWithEmailsUpdate(recipients.map((name) => ({ name })));
+    }
   };
 
   // Kurs bilgilerine göre AI önerisi al
@@ -544,8 +534,12 @@ export default function AIBulkCertificate({
                     <span className="text-lg font-semibold text-gray-900 dark:text-gray-100">{aiAnalysis.recipients.length}</span>
                   </div>
                   <div className="bg-white dark:bg-gray-900/30 rounded-lg p-3 border border-gray-100 dark:border-gray-700/50">
-                    <span className="text-gray-600 dark:text-gray-400 font-medium text-sm block">İsim Sütunu</span>
-                    <span className="text-lg font-semibold text-gray-900 dark:text-gray-100">{aiAnalysis.suggestedMapping.nameColumn + 1}</span>
+                    <span className="text-gray-600 dark:text-gray-400 font-medium text-sm block">E-posta Sütunu</span>
+                    <span className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                      {aiAnalysis.suggestedMapping.emailColumn !== undefined
+                        ? aiAnalysis.suggestedMapping.emailColumn + 1
+                        : 'Yok'}
+                    </span>
                   </div>
                 </div>
 
@@ -859,7 +853,7 @@ export default function AIBulkCertificate({
               <div className="p-5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    E-posta Sütunu (İsteğe bağlı)
+                    E-posta Sütunu
                   </label>
                   <select
                     value={columnMapping.email ?? ''}
@@ -869,7 +863,7 @@ export default function AIBulkCertificate({
                     }}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-[#990000] focus:border-transparent"
                   >
-                    <option value="">Buradan seçebilirisiniz (veya boş bırakın)</option>
+                    <option value="">E-posta sütunu seçin...</option>
                     {parsedData.headers?.map((header, index) => (
                       <option key={index} value={index}>
                         Sütun {index + 1}: {header || `(Boş)`}

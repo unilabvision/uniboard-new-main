@@ -1,4 +1,11 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import {
+  buildCertificateDescriptionPrompt,
+  buildCertificateDescriptionRetryPrompt,
+  cleanCertificateDescription,
+  isLikelyTruncatedDescription,
+  type CertificateDescriptionInput,
+} from '@/utils/certificateDescription';
 
 // Initialize Gemini AI client with proper error handling
 let genAI: GoogleGenerativeAI;
@@ -35,15 +42,7 @@ export interface CertificateFieldSuggestion {
   duration?: string;
   certificate_title?: string;
   completion_text?: string;
-  skills_label?: string;
-}
-
-export interface CertificateFieldSuggestion {
-  coursename?: string;
-  instructor?: string;
-  duration?: string;
-  certificate_title?: string;
-  completion_text?: string;
+  description?: string;
   skills_label?: string;
 }
 
@@ -114,10 +113,29 @@ export class GeminiService {
     );
   }
 
+  async generateCertificateDescription(
+    input: CertificateDescriptionInput
+  ): Promise<string> {
+    const prompt = buildCertificateDescriptionPrompt(input);
+    const { text } = await this.generateContentWithFallback(prompt, 1024);
+    let cleaned = cleanCertificateDescription(text);
+
+    if (isLikelyTruncatedDescription(cleaned)) {
+      const retryPrompt = buildCertificateDescriptionRetryPrompt(input, cleaned);
+      const retry = await this.generateContentWithFallback(retryPrompt, 1536);
+      const retryCleaned = cleanCertificateDescription(retry.text);
+      if (retryCleaned.length >= cleaned.length) {
+        cleaned = retryCleaned;
+      }
+    }
+
+    return cleaned;
+  }
+
   /**
    * Genel metin oluşturma metodu
    */
-  async generateText(prompt: string, maxTokens: number = 150): Promise<string> {
+  async generateText(prompt: string, maxTokens: number = 1024): Promise<string> {
     try {
       if (!process.env.GEMINI_API_KEY) {
         throw new Error('GEMINI_API_KEY environment variable is missing');
@@ -276,15 +294,17 @@ Lütfen şu alanlar için öneriler ver ve JSON formatında yanıtla:
 - instructor: Muhtemel eğitmen/kurum adı
 - duration: Tahmini süre (saat cinsinden)
 - certificate_title: Sertifika başlığı
-- completion_text: Tamamlama metni (örn: "başarıyla tamamlamıştır")
+- description: Sertifika üzerinde görünecek 2-3 cümlelik tam açıklama metni (200-350 karakter, eksiksiz cümleler)
+- completion_text: Kısa tamamlama ifadesi (örn: "başarıyla tamamlamıştır")
 - skills_label: Kazanılan yetkinlikler
 
-Türkçe öneriler ver. JSON formatı:
+Türkçe öneriler ver. description alanı mutlaka tam ve eksiksiz cümlelerle bitsin. JSON formatı:
 {
   "coursename": "kurs adı",
   "instructor": "eğitmen önerisi",
   "duration": "40 saat",
   "certificate_title": "Başarı Sertifikası",
+  "description": "Kurs kapsamında ... başarıyla tamamlayarak ... hak kazanmıştır.",
   "completion_text": "başarıyla tamamlamıştır",
   "skills_label": "Kazanılan Yetkinlikler"
 }
@@ -301,13 +321,17 @@ Türkçe öneriler ver. JSON formatı:
           instructor: 'Eğitmen',
           duration: '40 saat',
           certificate_title: 'Başarı Sertifikası',
+          description: `${courseName} kapsamında gerekli eğitimleri başarıyla tamamlayarak bu sertifikayı hak kazanmıştır.`,
           completion_text: 'başarıyla tamamlamıştır',
-          skills_label: 'Kazanılan Yetkinlikler'
+          skills_label: 'Kazanılan Yetkinlikler',
         };
       }
 
       const parsedData = JSON.parse(jsonMatch[0]);
-      return parsedData;
+      return {
+        ...parsedData,
+        description: parsedData.description || parsedData.completion_text,
+      };
 
     } catch (error) {
       console.error('Gemini öneri hatası:', error);
@@ -317,8 +341,9 @@ Türkçe öneriler ver. JSON formatı:
         instructor: 'Eğitmen',
         duration: '40 saat',
         certificate_title: 'Başarı Sertifikası',
+        description: `${courseName} kapsamında gerekli eğitimleri başarıyla tamamlayarak bu sertifikayı hak kazanmıştır.`,
         completion_text: 'başarıyla tamamlamıştır',
-        skills_label: 'Kazanılan Yetkinlikler'
+        skills_label: 'Kazanılan Yetkinlikler',
       };
     }
   }
