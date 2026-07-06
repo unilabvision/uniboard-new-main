@@ -7,14 +7,10 @@ import {
 import Link from 'next/link';
 import Image from 'next/image';
 import { useUser } from '@clerk/nextjs';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { certificatesSupabase as supabase } from '@/app/_services/certificatesSupabaseClient';
 import AIBulkCertificate from '@/app/components/certificates/AIBulkCertificate';
-
-// Supabase client
-const supabase = createClientComponentClient({
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL2 || 'https://emfvwpztyuykqtepnsfp.supabase.co',
-  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY2 || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtZnZ3cHp0eXV5a3F0ZXBuc2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzg0OTM5MDksImV4cCI6MjA1NDA2OTkwOX0.EbGPYHtXMO2RYGavv-FQa3mgI3RECiFnwAVqpUgghxg'
-});
+import { getCertificateOrganizationSlugs } from '@/app/_services/organizationAccessService';
+import { useUserModules } from '@/app/hooks/useUserModules';
 
 // Types
 interface Organization {
@@ -912,13 +908,13 @@ export default function CreateCertificatePage() {
   const [showCustomPrompt, setShowCustomPrompt] = useState(false);
   
   const { user: clerkUser, isLoaded } = useUser();
+  const { isSuperAdmin, loading: modulesLoading } = useUserModules();
   const locale = 'tr'; // You can get this from params or context
   const t = texts[locale] || texts.tr;
 
-  // Set current user
   useEffect(() => {
     const getCurrentUser = async () => {
-      if (!isLoaded) return;
+      if (!isLoaded || modulesLoading) return;
       
       if (!clerkUser) {
         setLoading(false);
@@ -926,53 +922,21 @@ export default function CreateCertificatePage() {
       }
 
       try {
-        // Initialize basic user info
+        const orgSlugs = await getCertificateOrganizationSlugs(clerkUser.id, isSuperAdmin);
+
         setCurrentUser({
           id: clerkUser.id,
           name: clerkUser.fullName || clerkUser.firstName || 'Kullanıcı',
           email: clerkUser.emailAddresses[0]?.emailAddress || '',
-          organizationSlugs: []
-        });
-        
-        // Fetch user's organization access from the database
-        const { data, error } = await supabase
-          .from('user_module_access')
-          .select(`
-            *,
-            organizations:organization_id (
-              slug
-            )
-          `)
-          .eq('clerk_user_id', clerkUser.id)
-          .eq('module_key', 'certificates')
-          .eq('is_enabled', true);
-        
-        if (error) {
-          console.error('Error fetching user module access:', error);
-          return;
-        }
-        
-        // Extract organization slugs from the join result
-        const orgSlugs = data
-          ?.filter(item => item.organizations?.slug)
-          .map(item => item.organizations.slug) || [];
-        
-        // Update current user with organization slugs
-        setCurrentUser(prev => ({
-          ...(prev || {
-            id: clerkUser.id,
-            name: clerkUser.fullName || clerkUser.firstName || 'Kullanıcı',
-            email: clerkUser.emailAddresses[0]?.emailAddress || ''
-          }),
           organizationSlugs: orgSlugs
-        }));
+        });
       } catch (error) {
         console.error('Error getting user profile:', error);
       }
     };
 
     getCurrentUser();
-  }, [clerkUser, isLoaded]);
+  }, [clerkUser, isLoaded, isSuperAdmin, modulesLoading]);
 
   // Fetch organizations and templates
   useEffect(() => {

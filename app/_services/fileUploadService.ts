@@ -1,4 +1,4 @@
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { certificatesSupabase } from '@/app/_services/certificatesSupabaseClient';
 
 export interface UploadResult {
   success: boolean;
@@ -28,11 +28,7 @@ export async function uploadFileToSupabase(
   clerkUserId?: string,
 ): Promise<UploadResult> {
   try {
-    // Create Supabase client
-    const supabase = createClientComponentClient({
-      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL2!,
-      supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY2!
-    });
+    const supabase = certificatesSupabase;
 
     // If we have a Clerk user ID, use it for filename generation
     // Otherwise, generate a unique filename without user context
@@ -101,11 +97,7 @@ export async function deleteFileFromSupabase(
   bucket: string = 'myunilab'
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    // Create Supabase client
-    const supabase = createClientComponentClient({
-      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL2!,
-      supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY2!
-    });
+    const supabase = certificatesSupabase;
 
     const { error } = await supabase.storage
       .from(bucket)

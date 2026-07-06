@@ -8,17 +8,11 @@ import {
 import Link from 'next/link';
 import NextImage from 'next/image';
 import { useUser } from '@clerk/nextjs';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { useParams } from 'next/navigation';
 import { generateDashboardCertificatePreview } from '@/utils/dashboardCertificateGenerator';
 import FileUpload from '@/app/components/ui/FileUpload';
 import { uploadFileToSupabase, validateFile } from '@/app/_services/fileUploadService';
-
-// Supabase client
-const supabase = createClientComponentClient({
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL2 || 'https://emfvwpztyuykqtepnsfp.supabase.co',
-  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY2 || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtZnZ3cHp0eXV5a3F0ZXBuc2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzg0OTM5MDksImV4cCI6MjA1NDA2OTkwOX0.EbGPYHtXMO2RYGavv-FQa3mgI3RECiFnwAVqpUgghxg'
-});
+import { certificatesSupabase as supabase } from '@/app/_services/certificatesSupabaseClient';
 
 // Types
 interface Organization {

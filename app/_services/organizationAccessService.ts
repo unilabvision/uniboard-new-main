@@ -1,12 +1,91 @@
 'use client';
 
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { certificatesSupabase as supabase } from '@/app/_services/certificatesSupabaseClient';
 
-// Supabase client
-const supabase = createClientComponentClient({
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL2 || 'https://emfvwpztyuykqtepnsfp.supabase.co',
-  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY2 || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtZnZ3cHp0eXV5a3F0ZXBuc2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzg0OTM5MDksImV4cCI6MjA1NDA2OTkwOX0.EbGPYHtXMO2RYGavv-FQa3mgI3RECiFnwAVqpUgghxg'
-});
+export function organizationSlugFromJoin(
+  organizations: { slug?: string } | { slug?: string }[] | null | undefined
+): string | undefined {
+  if (!organizations) return undefined;
+  if (Array.isArray(organizations)) {
+    return organizations[0]?.slug;
+  }
+  return organizations.slug;
+}
+
+/**
+ * Sertifika modülünde kullanılacak kuruluş slug listesi.
+ * Süper admin: tüm kuruluşlar. Normal kullanıcı: user_module_access kaydı.
+ */
+export async function getCertificateOrganizationSlugs(
+  clerkUserId: string,
+  isSuperAdmin = false
+): Promise<string[]> {
+  try {
+    if (isSuperAdmin) {
+      const { data, error } = await supabase
+        .from('organizations')
+        .select('slug')
+        .order('name', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching organizations for super admin:', error);
+        return [];
+      }
+
+      return (data ?? []).map((org) => org.slug).filter(Boolean);
+    }
+
+    const { data, error } = await supabase
+      .from('user_module_access')
+      .select(`
+        organization_id,
+        organizations:organization_id (
+          slug
+        )
+      `)
+      .eq('clerk_user_id', clerkUserId)
+      .eq('module_key', 'certificates')
+      .eq('is_enabled', true);
+
+    if (error) {
+      console.error('Error fetching certificate organization access:', error);
+      return [];
+    }
+
+    const slugsFromJoin =
+      data
+        ?.map((row) => organizationSlugFromJoin(row.organizations))
+        .filter((slug): slug is string => Boolean(slug)) ?? [];
+
+    if (slugsFromJoin.length > 0) {
+      return slugsFromJoin;
+    }
+
+    const organizationIds =
+      data
+        ?.map((row) => row.organization_id)
+        .filter((id): id is number => id != null) ?? [];
+
+    if (organizationIds.length === 0) {
+      return [];
+    }
+
+    const { data: orgs, error: orgsError } = await supabase
+      .from('organizations')
+      .select('slug')
+      .in('id', organizationIds);
+
+    if (orgsError) {
+      console.error('Error resolving organization slugs:', orgsError);
+      return [];
+    }
+
+    return (orgs ?? []).map((org) => org.slug).filter(Boolean);
+  } catch (error) {
+    console.error('getCertificateOrganizationSlugs error:', error);
+    return [];
+  }
+}
 
 /**
  * Check if a user has access to a specific organization's certificates

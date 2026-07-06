@@ -9,13 +9,9 @@ import {
 import Link from 'next/link';
 import Image from 'next/image';
 import { useUser } from '@clerk/nextjs';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-
-// Supabase client
-const supabase = createClientComponentClient({
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL2 || 'https://emfvwpztyuykqtepnsfp.supabase.co',
-  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY2 || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtZnZ3cHp0eXV5a3F0ZXBuc2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzg0OTM5MDksImV4cCI6MjA1NDA2OTkwOX0.EbGPYHtXMO2RYGavv-FQa3mgI3RECiFnwAVqpUgghxg'
-});
+import { certificatesSupabase as supabase } from '@/app/_services/certificatesSupabaseClient';
+import { getCertificateOrganizationSlugs, organizationSlugFromJoin } from '@/app/_services/organizationAccessService';
+import { useUserModules } from '@/app/hooks/useUserModules';
 
 // Types
 interface Organization {
@@ -608,67 +604,57 @@ export default function OrganizationSettingsPage() {
   
   // Clerk user hook
   const { user: clerkUser, isLoaded } = useUser();
+  const { isSuperAdmin, loading: modulesLoading } = useUserModules();
   const locale = 'tr'; // You can get this from params or context
   const t = texts[locale] || texts.tr;
 
-  // Fetch organizations
   useEffect(() => {
     const fetchOrganizations = async () => {
-      if (!isLoaded || !clerkUser) return;
+      if (!isLoaded || !clerkUser || modulesLoading) return;
       
       try {
         setLoading(true);
-        
-        // Fetch user's organization access from the database
-        const { data: accessData, error: accessError } = await supabase
-          .from('user_module_access')
-          .select(`
-            *,
-            organizations:organization_id (
-              id,
-              slug
-            )
-          `)
-          .eq('clerk_user_id', clerkUser.id)
-          .eq('module_key', 'certificates')
-          .eq('is_enabled', true);
-        
-        if (accessError) {
-          throw accessError;
-        }
-        
-        // Only log in development mode
-        if (process.env.NODE_ENV === 'development') {
-          console.log('Access Data:', accessData);
-        }
-        
-        // Extract organization slugs and build roles map
-        const orgSlugs: string[] = [];
-        const roles: Record<string, string> = {};
-        let userIsAdmin = false;
-        
-        accessData?.forEach(item => {
-          if (item.organizations?.slug) {
-            orgSlugs.push(item.organizations.slug);
-            roles[item.organizations.slug] = item.organization_role || 'member';
-            
-            // Check if user is admin for any organization
-            if (item.organization_role === 'admin') {
-              userIsAdmin = true;
-            }
+
+        const orgSlugs = await getCertificateOrganizationSlugs(clerkUser.id, isSuperAdmin);
+
+        if (isSuperAdmin) {
+          setUserRoles({});
+          setIsAdmin(true);
+        } else {
+          const { data: accessData, error: accessError } = await supabase
+            .from('user_module_access')
+            .select('organization_role, organizations:organization_id (slug)')
+            .eq('clerk_user_id', clerkUser.id)
+            .eq('module_key', 'certificates')
+            .eq('is_enabled', true);
+
+          if (accessError) {
+            throw accessError;
           }
-        });
-        
-        setUserRoles(roles);
-        setIsAdmin(userIsAdmin);
-        
+
+          const roles: Record<string, string> = {};
+          let userIsAdmin = false;
+
+          accessData?.forEach((item) => {
+            const slug = organizationSlugFromJoin(item.organizations);
+            if (slug) {
+              roles[slug] = item.organization_role || 'member';
+              if (item.organization_role === 'admin') {
+                userIsAdmin = true;
+              }
+            }
+          });
+
+          setUserRoles(roles);
+          setIsAdmin(userIsAdmin);
+        }
+
         if (orgSlugs.length === 0) {
           setOrganizations([]);
           setLoading(false);
           return;
         }
-        
-        // Fetch only the user's organizations
+
         const { data, error } = await supabase
           .from('organizations')
           .select('*')
@@ -687,7 +673,7 @@ export default function OrganizationSettingsPage() {
     };
     
     fetchOrganizations();
-  }, [clerkUser, isLoaded, t.notifications.error]);
+  }, [clerkUser, isLoaded, isSuperAdmin, modulesLoading, t.notifications.error]);
 
   // Handle form input changes
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
