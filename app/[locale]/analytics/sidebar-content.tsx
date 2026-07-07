@@ -1,4 +1,4 @@
-import { BarChart3, TrendingUp, Users, ShoppingCart } from 'lucide-react';
+import { BarChart3, TrendingUp, Users, ShoppingCart, Shield } from 'lucide-react';
 
 export const analyticsSidebarContent = {
   tr: {
@@ -24,6 +24,11 @@ export const analyticsSidebarContent = {
         href: '/#trends',
         icon: TrendingUp,
       },
+      {
+        name: 'Yetkilendirme',
+        href: '/access',
+        icon: Shield,
+      },
     ],
   },
   en: {
@@ -48,6 +53,11 @@ export const analyticsSidebarContent = {
         name: 'Trends',
         href: '/#trends',
         icon: TrendingUp,
+      },
+      {
+        name: 'Access Control',
+        href: '/access',
+        icon: Shield,
       },
     ],
   },

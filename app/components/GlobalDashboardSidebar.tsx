@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { Suspense, useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { 
   TrendingUp, 
   Settings, 
@@ -72,11 +72,13 @@ const sidebarTexts = {
   }
 };
 
-export default function GlobalDashboardSidebar({ locale, modules }: SidebarProps) {
+function GlobalDashboardSidebarInner({ locale, modules }: SidebarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [moduleContent, setModuleContent] = useState<Record<string, ModuleContent> | null>(null);
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentQuery = searchParams.toString();
   const { user } = useUser();
   const { signOut } = useClerk();
   
@@ -112,6 +114,10 @@ export default function GlobalDashboardSidebar({ locale, modules }: SidebarProps
       (currentModule === 'internship' &&
         modules.some((m) =>
           ['internship', 'staj', 'career', 'kariyer', 'careers'].includes(m.key)
+        )) ||
+      (currentModule === 'site-applications' &&
+        modules.some((m) =>
+          ['site-applications', 'site_basvurular', 'site-basvurular', 'basvurular'].includes(m.key)
         )) ||
       (['staj', 'career', 'kariyer', 'careers'].includes(currentModule) &&
         modules.some((m) =>
@@ -226,6 +232,19 @@ export default function GlobalDashboardSidebar({ locale, modules }: SidebarProps
                 content = null;
               }
               break;
+
+            case 'site-applications':
+            case 'site_basvurular':
+            case 'site-basvurular':
+            case 'basvurular':
+              try {
+                const { siteApplicationsSidebarContent } = await import('../../app/[locale]/site-applications/sidebar-content');
+                content = siteApplicationsSidebarContent;
+              } catch (error) {
+                console.error('Could not load site applications sidebar content', error);
+                content = null;
+              }
+              break;
             // case 'sales':
             //   const { salesSidebarContent } = await import('@/app/[locale]/dashboard/sales/sidebar-content');
             //   content = salesSidebarContent;
@@ -313,12 +332,20 @@ export default function GlobalDashboardSidebar({ locale, modules }: SidebarProps
         active: pathname === `/${locale}/`
       },
       // Modül özel navigation items
-      ...(content as ModuleContent).items.map((item) => ({
-        name: item.name,
-        href: `${basePath}${item.href}`,
-        icon: item.icon,
-        active: pathname === `${basePath}${item.href}` || pathname.startsWith(`${basePath}${item.href}/`)
-      }))
+      ...(content as ModuleContent).items.map((item) => {
+        const fullHref = `${basePath}${item.href}`;
+        const [itemPath, itemQuery = ''] = fullHref.split('?');
+        const isActive = itemQuery
+          ? pathname === itemPath && currentQuery === itemQuery
+          : pathname === itemPath && !currentQuery;
+
+        return {
+          name: item.name,
+          href: fullHref,
+          icon: item.icon,
+          active: isActive,
+        };
+      })
     ];
   };
 
@@ -663,5 +690,22 @@ export default function GlobalDashboardSidebar({ locale, modules }: SidebarProps
         </div>
       </div>
     </>
+  );
+}
+
+function GlobalDashboardSidebarFallback() {
+  return (
+    <div
+      className="hidden lg:block fixed inset-y-0 left-0 z-40 w-64 bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-800"
+      aria-hidden
+    />
+  );
+}
+
+export default function GlobalDashboardSidebar(props: SidebarProps) {
+  return (
+    <Suspense fallback={<GlobalDashboardSidebarFallback />}>
+      <GlobalDashboardSidebarInner {...props} />
+    </Suspense>
   );
 }

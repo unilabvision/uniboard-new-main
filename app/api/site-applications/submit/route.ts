@@ -1,0 +1,137 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+import { siteApplicationsDb, computeAttachmentExpiresAt } from '@/app/lib/siteApplications';
+import { requireCaptchaInProduction, verifyHCaptcha } from '@/app/lib/siteApplications/captcha';
+import {
+  extractContactFromSubmission,
+  validateSubmissionFields,
+} from '@/app/lib/siteApplications/validation';
+import type { SiteApplicationFormField } from '@/app/types/siteApplicationForms';
+
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL2;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY2;
+  if (!url || !key) {
+    throw new Error('Supabase configuration missing');
+  }
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+
+    if (body.honeypot?.trim()) {
+      return NextResponse.json({ success: true, submissionId: 'ok' });
+    }
+
+    const formSlug = String(body.formSlug || '').trim();
+    const locale = body.locale === 'en' ? 'en' : 'tr';
+    const fieldValues = (body.fields || {}) as Record<string, unknown>;
+
+    if (!formSlug) {
+      return NextResponse.json({ error: 'Form slug required' }, { status: 400 });
+    }
+
+    const captchaToken = body.hCaptchaToken as string | undefined;
+    if (!requireCaptchaInProduction(captchaToken)) {
+      return NextResponse.json({ error: 'Captcha required' }, { status: 400 });
+    }
+    if (captchaToken) {
+      const valid = await verifyHCaptcha(captchaToken);
+      if (!valid) {
+        return NextResponse.json({ error: 'Captcha verification failed' }, { status: 400 });
+      }
+    }
+
+    const supabase = getSupabase();
+    const slugColumn = locale === 'en' ? 'slug_en' : 'slug_tr';
+
+    const { data: form, error: formError } = await supabase
+      .from(siteApplicationsDb.forms)
+      .select('*')
+      .eq(slugColumn, formSlug)
+      .eq('is_active', true)
+      .single();
+
+    if (formError || !form) {
+      return NextResponse.json({ error: 'Form not found or inactive' }, { status: 404 });
+    }
+
+    const { data: fields, error: fieldsError } = await supabase
+      .from(siteApplicationsDb.formFields)
+      .select('*')
+      .eq('form_id', form.id)
+      .order('order_index', { ascending: true });
+
+    if (fieldsError || !fields?.length) {
+      return NextResponse.json({ error: 'Form configuration incomplete' }, { status: 400 });
+    }
+
+    const typedFields = fields as SiteApplicationFormField[];
+    const { valid, errors, normalized } = validateSubmissionFields(typedFields, fieldValues);
+
+    if (!valid) {
+      return NextResponse.json({ error: 'Validation failed', fieldErrors: errors }, { status: 400 });
+    }
+
+    const attachmentStoragePath = body.attachmentStoragePath?.trim() || null;
+    const attachmentFileName = body.attachmentFileName?.trim() || null;
+    const attachmentMimeType = body.attachmentMimeType?.trim() || null;
+    const attachmentFileSize = body.attachmentFileSize
+      ? Number(body.attachmentFileSize)
+      : null;
+
+    if (attachmentStoragePath && !form.allows_attachment) {
+      return NextResponse.json({ error: 'Attachments not allowed' }, { status: 400 });
+    }
+
+    if (attachmentStoragePath && (!attachmentFileName || !attachmentFileSize)) {
+      return NextResponse.json({ error: 'Incomplete attachment metadata' }, { status: 400 });
+    }
+
+    const contact = extractContactFromSubmission(typedFields, normalized);
+
+    const row = {
+      form_id: form.id,
+      application_type: formSlug,
+      first_name: contact.firstName,
+      last_name: contact.lastName,
+      email: contact.email,
+      phone: contact.phone,
+      message: typeof normalized.message === 'string' ? normalized.message : null,
+      motivation: typeof normalized.motivation === 'string' ? normalized.motivation : null,
+      locale,
+      source: 'website',
+      user_agent: request.headers.get('user-agent'),
+      status: 'pending',
+      submission_data: normalized,
+      attachment_file_name: attachmentFileName,
+      attachment_storage_path: attachmentStoragePath,
+      attachment_mime_type: attachmentMimeType,
+      attachment_file_size: attachmentFileSize,
+      attachment_expires_at: attachmentStoragePath ? computeAttachmentExpiresAt() : null,
+    };
+
+    const { data, error } = await supabase
+      .from(siteApplicationsDb.applications)
+      .insert(row)
+      .select('id')
+      .single();
+
+    if (error) {
+      console.error('Site application insert error:', error);
+      return NextResponse.json({ error: 'Failed to save application' }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      submissionId: data.id,
+    });
+  } catch (err) {
+    console.error('Form submit error:', err);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

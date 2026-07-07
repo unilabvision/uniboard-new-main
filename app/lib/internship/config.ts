@@ -21,6 +21,10 @@ export const internshipDb = {
   careerTags: 'myuni_career_tags',
   opportunityCareerTags: 'myuni_opportunity_career_tags',
   courseCareerTags: 'myuni_course_career_tags',
+
+  /** Site başvuruları — etkinlik & ekip */
+  siteApplications: 'myuni_site_applications',
+  siteApplicationStatusHistory: 'myuni_site_application_status_history',
 } as const;
 
 /** myuni_opportunities kolonları */

@@ -10,6 +10,10 @@ const modulePathOverrides: Record<string, string> = {
   career: 'internship/applications',
   kariyer: 'internship/applications',
   careers: 'internship/applications',
+  'site-applications': 'site-applications',
+  site_basvurular: 'site-applications',
+  'site-basvurular': 'site-applications',
+  basvurular: 'site-applications',
 };
 
 export const getModuleHref = (locale: string, moduleKey: string) => {

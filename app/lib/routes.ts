@@ -46,6 +46,14 @@ export const pageRoutes = {
   egitmen: {
     tr: 'egitmen-ol',
     en: 'egitmen-ol'
+  },
+  eventApplication: {
+    tr: 'etkinlik-basvuru',
+    en: 'event-application'
+  },
+  teamApplication: {
+    tr: 'ekip-basvuru',
+    en: 'team-application'
   }
 };
 

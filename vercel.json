@@ -1,4 +1,10 @@
 {
+  "crons": [
+    {
+      "path": "/api/site-applications/cleanup",
+      "schedule": "0 3 * * *"
+    }
+  ],
   "functions": {
     "app/api/vimeo/upload/route.ts": {
       "maxDuration": 300,

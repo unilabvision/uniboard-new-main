@@ -7,6 +7,8 @@ import NotFound from '@/app/components/pages/errors/NotFound';
 import TermsPage from './terms/TermsPage';
 import PrivacyPage from './privacy/PrivacyPage';
 import ContactPage from './contact/ContactPage';
+import EventApplicationPage from './applications/EventApplicationPage';
+import TeamApplicationPage from './applications/TeamApplicationPage';
 
 // İçerik türleri
 import { ContactContent } from './contact/content';
@@ -14,7 +16,7 @@ import { default as contactContentModule } from './contact/content';
 
 // Desteklenen diller ve sayfalar için tip tanımları
 type SupportedLocale = 'tr' | 'en';
-type PageType = 'about' | 'projects' | 'blog' | 'services' | 'careers' | 'contact' | 'terms' | 'privacy' | 'newsletter' | 'egitmen' | 'not-found';
+type PageType = 'about' | 'projects' | 'blog' | 'services' | 'careers' | 'contact' | 'terms' | 'privacy' | 'newsletter' | 'egitmen' | 'eventApplication' | 'teamApplication' | 'not-found';
 
 // Generic content interface to avoid using `any`
 interface PageContent {
@@ -50,7 +52,7 @@ interface PageHandlerProps {
 
 export default async function PageHandler({ pageType, locale }: PageHandlerProps) {
   // Geçerli bir sayfa türü olup olmadığını kontrol et - egitmen eklendi
-  const validPageType = ['about', 'projects', 'blog', 'services', 'careers', 'contact', 'terms', 'privacy', 'newsletter', 'egitmen'].includes(pageType) 
+  const validPageType = ['about', 'projects', 'blog', 'services', 'careers', 'contact', 'terms', 'privacy', 'newsletter', 'egitmen', 'eventApplication', 'teamApplication'].includes(pageType) 
     ? pageType as PageType 
     : 'not-found';
   
@@ -95,6 +97,22 @@ export default async function PageHandler({ pageType, locale }: PageHandlerProps
           : 'Get in touch with us.'
       };
     }
+  } else if (validPageType === 'eventApplication') {
+    content = {
+      title: locale === 'tr' ? 'Etkinlik Başvurusu' : 'Event Application',
+      description: locale === 'tr'
+        ? 'Etkinliklerimiz için başvuru formu.'
+        : 'Application form for our events.',
+    };
+    pageContent = <EventApplicationPage locale={locale} />;
+  } else if (validPageType === 'teamApplication') {
+    content = {
+      title: locale === 'tr' ? 'Ekip Başvurusu' : 'Team Application',
+      description: locale === 'tr'
+        ? 'MyUNI ekibine katılmak için başvuru formu.'
+        : 'Apply to join the MyUNI team.',
+    };
+    pageContent = <TeamApplicationPage locale={locale} />;
   }
   
   // İçerik bulunamazsa veya sayfa içeriği tanımlı değilse, NotFound bileşenini göster
@@ -127,6 +145,7 @@ export default async function PageHandler({ pageType, locale }: PageHandlerProps
       description={defaultContent.description} 
       locale={locale}
       breadcrumbs={breadcrumbs}
+      variant={validPageType === 'eventApplication' || validPageType === 'teamApplication' ? 'application' : 'default'}
     >
       {/* Sayfa içeriğini göster */}
       {pageContent}

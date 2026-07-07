@@ -1,9 +1,10 @@
-import { 
-  DollarSign, 
-  BarChart3, 
-  Star, 
+import {
+  DollarSign,
+  BarChart3,
+  Star,
   Home,
-  Link2
+  Link2,
+  Shield,
 } from 'lucide-react';
 
 export const influencerSidebarContent = {
@@ -35,7 +36,11 @@ export const influencerSidebarContent = {
         href: "/docs",
         icon: Link2
       },
-      
+      {
+        name: "Yetkilendirme",
+        href: "/access",
+        icon: Shield
+      },
     ]
   },
   en: {
@@ -66,7 +71,11 @@ export const influencerSidebarContent = {
         href: "/docs",
         icon: Link2
       },
-      
+      {
+        name: "Access Control",
+        href: "/access",
+        icon: Shield
+      },
     ]
   }
 };

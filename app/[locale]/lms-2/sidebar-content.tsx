@@ -4,7 +4,8 @@ import {
   BarChart3,
   Award,
   PlusCircle,
-  Library
+  Library,
+  Shield,
 } from 'lucide-react';
 
 export const lmsSidebarContent = {
@@ -25,6 +26,11 @@ export const lmsSidebarContent = {
         name: "Ayarlar",
         href: "/settings",
         icon: Settings
+      },
+      {
+        name: "Yetkilendirme",
+        href: "/access",
+        icon: Shield
       }
     ]
   },
@@ -60,6 +66,11 @@ export const lmsSidebarContent = {
         name: "Settings",
         href: "/settings",
         icon: Settings
+      },
+      {
+        name: "Access Control",
+        href: "/access",
+        icon: Shield
       }
     ]
   }

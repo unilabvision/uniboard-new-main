@@ -1,0 +1,428 @@
+'use client';
+
+import React, { useState, useEffect, use } from 'react';
+import Link from 'next/link';
+import { useUser } from '@clerk/nextjs';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import {
+  ArrowLeft,
+  Mail,
+  Phone,
+  Calendar,
+  Save,
+  PartyPopper,
+  Users,
+  Paperclip,
+  Download,
+  Loader2,
+} from 'lucide-react';
+import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
+import type { SiteApplication, SiteApplicationStatusHistory } from '@/app/types/siteApplications';
+import { formatFileSize } from '@/app/lib/siteApplications';
+import { getSiteApplicationAttachmentUrl } from '@/app/lib/siteApplications/attachmentDownload';
+
+const supabase = createClientComponentClient({
+  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL2 || '',
+  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY2 || '',
+});
+
+const texts = {
+  tr: {
+    back: 'Listeye Dön',
+    personal: 'Kişisel Bilgiler',
+    application: 'Başvuru Bilgileri',
+    status: 'Durum',
+    notes: 'Yönetici Notları',
+    saveNotes: 'Notları Kaydet',
+    changeStatus: 'Durumu Güncelle',
+    history: 'Durum Geçmişi',
+    loading: 'Yükleniyor...',
+    notFound: 'Başvuru bulunamadı',
+    statusLabels: {
+      pending: 'Bekliyor',
+      under_review: 'İncelemede',
+      accepted: 'Kabul',
+      rejected: 'Red',
+    },
+    typeLabels: { event: 'Etkinlik', team: 'Ekip' },
+    fields: {
+      event_name: 'Etkinlik Adı',
+      event_date: 'Tarih',
+      participant_count: 'Katılımcı Sayısı',
+      organization: 'Kurum',
+      role_interest: 'Rol',
+      experience: 'Deneyim',
+      portfolio_url: 'Portfolyo',
+      motivation: 'Motivasyon',
+      message: 'Mesaj',
+    },
+    attachment: 'Ek Dosya',
+    download: 'Dosyayı İndir',
+    expires: 'Silinme tarihi',
+    noAttachment: 'Ek dosya yok',
+    attachmentExpired: 'Dosya süresi doldu veya silindi',
+  },
+  en: {
+    back: 'Back to List',
+    personal: 'Personal Information',
+    application: 'Application Details',
+    status: 'Status',
+    notes: 'Admin Notes',
+    saveNotes: 'Save Notes',
+    changeStatus: 'Update Status',
+    history: 'Status History',
+    loading: 'Loading...',
+    notFound: 'Application not found',
+    statusLabels: {
+      pending: 'Pending',
+      under_review: 'Under Review',
+      accepted: 'Accepted',
+      rejected: 'Rejected',
+    },
+    typeLabels: { event: 'Event', team: 'Team' },
+    fields: {
+      event_name: 'Event Name',
+      event_date: 'Date',
+      participant_count: 'Participants',
+      organization: 'Organization',
+      role_interest: 'Role',
+      experience: 'Experience',
+      portfolio_url: 'Portfolio',
+      motivation: 'Motivation',
+      message: 'Message',
+    },
+    attachment: 'Attachment',
+    download: 'Download File',
+    expires: 'Expires on',
+    noAttachment: 'No attachment',
+    attachmentExpired: 'File expired or was removed',
+  },
+};
+
+export default function SiteApplicationDetailPage({
+  params,
+}: {
+  params: Promise<{ locale: string; id: string }>;
+}) {
+  const { locale, id } = use(params);
+  const t = texts[locale as keyof typeof texts] || texts.tr;
+  const { user } = useUser();
+
+  const [app, setApp] = useState<SiteApplication | null>(null);
+  const [history, setHistory] = useState<SiteApplicationStatusHistory[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newStatus, setNewStatus] = useState('');
+  const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const { data, error } = await supabase
+          .from(siteApplicationsDb.applications)
+          .select('*')
+          .eq('id', id)
+          .single();
+
+        if (error || !data) throw error;
+        setApp(data as SiteApplication);
+        setNewStatus(data.status);
+        setNotes(data.admin_notes || '');
+
+        const { data: hist } = await supabase
+          .from(siteApplicationsDb.statusHistory)
+          .select('*')
+          .eq('application_id', id)
+          .order('created_at', { ascending: false });
+
+        setHistory((hist as SiteApplicationStatusHistory[]) || []);
+      } catch {
+        setApp(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [id]);
+
+  const updateStatus = async () => {
+    if (!app || !user || newStatus === app.status) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from(siteApplicationsDb.applications)
+        .update({
+          status: newStatus,
+          reviewed_by: user.id,
+          reviewed_by_email: user.primaryEmailAddress?.emailAddress,
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      await supabase.from(siteApplicationsDb.statusHistory).insert({
+        application_id: id,
+        old_status: app.status,
+        new_status: newStatus,
+        changed_by: user.id,
+        changed_by_email: user.primaryEmailAddress?.emailAddress,
+      });
+
+      setApp((prev) => (prev ? { ...prev, status: newStatus as SiteApplication['status'] } : prev));
+      const { data: hist } = await supabase
+        .from(siteApplicationsDb.statusHistory)
+        .select('*')
+        .eq('application_id', id)
+        .order('created_at', { ascending: false });
+      setHistory((hist as SiteApplicationStatusHistory[]) || []);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveNotes = async () => {
+    if (!app || !user) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from(siteApplicationsDb.applications)
+        .update({ admin_notes: notes })
+        .eq('id', id);
+      if (error) throw error;
+      setApp((prev) => (prev ? { ...prev, admin_notes: notes } : prev));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDownloadAttachment = async () => {
+    if (!app?.attachment_storage_path) return;
+    if (app.attachment_expires_at && new Date(app.attachment_expires_at) < new Date()) {
+      setAttachmentError(t.attachmentExpired);
+      return;
+    }
+
+    setDownloading(true);
+    setAttachmentError(null);
+    try {
+      const url = await getSiteApplicationAttachmentUrl(supabase, app.attachment_storage_path);
+      if (!url) throw new Error('URL missing');
+      window.open(url, '_blank', 'noopener');
+    } catch {
+      setAttachmentError(t.attachmentExpired);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="p-8 text-center text-neutral-500">{t.loading}</div>;
+  }
+
+  if (!app) {
+    return (
+      <div className="p-8 text-center">
+        <p className="text-neutral-600 dark:text-neutral-400 mb-4">{t.notFound}</p>
+        <Link href={`/${locale}/site-applications/applications`} className="text-[#990000]">
+          {t.back}
+        </Link>
+      </div>
+    );
+  }
+
+  const detailFields =
+    app.submission_data && Object.keys(app.submission_data).length > 0
+      ? Object.entries(app.submission_data)
+      : app.application_type === 'event'
+        ? [
+            ['event_name', app.event_name],
+            ['event_date', app.event_date],
+            ['participant_count', app.participant_count],
+            ['organization', app.organization],
+            ['motivation', app.motivation],
+            ['message', app.message],
+          ]
+        : [
+            ['role_interest', app.role_interest],
+            ['experience', app.experience],
+            ['portfolio_url', app.portfolio_url],
+            ['motivation', app.motivation],
+            ['message', app.message],
+          ];
+
+  return (
+    <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto">
+      <Link
+        href={`/${locale}/site-applications/applications`}
+        className="inline-flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400 hover:text-[#990000] mb-6"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        {t.back}
+      </Link>
+
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">
+          {app.first_name} {app.last_name}
+        </h1>
+        <div className="mt-2 flex items-center gap-2 text-sm text-neutral-500">
+          {app.application_type === 'event' ? <PartyPopper className="w-4 h-4" /> : <Users className="w-4 h-4" />}
+          {app.application_type}
+          <span>·</span>
+          <Calendar className="w-4 h-4" />
+          {new Date(app.created_at).toLocaleString(locale === 'tr' ? 'tr-TR' : 'en-US')}
+        </div>
+      </div>
+
+      <div className="grid gap-6">
+        <section className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">
+          <h2 className="font-semibold mb-4">{t.personal}</h2>
+          <dl className="grid sm:grid-cols-2 gap-4 text-sm">
+            <div className="flex items-center gap-2">
+              <Mail className="w-4 h-4 text-neutral-400" />
+              <a href={`mailto:${app.email}`} className="text-[#990000]">{app.email}</a>
+            </div>
+            {app.phone && (
+              <div className="flex items-center gap-2">
+                <Phone className="w-4 h-4 text-neutral-400" />
+                {app.phone}
+              </div>
+            )}
+          </dl>
+        </section>
+
+        <section className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">
+          <h2 className="font-semibold mb-4">{t.application}</h2>
+          <dl className="space-y-4 text-sm">
+            {detailFields.map((entry) => {
+              const [key, value] = Array.isArray(entry) ? entry : [entry, app.submission_data[entry as string]];
+              if (value === null || value === undefined || value === '') return null;
+              const label =
+                t.fields[key as keyof typeof t.fields] ||
+                String(key).replace(/_/g, ' ');
+              return (
+                <div key={String(key)}>
+                  <dt className="text-neutral-500 mb-1 capitalize">{label}</dt>
+                  <dd className="text-neutral-900 dark:text-neutral-100 whitespace-pre-wrap">
+                    {String(key).includes('url') && typeof value === 'string' ? (
+                      <a href={String(value)} target="_blank" rel="noopener noreferrer" className="text-[#990000] break-all">
+                        {String(value)}
+                      </a>
+                    ) : (
+                      String(value)
+                    )}
+                  </dd>
+                </div>
+              );
+            })}
+          </dl>
+        </section>
+
+        <section className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">
+          <h2 className="font-semibold mb-4 flex items-center gap-2">
+            <Paperclip className="w-4 h-4" />
+            {t.attachment}
+          </h2>
+          {app.attachment_storage_path && app.attachment_file_name ? (
+            <div className="space-y-3">
+              <div className="text-sm">
+                <p className="font-medium text-neutral-900 dark:text-neutral-100">
+                  {app.attachment_file_name}
+                </p>
+                {app.attachment_file_size != null && (
+                  <p className="text-neutral-500 text-xs mt-1">
+                    {formatFileSize(app.attachment_file_size)}
+                  </p>
+                )}
+                {app.attachment_expires_at && (
+                  <p className="text-neutral-500 text-xs mt-1">
+                    {t.expires}:{' '}
+                    {new Date(app.attachment_expires_at).toLocaleString(
+                      locale === 'tr' ? 'tr-TR' : 'en-US'
+                    )}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={handleDownloadAttachment}
+                disabled={downloading}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-[#990000] text-white rounded-lg text-sm disabled:opacity-50"
+              >
+                {downloading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4" />
+                )}
+                {t.download}
+              </button>
+              {attachmentError && (
+                <p className="text-sm text-red-600 dark:text-red-400">{attachmentError}</p>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-neutral-500">{t.noAttachment}</p>
+          )}
+        </section>
+
+        <section className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">
+          <h2 className="font-semibold mb-4">{t.status}</h2>
+          <div className="flex flex-wrap gap-3 items-end">
+            <select
+              value={newStatus}
+              onChange={(e) => setNewStatus(e.target.value)}
+              className="px-4 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900"
+            >
+              {Object.entries(t.statusLabels).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+            <button
+              onClick={updateStatus}
+              disabled={saving || newStatus === app.status}
+              className="px-4 py-2 bg-[#990000] text-white rounded-lg disabled:opacity-50 flex items-center gap-2"
+            >
+              <Save className="w-4 h-4" />
+              {t.changeStatus}
+            </button>
+          </div>
+        </section>
+
+        <section className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">
+          <h2 className="font-semibold mb-4">{t.notes}</h2>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={4}
+            className="w-full px-4 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 mb-3"
+          />
+          <button
+            onClick={saveNotes}
+            disabled={saving}
+            className="px-4 py-2 bg-neutral-800 dark:bg-neutral-600 text-white rounded-lg disabled:opacity-50"
+          >
+            {t.saveNotes}
+          </button>
+        </section>
+
+        {history.length > 0 && (
+          <section className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">
+            <h2 className="font-semibold mb-4">{t.history}</h2>
+            <ul className="space-y-2 text-sm">
+              {history.map((h) => (
+                <li key={h.id} className="text-neutral-600 dark:text-neutral-400">
+                  {h.old_status} → {h.new_status}
+                  <span className="text-neutral-400 ml-2">
+                    {new Date(h.created_at).toLocaleString(locale === 'tr' ? 'tr-TR' : 'en-US')}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+      </div>
+    </div>
+  );
+}

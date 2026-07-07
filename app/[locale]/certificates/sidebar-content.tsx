@@ -2,7 +2,8 @@ import {
   FileText, 
   PlusCircle,
   Home,
-  Settings
+  Settings,
+  Shield,
 } from 'lucide-react';
 
 export const certificatesSidebarContent = {
@@ -28,6 +29,11 @@ export const certificatesSidebarContent = {
         name: "Organizasyon Ayarları",
         href: "/settings",
         icon: Settings
+      },
+      {
+        name: "Yetkilendirme",
+        href: "/access",
+        icon: Shield
       }
     ]
   },
@@ -53,6 +59,11 @@ export const certificatesSidebarContent = {
         name: "Organization Settings",
         href: "/settings",
         icon: Settings
+      },
+      {
+        name: "Access Control",
+        href: "/access",
+        icon: Shield
       }
     ]
   }

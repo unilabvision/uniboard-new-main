@@ -1,4 +1,4 @@
-import { User } from 'lucide-react';
+import { User, Shield } from 'lucide-react';
 
 export const settingsSidebarContent = {
   tr: {
@@ -8,6 +8,11 @@ export const settingsSidebarContent = {
         name: "Profil Ayarları",
         href: "/profile",
         icon: User
+      },
+      {
+        name: "Yetkilendirme",
+        href: "/access",
+        icon: Shield
       }
     ]
   },
@@ -18,6 +23,11 @@ export const settingsSidebarContent = {
         name: "Profile Settings",
         href: "/profile",
         icon: User
+      },
+      {
+        name: "Access Control",
+        href: "/access",
+        icon: Shield
       }
     ]
   }

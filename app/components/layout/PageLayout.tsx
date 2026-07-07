@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 // import Link from 'next/link'; // Removed to fix build error
 import { ChevronRight, Home } from 'lucide-react';
+import ApplicationFormHero from './ApplicationFormHero';
 
 interface BreadcrumbItem {
   name: string;
@@ -13,7 +14,7 @@ interface PageLayoutProps {
   description?: string;
   locale: string;
   breadcrumbs?: BreadcrumbItem[];
-  variant?: 'default' | 'minimal';
+  variant?: 'default' | 'minimal' | 'application';
   bgImage?: string; // Added to accept the background image prop
 }
 
@@ -42,54 +43,65 @@ export default function PageLayout({
 
   return (
     <div className="min-h-screen bg-white dark:bg-neutral-900">
-      {/* Header Section */}
-      <div className={`${headerClasses} py-12 lg:py-16`} style={heroStyle}>
-        <div className="max-w-full xl:max-w-[1500px] 2xl:max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 relative z-10">
-          
-          {/* Breadcrumbs */}
-          {breadcrumbs && (
-            <nav className="mb-6">
-              <div className="flex items-center text-sm text-black dark:text-rose-300/80 space-x-1">
-                <a href={`/${locale}`} className="hover:text-rose-700 dark:hover:text-rose-200 flex items-center">
-                  <Home className="w-4 h-4 mr-1" />
-                  {homeText}
-                </a>
-                {breadcrumbs.map((item, index) => {
-                  const isLast = index === breadcrumbs.length - 1;
-                  return (
-                    <div key={index} className="flex items-center">
-                      <ChevronRight className="w-4 h-4 text-rose-500 dark:text-rose-400" />
-                      {isLast ? (
-                        <span className="ml-1 text-rose-500 dark:text-rose-100 font-medium">{item.name}</span>
-                      ) : (
-                        <a href={item.href} className="ml-1 hover:text-white dark:hover:text-rose-200">
-                          {item.name}
-                        </a>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </nav>
-          )}
-
-          {/* Title */}
-          <div className="max-w-3xl">
-            <h1 className={`text-3xl lg:text-4xl font-medium mb-4 leading-relaxed ${bgImage ? 'text-white' : 'text-gray-800 dark:text-gray-100'}`}>
-              {title}
-            </h1>
-            
-            {description && (
-              <p className={`text-lg leading-relaxed font-regular ${bgImage ? 'text-rose-100/90' : 'text-gray-600 dark:text-gray-300'}`}>
-                {description}
-              </p>
+      {variant === 'application' ? (
+        <ApplicationFormHero
+          title={title}
+          description={description}
+          locale={locale}
+          breadcrumbs={breadcrumbs}
+        />
+      ) : (
+        <div className={`${headerClasses} py-12 lg:py-16`} style={heroStyle}>
+          <div className="max-w-full xl:max-w-[1500px] 2xl:max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 relative z-10">
+            {breadcrumbs && (
+              <nav className="mb-6">
+                <div className="flex items-center text-sm text-black dark:text-rose-300/80 space-x-1">
+                  <a href={`/${locale}`} className="hover:text-rose-700 dark:hover:text-rose-200 flex items-center">
+                    <Home className="w-4 h-4 mr-1" />
+                    {homeText}
+                  </a>
+                  {breadcrumbs.map((item, index) => {
+                    const isLast = index === breadcrumbs.length - 1;
+                    return (
+                      <div key={index} className="flex items-center">
+                        <ChevronRight className="w-4 h-4 text-rose-500 dark:text-rose-400" />
+                        {isLast ? (
+                          <span className="ml-1 text-rose-500 dark:text-rose-100 font-medium">{item.name}</span>
+                        ) : (
+                          <a href={item.href} className="ml-1 hover:text-white dark:hover:text-rose-200">
+                            {item.name}
+                          </a>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </nav>
             )}
+
+            <div className="max-w-3xl">
+              <h1 className={`text-3xl lg:text-4xl font-medium mb-4 leading-relaxed ${bgImage ? 'text-white' : 'text-gray-800 dark:text-gray-100'}`}>
+                {title}
+              </h1>
+
+              {description && (
+                <p className={`text-lg leading-relaxed font-regular ${bgImage ? 'text-rose-100/90' : 'text-gray-600 dark:text-gray-300'}`}>
+                  {description}
+                </p>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Main Content */}
-      <main className="bg-white dark:bg-neutral-900">
+      <main
+        className={
+          variant === 'application'
+            ? 'bg-gradient-to-b from-white to-rose-50/30 dark:from-neutral-900 dark:to-neutral-900 -mt-1'
+            : 'bg-white dark:bg-neutral-900'
+        }
+      >
         {children}
       </main>
 

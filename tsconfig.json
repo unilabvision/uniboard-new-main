@@ -19,7 +19,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@/app/lib/siteApplications": ["./app/lib/siteApplications/index.ts"],
+      "@/app/lib/siteApplications/*": ["./app/lib/siteApplications/*"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
