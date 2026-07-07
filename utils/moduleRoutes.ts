@@ -14,6 +14,12 @@ const modulePathOverrides: Record<string, string> = {
   site_basvurular: 'site-applications',
   'site-basvurular': 'site-applications',
   basvurular: 'site-applications',
+  events: 'events',
+  etkinlik: 'events',
+  etkinlikler: 'events',
+  'etkinlik-yonetimi': 'events',
+  'event-management': 'events',
+  event_management: 'events',
 };
 
 export const getModuleHref = (locale: string, moduleKey: string) => {

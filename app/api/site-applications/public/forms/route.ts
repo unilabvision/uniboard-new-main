@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { siteApplicationsDb, getSiteApplicationPublicPath } from '@/app/lib/siteApplications/config';
+import {
+  siteApplicationsDb,
+  getSiteApplicationPublicPath,
+  getEventApplicationPath,
+} from '@/app/lib/siteApplications/config';
+import { attachLinkedEventsToForms, fetchEventBySlug } from '@/app/lib/siteApplications/events';
+import { toPublicForm } from '@/app/lib/siteApplications/forms';
+import type { SiteApplicationForm, SiteApplicationFormField } from '@/app/types/siteApplicationForms';
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL2;
@@ -11,7 +18,7 @@ function getSupabase() {
   });
 }
 
-/** myunilab.net ana site menüsü için aktif formlar */
+/** myunilab.net — standalone forms + event-linked application URLs */
 export async function GET(request: NextRequest) {
   try {
     const locale = request.nextUrl.searchParams.get('locale') === 'en' ? 'en' : 'tr';
@@ -19,7 +26,7 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabase
       .from(siteApplicationsDb.forms)
-      .select('id, slug_tr, slug_en, title_tr, title_en, subtitle_tr, subtitle_en')
+      .select('id, slug_tr, slug_en, title_tr, title_en, subtitle_tr, subtitle_en, event_id')
       .eq('is_active', true)
       .eq('show_on_website', true)
       .order('created_at', { ascending: false });
@@ -28,18 +35,40 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const forms = (data ?? []).map((form) => {
-      const slug = locale === 'en' ? form.slug_en : form.slug_tr;
-      return {
-        id: form.id,
-        slug,
-        title: locale === 'en' ? form.title_en : form.title_tr,
-        subtitle: locale === 'en' ? form.subtitle_en : form.subtitle_tr,
-        url: getSiteApplicationPublicPath(locale, slug),
-      };
-    });
+    const formsWithEvents = await attachLinkedEventsToForms(supabase, data ?? []);
 
-    return NextResponse.json({ forms, locale });
+    const standaloneForms = formsWithEvents
+      .filter((form) => !form.event_id)
+      .map((form) => {
+        const slug = locale === 'en' ? form.slug_en : form.slug_tr;
+        return {
+          id: form.id,
+          slug,
+          title: locale === 'en' ? form.title_en : form.title_tr,
+          subtitle: locale === 'en' ? form.subtitle_en : form.subtitle_tr,
+          url: getSiteApplicationPublicPath(locale, slug),
+        };
+      });
+
+    const eventApplications = formsWithEvents
+      .filter((form) => form.event_id && form.myuni_events)
+      .map((form) => {
+        const event = form.myuni_events!;
+        return {
+          form_id: form.id,
+          event_id: form.event_id,
+          event_slug: event.slug,
+          event_title: event.title,
+          form_title: locale === 'en' ? form.title_en : form.title_tr,
+          application_url: getEventApplicationPath(locale, event.slug),
+        };
+      });
+
+    return NextResponse.json({
+      locale,
+      forms: standaloneForms,
+      eventApplications,
+    });
   } catch (err) {
     console.error('Public forms list error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

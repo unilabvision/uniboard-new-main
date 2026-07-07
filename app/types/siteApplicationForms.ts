@@ -43,6 +43,7 @@ export interface SiteApplicationForm {
   is_active: boolean;
   show_on_website: boolean;
   allows_attachment: boolean;
+  event_id: string | null;
   created_by: string | null;
   created_by_email: string | null;
   created_at: string;
@@ -62,6 +63,7 @@ export interface SiteApplicationFormInput {
   is_active?: boolean;
   show_on_website?: boolean;
   allows_attachment?: boolean;
+  event_id?: string | null;
 }
 
 export interface SiteApplicationFormFieldInput {

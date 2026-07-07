@@ -44,6 +44,11 @@ export function getSiteApplicationPublicPath(locale: string, slug: string): stri
   return `/${locale}/${prefix}/${slug}`;
 }
 
+export function getEventApplicationPath(locale: string, eventSlug: string): string {
+  const segment = locale === 'en' ? 'event' : 'etkinlik';
+  return `/${locale}/${segment}/${eventSlug}/basvuru`;
+}
+
 export function slugifyFormValue(value: string): string {
   return value
     .toLowerCase()

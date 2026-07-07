@@ -59,6 +59,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (body.is_active !== undefined) updates.is_active = body.is_active;
   if (body.show_on_website !== undefined) updates.show_on_website = body.show_on_website;
   if (body.allows_attachment !== undefined) updates.allows_attachment = body.allows_attachment;
+  if (body.event_id !== undefined) updates.event_id = body.event_id || null;
 
   const { data, error } = await authResult.supabase!
     .from(siteApplicationsDb.forms)

@@ -77,6 +77,14 @@ export const MODULE_ACCESS_REGISTRY: Record<string, ModuleAccessDefinition> = {
     nameEn: 'Analytics Reports',
     managePolicy: 'moduleHolder',
   },
+  events: {
+    primaryModuleKey: 'events',
+    moduleKeys: ['events', 'etkinlik', 'etkinlikler'],
+    dashboardPath: 'events',
+    nameTr: 'Etkinlik Yönetimi',
+    nameEn: 'Event Management',
+    managePolicy: 'moduleHolder',
+  },
 };
 
 export function getModuleAccessDefinition(moduleKey: string): ModuleAccessDefinition | null {

@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useUserModules } from '../../../hooks/useUserModules';
-import { getSiteApplicationPublicPath } from '@/app/lib/siteApplications/config';
+import { getSiteApplicationPublicPath, getEventApplicationPath } from '@/app/lib/siteApplications/config';
 import type { SiteApplicationForm } from '@/app/types/siteApplicationForms';
 import {
   Plus,
@@ -13,6 +13,10 @@ import {
   FileText,
   Globe,
 } from 'lucide-react';
+
+type FormWithEvent = SiteApplicationForm & {
+  myuni_events?: { id: string; slug: string; title: string } | null;
+};
 
 const texts = {
   tr: {
@@ -29,6 +33,8 @@ const texts = {
     preview: 'Önizle',
     slugTr: 'TR slug',
     slugEn: 'EN slug',
+    linkedEvent: 'Bağlı etkinlik',
+    noLinkedEvent: 'Etkinlik bağlı değil',
   },
   en: {
     title: 'Application Forms',
@@ -44,6 +50,8 @@ const texts = {
     preview: 'Preview',
     slugTr: 'TR slug',
     slugEn: 'EN slug',
+    linkedEvent: 'Linked event',
+    noLinkedEvent: 'No event linked',
   },
 };
 
@@ -53,7 +61,7 @@ export default function SiteApplicationFormsPage({
   params: Promise<{ locale: string }>;
 }) {
   const [locale, setLocale] = useState('tr');
-  const [forms, setForms] = useState<SiteApplicationForm[]>([]);
+  const [forms, setForms] = useState<FormWithEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const { isSuperAdmin, loading: modulesLoading } = useUserModules();
   const t = texts[locale as keyof typeof texts] || texts.tr;
@@ -119,7 +127,16 @@ export default function SiteApplicationFormsPage({
         </div>
       ) : (
         <div className="space-y-4">
-          {forms.map((form) => (
+          {forms.map((form) => {
+            const linkedEvent = form.myuni_events;
+            const previewHref = linkedEvent
+              ? getEventApplicationPath(locale, linkedEvent.slug)
+              : getSiteApplicationPublicPath(
+                  locale,
+                  locale === 'en' ? form.slug_en : form.slug_tr
+                );
+
+            return (
             <div
               key={form.id}
               className="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800/50 p-5"
@@ -132,6 +149,15 @@ export default function SiteApplicationFormsPage({
                   <p className="text-sm text-neutral-500 mt-1">
                     {t.slugTr}: <code>{form.slug_tr}</code> · {t.slugEn}:{' '}
                     <code>{form.slug_en}</code>
+                  </p>
+                  <p className="text-sm text-neutral-500 mt-1">
+                    {t.linkedEvent}:{' '}
+                    <span className="font-medium text-neutral-700 dark:text-neutral-300">
+                      {linkedEvent?.title || t.noLinkedEvent}
+                    </span>
+                    {linkedEvent?.slug ? (
+                      <span className="text-neutral-400"> ({linkedEvent.slug})</span>
+                    ) : null}
                   </p>
                   <div className="flex flex-wrap gap-2 mt-3">
                     <span
@@ -154,10 +180,7 @@ export default function SiteApplicationFormsPage({
                 <div className="flex flex-wrap gap-2">
                   {form.is_active && (
                     <a
-                      href={getSiteApplicationPublicPath(
-                        locale,
-                        locale === 'en' ? form.slug_en : form.slug_tr
-                      )}
+                      href={previewHref}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-neutral-300 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-700"
@@ -178,7 +201,8 @@ export default function SiteApplicationFormsPage({
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

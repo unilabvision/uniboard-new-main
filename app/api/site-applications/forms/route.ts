@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
 import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
+import { attachLinkedEventsToForms } from '@/app/lib/siteApplications/events';
 import {
   requireSiteApplicationsModuleUser,
   requireSiteApplicationsSuperAdmin,
@@ -22,7 +23,9 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ forms: data ?? [] });
+  const forms = await attachLinkedEventsToForms(authResult.supabase!, data ?? []);
+
+  return NextResponse.json({ forms });
 }
 
 export async function POST(request: NextRequest) {
@@ -64,6 +67,7 @@ export async function POST(request: NextRequest) {
       is_active: body.is_active ?? false,
       show_on_website: body.show_on_website ?? false,
       allows_attachment: body.allows_attachment ?? false,
+      event_id: body.event_id || null,
       created_by: authResult.userId,
       created_by_email: createdByEmail,
     })

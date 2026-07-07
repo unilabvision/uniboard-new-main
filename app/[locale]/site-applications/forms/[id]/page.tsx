@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { use } from 'react';
 import { useUserModules } from '../../../../hooks/useUserModules';
-import { getSiteApplicationPublicPath } from '@/app/lib/siteApplications/config';
+import { getSiteApplicationPublicPath, getEventApplicationPath } from '@/app/lib/siteApplications/config';
 import type {
   SiteApplicationForm,
   SiteApplicationFormField,
@@ -51,6 +51,9 @@ const texts = {
     order: 'Sıra',
     active: 'Aktif',
     showOnWebsite: 'Sitede göster',
+    linkedEvent: 'Bağlı etkinlik',
+    noEvent: 'Etkinlik seçilmedi (ekip formu)',
+    eventsLoadError: 'Etkinlik listesi yüklenemedi',
     allowsAttachment: 'Ek dosya',
     remove: 'Sil',
     defaultFields: 'Varsayılan alanları ekle',
@@ -74,6 +77,9 @@ const texts = {
     order: 'Order',
     active: 'Active',
     showOnWebsite: 'Show on site',
+    linkedEvent: 'Linked event',
+    noEvent: 'No event (team form)',
+    eventsLoadError: 'Could not load events list',
     allowsAttachment: 'Attachments',
     remove: 'Remove',
     defaultFields: 'Add default fields',
@@ -99,6 +105,8 @@ export default function EditSiteApplicationFormPage({
 
   const [form, setForm] = useState<SiteApplicationForm | null>(null);
   const [fields, setFields] = useState<SiteApplicationFormFieldInput[]>([]);
+  const [events, setEvents] = useState<Array<{ id: string; slug: string; title: string }>>([]);
+  const [eventsError, setEventsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
   const [savingFields, setSavingFields] = useState(false);
@@ -107,9 +115,12 @@ export default function EditSiteApplicationFormPage({
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch(`/api/site-applications/forms/${id}`);
-        if (res.ok) {
-          const data = await res.json();
+        const [formRes, eventsRes] = await Promise.all([
+          fetch(`/api/site-applications/forms/${id}`),
+          fetch('/api/site-applications/events'),
+        ]);
+        if (formRes.ok) {
+          const data = await formRes.json();
           setForm(data.form);
           setFields(
             (data.form.fields as SiteApplicationFormField[] | undefined)?.map((f) => ({
@@ -126,12 +137,23 @@ export default function EditSiteApplicationFormPage({
             })) || []
           );
         }
+        if (eventsRes.ok) {
+          const eventsData = await eventsRes.json();
+          setEvents(eventsData.events ?? []);
+          setEventsError(null);
+        } else {
+          const eventsData = await eventsRes.json().catch(() => ({}));
+          setEventsError(
+            eventsData.error ||
+              (locale === 'tr' ? 'Etkinlik listesi yüklenemedi' : 'Could not load events list')
+          );
+        }
       } finally {
         setLoading(false);
       }
     };
     load();
-  }, [id]);
+  }, [id, locale]);
 
   const saveSettings = async () => {
     if (!form) return;
@@ -153,6 +175,7 @@ export default function EditSiteApplicationFormPage({
           is_active: form.is_active,
           show_on_website: form.show_on_website,
           allows_attachment: form.allows_attachment,
+          event_id: form.event_id,
         }),
       });
       if (!res.ok) {
@@ -220,6 +243,10 @@ export default function EditSiteApplicationFormPage({
   }
 
   const previewSlug = locale === 'en' ? form.slug_en : form.slug_tr;
+  const linkedEvent = events.find((e) => e.id === form.event_id);
+  const previewHref = linkedEvent
+    ? getEventApplicationPath(locale, linkedEvent.slug)
+    : getSiteApplicationPublicPath(locale, previewSlug);
 
   return (
     <div className="p-6 lg:p-8 max-w-5xl mx-auto space-y-8">
@@ -233,7 +260,7 @@ export default function EditSiteApplicationFormPage({
         </Link>
         {form.is_active && (
           <a
-            href={getSiteApplicationPublicPath(locale, previewSlug)}
+            href={previewHref}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-sm text-[#990000]"
@@ -253,6 +280,24 @@ export default function EditSiteApplicationFormPage({
       <section className="rounded-xl border border-neutral-200 dark:border-neutral-700 p-5 space-y-4">
         <h2 className="text-lg font-semibold">{t.settings}</h2>
         <div className="grid sm:grid-cols-2 gap-3">
+          <div className="sm:col-span-2">
+            <label className="text-xs text-neutral-500 block mb-1">{t.linkedEvent}</label>
+            <select
+              value={form.event_id || ''}
+              onChange={(e) => setForm({ ...form, event_id: e.target.value || null })}
+              className="w-full rounded border px-3 py-2 text-sm dark:bg-neutral-900"
+            >
+              <option value="">{t.noEvent}</option>
+              {events.map((ev) => (
+                <option key={ev.id} value={ev.id}>
+                  {ev.title} ({ev.slug})
+                </option>
+              ))}
+            </select>
+            {eventsError && (
+              <p className="text-xs text-red-600 mt-1">{eventsError}</p>
+            )}
+          </div>
           <Input label="TR slug" value={form.slug_tr} onChange={(v) => setForm({ ...form, slug_tr: v })} />
           <Input label="EN slug" value={form.slug_en} onChange={(v) => setForm({ ...form, slug_en: v })} />
           <Input label="Title TR" value={form.title_tr} onChange={(v) => setForm({ ...form, title_tr: v })} />

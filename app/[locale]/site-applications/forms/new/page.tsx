@@ -22,6 +22,9 @@ const texts = {
     successEn: 'Başarı mesajı (EN)',
     active: 'Formu aktif et',
     showOnWebsite: 'myunilab.net ana sitede göster',
+    linkedEvent: 'Bağlı etkinlik',
+    noEvent: 'Etkinlik seçilmedi (ekip formu için boş bırakın)',
+    eventsLoadError: 'Etkinlik listesi yüklenemedi',
     allowsAttachment: 'Ek dosya yükleme izni',
     create: 'Formu Oluştur',
     saving: 'Kaydediliyor...',
@@ -41,6 +44,9 @@ const texts = {
     successEn: 'Success message (EN)',
     active: 'Activate form',
     showOnWebsite: 'Show on myunilab.net homepage',
+    linkedEvent: 'Linked event',
+    noEvent: 'No event (leave empty for team forms)',
+    eventsLoadError: 'Could not load events list',
     allowsAttachment: 'Allow file attachments',
     create: 'Create Form',
     saving: 'Saving...',
@@ -58,6 +64,8 @@ export default function NewSiteApplicationFormPage({
   const { isSuperAdmin, loading: modulesLoading } = useUserModules();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [events, setEvents] = useState<Array<{ id: string; slug: string; title: string }>>([]);
+  const [eventsError, setEventsError] = useState<string | null>(null);
   const t = texts[locale as keyof typeof texts] || texts.tr;
 
   const [form, setForm] = useState({
@@ -72,11 +80,32 @@ export default function NewSiteApplicationFormPage({
     is_active: false,
     show_on_website: false,
     allows_attachment: false,
+    event_id: '' as string,
   });
 
   useEffect(() => {
     params.then((p) => setLocale(p.locale));
   }, [params]);
+
+  useEffect(() => {
+    fetch('/api/site-applications/events')
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'events');
+        setEvents(data.events ?? []);
+        setEventsError(null);
+      })
+      .catch((err) => {
+        setEvents([]);
+        setEventsError(
+          err instanceof Error && err.message !== 'events'
+            ? err.message
+            : locale === 'tr'
+              ? 'Etkinlik listesi yüklenemedi'
+              : 'Could not load events list'
+        );
+      });
+  }, [locale]);
 
   useEffect(() => {
     if (form.title_tr && !form.slug_tr) {
@@ -95,7 +124,10 @@ export default function NewSiteApplicationFormPage({
       const res = await fetch('/api/site-applications/forms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          event_id: form.event_id || null,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || t.error);
@@ -136,6 +168,30 @@ export default function NewSiteApplicationFormPage({
       <h1 className="text-2xl font-bold mb-6">{t.title}</h1>
 
       <form onSubmit={handleCreate} className="space-y-5">
+        <div>
+          <label className="block text-sm font-medium mb-1">{t.linkedEvent}</label>
+          <select
+            value={form.event_id}
+            onChange={(e) => setForm({ ...form, event_id: e.target.value })}
+            className="w-full rounded-lg border border-neutral-300 px-3 py-2 dark:bg-neutral-800 dark:border-neutral-600"
+          >
+            <option value="">{t.noEvent}</option>
+            {events.map((ev) => (
+              <option key={ev.id} value={ev.id}>
+                {ev.title} ({ev.slug})
+              </option>
+            ))}
+          </select>
+          {eventsError && (
+            <p className="text-xs text-red-600 mt-1">{eventsError}</p>
+          )}
+          {!eventsError && events.length === 0 && (
+            <p className="text-xs text-neutral-500 mt-1">
+              {locale === 'tr' ? 'Aktif etkinlik bulunamadı.' : 'No active events found.'}
+            </p>
+          )}
+        </div>
+
         <div className="grid sm:grid-cols-2 gap-4">
           <Field label={t.titleTr} value={form.title_tr} onChange={(v) => setForm({ ...form, title_tr: v })} required />
           <Field label={t.titleEn} value={form.title_en} onChange={(v) => setForm({ ...form, title_en: v })} required />

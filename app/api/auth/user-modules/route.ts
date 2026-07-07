@@ -2,6 +2,32 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
+const DUPLICATE_EVENT_MODULE_KEYS = new Set([
+  'etkinlik',
+  'etkinlikler',
+  'etkinlik-yonetimi',
+  'event-management',
+  'event_management',
+]);
+
+function dedupeDashboardModules<
+  T extends { key: string; name_tr: string; name_en: string },
+>(modules: T[]): T[] {
+  const hasCanonicalEvents = modules.some((m) => m.key === 'events');
+  if (!hasCanonicalEvents) return modules;
+
+  return modules.filter((m) => {
+    if (DUPLICATE_EVENT_MODULE_KEYS.has(m.key)) return false;
+    if (
+      (m.name_tr === 'Etkinlik Yönetimi' || m.name_en === 'Event Management') &&
+      m.key !== 'events'
+    ) {
+      return false;
+    }
+    return true;
+  });
+}
+
 export async function GET() {
   try {
     console.log('🚀 User modules API starting...');
@@ -122,6 +148,8 @@ export async function GET() {
           is_super_admin?: boolean;
         }>;
     }
+
+    modules = dedupeDashboardModules(modules);
 
     // 5. Debug bilgileri (sadece development'ta)
     if (isDev) {

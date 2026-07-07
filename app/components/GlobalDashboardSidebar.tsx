@@ -123,6 +123,10 @@ function GlobalDashboardSidebarInner({ locale, modules }: SidebarProps) {
         modules.some((m) =>
           ['internship', 'staj', 'career', 'kariyer', 'careers'].includes(m.key)
         )) ||
+      (['events', 'etkinlik', 'etkinlikler'].includes(currentModule) &&
+        modules.some((m) =>
+          ['events', 'etkinlik', 'etkinlikler'].includes(m.key)
+        )) ||
       currentModule === 'settings');
 
   // Modül değiştiğinde sidebar content'ini yükle
@@ -245,6 +249,18 @@ function GlobalDashboardSidebarInner({ locale, modules }: SidebarProps) {
                 content = null;
               }
               break;
+
+            case 'events':
+            case 'etkinlik':
+            case 'etkinlikler':
+              try {
+                const { eventsSidebarContent } = await import('../../app/[locale]/events/sidebar-content');
+                content = eventsSidebarContent;
+              } catch (error) {
+                console.error('Could not load events sidebar content', error);
+                content = null;
+              }
+              break;
             // case 'sales':
             //   const { salesSidebarContent } = await import('@/app/[locale]/dashboard/sales/sidebar-content');
             //   content = salesSidebarContent;
@@ -333,7 +349,9 @@ function GlobalDashboardSidebarInner({ locale, modules }: SidebarProps) {
       },
       // Modül özel navigation items
       ...(content as ModuleContent).items.map((item) => {
-        const fullHref = `${basePath}${item.href}`;
+        const fullHref = item.href.startsWith('http')
+          ? item.href
+          : `${basePath}${item.href}`;
         const [itemPath, itemQuery = ''] = fullHref.split('?');
         const isActive = itemQuery
           ? pathname === itemPath && currentQuery === itemQuery
