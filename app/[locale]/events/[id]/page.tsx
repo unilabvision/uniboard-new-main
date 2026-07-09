@@ -117,6 +117,7 @@ export default function EditEventPage({
           setForm={setForm}
           slugTouched={slugTouched}
           setSlugTouched={setSlugTouched}
+          isEdit
         />
         {error && <p className="text-red-600 text-sm">{error}</p>}
         <button

@@ -4,7 +4,16 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { use } from 'react';
 import { useUserModules } from '../../../../hooks/useUserModules';
-import { getSiteApplicationPublicPath, getEventApplicationPath } from '@/app/lib/siteApplications/config';
+import {
+  getSiteApplicationPublicPath,
+  getEventApplicationPath,
+} from '@/app/lib/siteApplications/config';
+import {
+  getTeamFormPublicPath,
+  inferFormType,
+  TEAM_DEFAULT_FIELDS,
+  type SiteApplicationFormType,
+} from '@/app/lib/siteApplications/formTypes';
 import type {
   SiteApplicationForm,
   SiteApplicationFormField,
@@ -51,12 +60,20 @@ const texts = {
     order: 'Sıra',
     active: 'Aktif',
     showOnWebsite: 'Sitede göster',
-    linkedEvent: 'Bağlı etkinlik',
-    noEvent: 'Etkinlik seçilmedi (ekip formu)',
+    teamBadge: 'UNILAB Ekip Başvurusu',
+    eventBadge: 'Etkinlik Başvuru Formu',
+    teamMenuHint: 'Bu form myunilab.net → Hakkımızda menüsünde görünür',
+    eventMenuHint: 'Bu form seçilen etkinliğin başvuru sayfasında açılır',
+    pageAddress: 'Sayfa adresi',
+    placeholderTr: 'Placeholder (TR)',
+    placeholderEn: 'Placeholder (EN)',
     eventsLoadError: 'Etkinlik listesi yüklenemedi',
     allowsAttachment: 'Ek dosya',
     remove: 'Sil',
-    defaultFields: 'Varsayılan alanları ekle',
+    defaultFields: 'UNILAB ekip alanlarını ekle',
+    defaultEventFields: 'Varsayılan alanları ekle',
+    linkedEvent: 'Bağlı etkinlik',
+    noEvent: 'Etkinlik seçilmedi',
   },
   en: {
     back: 'Back to Forms',
@@ -77,16 +94,24 @@ const texts = {
     order: 'Order',
     active: 'Active',
     showOnWebsite: 'Show on site',
-    linkedEvent: 'Linked event',
-    noEvent: 'No event (team form)',
+    teamBadge: 'UNILAB Team Application',
+    eventBadge: 'Event Application Form',
+    teamMenuHint: 'Shown under About Us on myunilab.net',
+    eventMenuHint: 'Opens on the linked event application page',
+    pageAddress: 'Page address',
+    placeholderTr: 'Placeholder (TR)',
+    placeholderEn: 'Placeholder (EN)',
     eventsLoadError: 'Could not load events list',
     allowsAttachment: 'Attachments',
     remove: 'Remove',
-    defaultFields: 'Add default fields',
+    defaultFields: 'Add UNILAB team fields',
+    defaultEventFields: 'Add default fields',
+    linkedEvent: 'Linked event',
+    noEvent: 'No event selected',
   },
 };
 
-const DEFAULT_FIELDS: SiteApplicationFormFieldInput[] = [
+const DEFAULT_EVENT_FIELDS: SiteApplicationFormFieldInput[] = [
   { field_key: 'first_name', field_type: 'text', label_tr: 'Ad', label_en: 'First Name', required: true, order_index: 0, is_contact: true },
   { field_key: 'last_name', field_type: 'text', label_tr: 'Soyad', label_en: 'Last Name', required: true, order_index: 1, is_contact: true },
   { field_key: 'email', field_type: 'email', label_tr: 'E-posta', label_en: 'Email', required: true, order_index: 2, is_contact: true },
@@ -115,10 +140,7 @@ export default function EditSiteApplicationFormPage({
   useEffect(() => {
     const load = async () => {
       try {
-        const [formRes, eventsRes] = await Promise.all([
-          fetch(`/api/site-applications/forms/${id}`),
-          fetch('/api/site-applications/events'),
-        ]);
+        const formRes = await fetch(`/api/site-applications/forms/${id}`);
         if (formRes.ok) {
           const data = await formRes.json();
           setForm(data.form);
@@ -136,24 +158,24 @@ export default function EditSiteApplicationFormPage({
               is_contact: f.is_contact,
             })) || []
           );
-        }
-        if (eventsRes.ok) {
-          const eventsData = await eventsRes.json();
-          setEvents(eventsData.events ?? []);
-          setEventsError(null);
-        } else {
-          const eventsData = await eventsRes.json().catch(() => ({}));
-          setEventsError(
-            eventsData.error ||
-              (locale === 'tr' ? 'Etkinlik listesi yüklenemedi' : 'Could not load events list')
-          );
+          const type = data.form.form_type ?? inferFormType(data.form);
+          if (type === 'event') {
+            const eventsRes = await fetch('/api/site-applications/events');
+            if (eventsRes.ok) {
+              const eventsData = await eventsRes.json();
+              setEvents(eventsData.events ?? []);
+              setEventsError(null);
+            } else {
+              setEventsError(t.eventsLoadError);
+            }
+          }
         }
       } finally {
         setLoading(false);
       }
     };
     load();
-  }, [id, locale]);
+  }, [id, t.eventsLoadError]);
 
   const saveSettings = async () => {
     if (!form) return;
@@ -242,17 +264,22 @@ export default function EditSiteApplicationFormPage({
     return <div className="p-8">Form not found</div>;
   }
 
+  const formType: SiteApplicationFormType = form.form_type ?? inferFormType(form);
+  const isTeam = formType === 'team';
   const previewSlug = locale === 'en' ? form.slug_en : form.slug_tr;
   const linkedEvent = events.find((e) => e.id === form.event_id);
-  const previewHref = linkedEvent
-    ? getEventApplicationPath(locale, linkedEvent.slug)
-    : getSiteApplicationPublicPath(locale, previewSlug);
+  const previewHref = isTeam
+    ? getTeamFormPublicPath(locale, previewSlug)
+    : linkedEvent
+      ? getEventApplicationPath(locale, linkedEvent.slug)
+      : getSiteApplicationPublicPath(locale, previewSlug);
+  const defaultFieldsTemplate = isTeam ? TEAM_DEFAULT_FIELDS : DEFAULT_EVENT_FIELDS;
 
   return (
     <div className="p-6 lg:p-8 max-w-5xl mx-auto space-y-8">
       <div className="flex items-center justify-between gap-4">
         <Link
-          href={`/${locale}/site-applications/forms`}
+          href={`/${locale}/site-applications/forms?tab=${isTeam ? 'team' : 'event'}`}
           className="inline-flex items-center gap-1 text-sm text-neutral-600 hover:text-[#990000]"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -271,6 +298,15 @@ export default function EditSiteApplicationFormPage({
         )}
       </div>
 
+      <div>
+        <span className="text-xs font-medium uppercase tracking-wide text-[#990000]">
+          {isTeam ? t.teamBadge : t.eventBadge}
+        </span>
+        <h1 className="text-2xl font-bold mt-1">
+          {locale === 'en' ? form.title_en : form.title_tr}
+        </h1>
+      </div>
+
       {message && (
         <div className="rounded-lg bg-green-50 border border-green-200 text-green-800 px-4 py-2 text-sm">
           {message}
@@ -279,25 +315,36 @@ export default function EditSiteApplicationFormPage({
 
       <section className="rounded-xl border border-neutral-200 dark:border-neutral-700 p-5 space-y-4">
         <h2 className="text-lg font-semibold">{t.settings}</h2>
+        <p className="text-sm text-neutral-500">
+          {isTeam ? t.teamMenuHint : t.eventMenuHint}
+        </p>
         <div className="grid sm:grid-cols-2 gap-3">
-          <div className="sm:col-span-2">
-            <label className="text-xs text-neutral-500 block mb-1">{t.linkedEvent}</label>
-            <select
-              value={form.event_id || ''}
-              onChange={(e) => setForm({ ...form, event_id: e.target.value || null })}
-              className="w-full rounded border px-3 py-2 text-sm dark:bg-neutral-900"
-            >
-              <option value="">{t.noEvent}</option>
-              {events.map((ev) => (
-                <option key={ev.id} value={ev.id}>
-                  {ev.title} ({ev.slug})
-                </option>
-              ))}
-            </select>
-            {eventsError && (
-              <p className="text-xs text-red-600 mt-1">{eventsError}</p>
-            )}
-          </div>
+          {!isTeam && (
+            <div className="sm:col-span-2">
+              <label className="text-xs text-neutral-500 block mb-1">{t.linkedEvent}</label>
+              <select
+                value={form.event_id || ''}
+                onChange={(e) => setForm({ ...form, event_id: e.target.value || null })}
+                className="w-full rounded border px-3 py-2 text-sm dark:bg-neutral-900"
+              >
+                <option value="">{t.noEvent}</option>
+                {events.map((ev) => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.title} ({ev.slug})
+                  </option>
+                ))}
+              </select>
+              {eventsError && <p className="text-xs text-red-600 mt-1">{eventsError}</p>}
+            </div>
+          )}
+          {isTeam && (
+            <div className="sm:col-span-2">
+              <label className="text-xs text-neutral-500 block mb-1">{t.pageAddress}</label>
+              <div className="rounded border bg-neutral-50 dark:bg-neutral-900/40 px-3 py-2 text-sm font-mono break-all">
+                {previewHref}
+              </div>
+            </div>
+          )}
           <Input label="TR slug" value={form.slug_tr} onChange={(v) => setForm({ ...form, slug_tr: v })} />
           <Input label="EN slug" value={form.slug_en} onChange={(v) => setForm({ ...form, slug_en: v })} />
           <Input label="Title TR" value={form.title_tr} onChange={(v) => setForm({ ...form, title_tr: v })} />
@@ -327,10 +374,10 @@ export default function EditSiteApplicationFormPage({
             {fields.length === 0 && (
               <button
                 type="button"
-                onClick={() => setFields(DEFAULT_FIELDS)}
+                onClick={() => setFields(defaultFieldsTemplate)}
                 className="text-sm px-3 py-1.5 border rounded-lg"
               >
-                {t.defaultFields}
+                {isTeam ? t.defaultFields : t.defaultEventFields}
               </button>
             )}
             <button type="button" onClick={addField} className="inline-flex items-center gap-1 text-sm px-3 py-1.5 border rounded-lg">
@@ -340,26 +387,30 @@ export default function EditSiteApplicationFormPage({
           </div>
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-4">
           {fields.map((field, index) => (
-            <div key={index} className="grid sm:grid-cols-6 gap-2 items-end border-b border-neutral-100 pb-3">
-              <Input label={t.fieldKey} value={field.field_key} onChange={(v) => updateField(index, { field_key: v }, setFields)} />
-              <Input label={t.labelTr} value={field.label_tr} onChange={(v) => updateField(index, { label_tr: v }, setFields)} />
-              <Input label={t.labelEn} value={field.label_en} onChange={(v) => updateField(index, { label_en: v }, setFields)} />
-              <div>
-                <label className="text-xs text-neutral-500">{t.type}</label>
-                <select
-                  value={field.field_type}
-                  onChange={(e) => updateField(index, { field_type: e.target.value as SiteApplicationFieldType }, setFields)}
-                  className="w-full rounded border px-2 py-1.5 text-sm"
-                >
-                  {FIELD_TYPES.map((ft) => (
-                    <option key={ft} value={ft}>{ft}</option>
-                  ))}
-                </select>
+            <div key={index} className="rounded-lg border border-neutral-200 dark:border-neutral-700 p-4 space-y-3">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                <Input label={t.fieldKey} value={field.field_key} onChange={(v) => updateField(index, { field_key: v }, setFields)} />
+                <Input label={t.labelTr} value={field.label_tr} onChange={(v) => updateField(index, { label_tr: v }, setFields)} />
+                <Input label={t.labelEn} value={field.label_en} onChange={(v) => updateField(index, { label_en: v }, setFields)} />
+                <Input label={t.placeholderTr} value={field.placeholder_tr || ''} onChange={(v) => updateField(index, { placeholder_tr: v }, setFields)} />
+                <Input label={t.placeholderEn} value={field.placeholder_en || ''} onChange={(v) => updateField(index, { placeholder_en: v }, setFields)} />
+                <div>
+                  <label className="text-xs text-neutral-500">{t.type}</label>
+                  <select
+                    value={field.field_type}
+                    onChange={(e) => updateField(index, { field_type: e.target.value as SiteApplicationFieldType }, setFields)}
+                    className="w-full rounded border px-2 py-1.5 text-sm"
+                  >
+                    {FIELD_TYPES.map((ft) => (
+                      <option key={ft} value={ft}>{ft}</option>
+                    ))}
+                  </select>
+                </div>
+                <Input label={t.order} value={String(field.order_index ?? index)} onChange={(v) => updateField(index, { order_index: Number(v) || 0 }, setFields)} />
               </div>
-              <Input label={t.order} value={String(field.order_index ?? index)} onChange={(v) => updateField(index, { order_index: Number(v) || 0 }, setFields)} />
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between">
                 <Check label={t.required} checked={!!field.required} onChange={(v) => updateField(index, { required: v }, setFields)} />
                 <button type="button" onClick={() => setFields((prev) => prev.filter((_, i) => i !== index))} className="p-2 text-red-600">
                   <Trash2 className="w-4 h-4" />

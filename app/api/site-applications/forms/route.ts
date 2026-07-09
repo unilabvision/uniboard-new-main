@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
 import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
 import { attachLinkedEventsToForms } from '@/app/lib/siteApplications/events';
+import { inferFormType } from '@/app/lib/siteApplications/formTypes';
 import {
   requireSiteApplicationsModuleUser,
   requireSiteApplicationsSuperAdmin,
@@ -23,7 +24,12 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const forms = await attachLinkedEventsToForms(authResult.supabase!, data ?? []);
+  const forms = (await attachLinkedEventsToForms(authResult.supabase!, data ?? [])).map(
+    (form) => ({
+      ...form,
+      form_type: inferFormType(form),
+    })
+  );
 
   return NextResponse.json({ forms });
 }
@@ -43,6 +49,12 @@ export async function POST(request: NextRequest) {
   if (!slugTr || !slugEn || !titleTr || !titleEn) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
+
+  const formType = body.form_type ?? (body.event_id ? 'event' : 'team');
+  if (formType === 'event' && !body.event_id) {
+    return NextResponse.json({ error: 'Etkinlik formları için bir etkinlik seçilmelidir.' }, { status: 400 });
+  }
+  const eventId = formType === 'team' ? null : body.event_id || null;
 
   let createdByEmail: string | null = null;
   try {
@@ -67,7 +79,7 @@ export async function POST(request: NextRequest) {
       is_active: body.is_active ?? false,
       show_on_website: body.show_on_website ?? false,
       allows_attachment: body.allows_attachment ?? false,
-      event_id: body.event_id || null,
+      event_id: eventId,
       created_by: authResult.userId,
       created_by_email: createdByEmail,
     })

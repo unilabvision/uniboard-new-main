@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
+import { inferFormType } from '@/app/lib/siteApplications/formTypes';
 import {
   requireSiteApplicationsModuleUser,
   requireSiteApplicationsSuperAdmin,
@@ -31,7 +32,9 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     .eq('form_id', id)
     .order('order_index', { ascending: true });
 
-  return NextResponse.json({ form: { ...form, fields: fields ?? [] } });
+  return NextResponse.json({
+    form: { ...form, fields: fields ?? [], form_type: inferFormType(form) },
+  });
 }
 
 export async function PATCH(request: NextRequest, context: RouteContext) {

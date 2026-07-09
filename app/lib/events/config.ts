@@ -35,9 +35,29 @@ export function getPublicEventApplicationPath(locale: string, slug: string): str
 }
 
 export function slugifyEventTitle(value: string): string {
-  return value
-    .toLowerCase()
+  const trMap: Record<string, string> = {
+    ç: 'c',
+    Ç: 'c',
+    ğ: 'g',
+    Ğ: 'g',
+    ı: 'i',
+    İ: 'i',
+    ö: 'o',
+    Ö: 'o',
+    ş: 's',
+    Ş: 's',
+    ü: 'u',
+    Ü: 'u',
+  };
+
+  const normalized = value
     .trim()
+    .split('')
+    .map((ch) => trMap[ch] ?? ch)
+    .join('');
+
+  return normalized
+    .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 80);

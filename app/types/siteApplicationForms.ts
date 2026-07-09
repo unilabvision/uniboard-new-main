@@ -44,6 +44,7 @@ export interface SiteApplicationForm {
   show_on_website: boolean;
   allows_attachment: boolean;
   event_id: string | null;
+  form_type?: 'team' | 'event' | null;
   created_by: string | null;
   created_by_email: string | null;
   created_at: string;
@@ -64,6 +65,7 @@ export interface SiteApplicationFormInput {
   show_on_website?: boolean;
   allows_attachment?: boolean;
   event_id?: string | null;
+  form_type?: 'team' | 'event';
 }
 
 export interface SiteApplicationFormFieldInput {

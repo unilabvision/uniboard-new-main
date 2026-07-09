@@ -6,6 +6,7 @@ import {
   getEventApplicationPath,
 } from '@/app/lib/siteApplications/config';
 import { attachLinkedEventsToForms } from '@/app/lib/siteApplications/events';
+import { getTeamFormPublicPath } from '@/app/lib/siteApplications/formTypes';
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL2;
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
           slug,
           title: locale === 'en' ? form.title_en : form.title_tr,
           subtitle: locale === 'en' ? form.subtitle_en : form.subtitle_tr,
-          url: getSiteApplicationPublicPath(locale, slug),
+          url: getTeamFormPublicPath(locale, slug),
         };
       });
 

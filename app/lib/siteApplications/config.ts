@@ -50,10 +50,33 @@ export function getEventApplicationPath(locale: string, eventSlug: string): stri
 }
 
 export function slugifyFormValue(value: string): string {
-  return value
-    .toLowerCase()
+  const trMap: Record<string, string> = {
+    ç: 'c',
+    Ç: 'c',
+    ğ: 'g',
+    Ğ: 'g',
+    ı: 'i',
+    İ: 'i',
+    ö: 'o',
+    Ö: 'o',
+    ş: 's',
+    Ş: 's',
+    ü: 'u',
+    Ü: 'u',
+  };
+
+  const normalized = value
     .trim()
+    .split('')
+    .map((ch) => trMap[ch] ?? ch)
+    .join('');
+
+  return normalized
+    .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 80);
 }
+
+/** @deprecated Use inferFormType + getTeamFormPublicPath from formTypes.ts */
+export const TEAM_FORM_SLUGS = new Set(['ekip-basvuru', 'team-application']);

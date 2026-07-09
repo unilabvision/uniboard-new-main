@@ -64,6 +64,7 @@ export default function NewEventPage({
           setForm={setForm}
           slugTouched={slugTouched}
           setSlugTouched={setSlugTouched}
+          isEdit={false}
         />
         {error && <p className="text-red-600 text-sm">{error}</p>}
         <button

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   EVENT_STATUSES,
@@ -16,7 +16,11 @@ const texts = {
     schedule: 'Tarih & Konum',
     media: 'Görsel & Organizatör',
     publish: 'Yayın',
-    slug: 'URL slug',
+    slug: 'Sayfa adresi',
+    slugHint: 'Başlıktan otomatik oluşturulur',
+    slugCustomize: 'Adresi düzenle',
+    slugCustomizeHide: 'Otomatik adrese dön',
+    slugPlaceholder: 'etkinlik-basligi',
     title: 'Başlık',
     description: 'Açıklama',
     eventType: 'Etkinlik türü',
@@ -48,7 +52,11 @@ const texts = {
     schedule: 'Schedule & Location',
     media: 'Media & Organizer',
     publish: 'Publishing',
-    slug: 'URL slug',
+    slug: 'Page address',
+    slugHint: 'Generated automatically from the title',
+    slugCustomize: 'Customize address',
+    slugCustomizeHide: 'Use automatic address',
+    slugPlaceholder: 'event-title',
     title: 'Title',
     description: 'Description',
     eventType: 'Event type',
@@ -171,9 +179,12 @@ export function eventToFormState(event: MyuniEvent): EventFormState {
 }
 
 export function formStateToPayload(form: EventFormState) {
+  const title = form.title.trim();
+  const slug = form.slug.trim() || slugifyEventTitle(title);
+
   return {
-    slug: form.slug.trim(),
-    title: form.title.trim(),
+    slug,
+    title,
     description: form.description.trim() || null,
     event_type: form.event_type,
     status: form.status,
@@ -209,14 +220,34 @@ export default function EventFormFields({
   setForm,
   slugTouched,
   setSlugTouched,
+  isEdit = false,
 }: {
   locale: string;
   form: EventFormState;
   setForm: React.Dispatch<React.SetStateAction<EventFormState>>;
   slugTouched: boolean;
   setSlugTouched: (v: boolean) => void;
+  isEdit?: boolean;
 }) {
   const t = texts[locale as keyof typeof texts] || texts.tr;
+  const [showCustomSlug, setShowCustomSlug] = useState(false);
+
+  const previewSlug = form.slug || slugifyEventTitle(form.title) || t.slugPlaceholder;
+  const previewUrl = getPublicEventUrl(locale, previewSlug);
+
+  const toggleCustomSlug = () => {
+    if (showCustomSlug) {
+      setShowCustomSlug(false);
+      if (!isEdit) {
+        setSlugTouched(false);
+        if (form.title) {
+          setForm((prev) => ({ ...prev, slug: slugifyEventTitle(form.title) }));
+        }
+      }
+      return;
+    }
+    setShowCustomSlug(true);
+  };
 
   useEffect(() => {
     if (!slugTouched && form.title) {
@@ -229,16 +260,38 @@ export default function EventFormFields({
       <section className="space-y-4">
         <h2 className="font-semibold text-neutral-800 dark:text-neutral-200">{t.basic}</h2>
         <div className="grid sm:grid-cols-2 gap-4">
-          <Field label={t.title} value={form.title} onChange={(v) => setForm({ ...form, title: v })} required />
-          <Field
-            label={t.slug}
-            value={form.slug}
-            onChange={(v) => {
-              setSlugTouched(true);
-              setForm({ ...form, slug: v });
-            }}
-            required
-          />
+          <div className="sm:col-span-2">
+            <Field label={t.title} value={form.title} onChange={(v) => setForm({ ...form, title: v })} required />
+          </div>
+          <div className="sm:col-span-2">
+            <p className="block text-sm font-medium mb-1">{t.slug}</p>
+            <div className="rounded-lg border border-neutral-200 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-900/40 px-3 py-2.5">
+              <p className="text-sm text-neutral-800 dark:text-neutral-200 break-all font-mono">
+                {previewUrl}
+              </p>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">{t.slugHint}</p>
+            </div>
+            <button
+              type="button"
+              onClick={toggleCustomSlug}
+              className="mt-2 text-xs text-[#990000] hover:underline"
+            >
+              {showCustomSlug ? t.slugCustomizeHide : t.slugCustomize}
+            </button>
+            {showCustomSlug && (
+              <div className="mt-3">
+                <Field
+                  label={t.slug}
+                  value={form.slug}
+                  onChange={(v) => {
+                    setSlugTouched(true);
+                    setForm({ ...form, slug: slugifyEventTitle(v) });
+                  }}
+                  required
+                />
+              </div>
+            )}
+          </div>
           <div className="sm:col-span-2">
             <label className="block text-sm font-medium mb-1">{t.description}</label>
             <textarea
