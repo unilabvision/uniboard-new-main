@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { eventsDb } from '@/app/lib/events/config';
+import { eventsDb, parseBooleanField } from '@/app/lib/events/config';
 import { requireEventsModuleUser } from '@/app/api/events/_helpers';
 import type { MyuniEventInput } from '@/app/types/events';
 
@@ -64,18 +64,23 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (body.end_date !== undefined) updates.end_date = body.end_date || null;
   if (body.timezone !== undefined) updates.timezone = body.timezone;
   if (body.duration_minutes !== undefined) updates.duration_minutes = body.duration_minutes;
-  if (body.is_online !== undefined) updates.is_online = body.is_online;
-  if (body.is_paid !== undefined) updates.is_paid = body.is_paid;
-  if (body.price !== undefined) updates.price = body.is_paid === false ? null : body.price;
+  if (body.is_online !== undefined) updates.is_online = parseBooleanField(body.is_online);
+  if (body.is_paid !== undefined) {
+    updates.is_paid = parseBooleanField(body.is_paid);
+    if (!updates.is_paid) updates.price = null;
+  }
+  if (body.price !== undefined && body.is_paid !== false) {
+    updates.price = body.price;
+  }
   if (body.max_attendees !== undefined) updates.max_attendees = body.max_attendees;
   if (body.registration_deadline !== undefined) {
     updates.registration_deadline = body.registration_deadline || null;
   }
   if (body.is_registration_open !== undefined) {
-    updates.is_registration_open = body.is_registration_open;
+    updates.is_registration_open = parseBooleanField(body.is_registration_open);
   }
-  if (body.is_active !== undefined) updates.is_active = body.is_active;
-  if (body.is_featured !== undefined) updates.is_featured = body.is_featured;
+  if (body.is_active !== undefined) updates.is_active = parseBooleanField(body.is_active);
+  if (body.is_featured !== undefined) updates.is_featured = parseBooleanField(body.is_featured);
 
   const { data, error } = await authResult.supabase
     .from(eventsDb.events)

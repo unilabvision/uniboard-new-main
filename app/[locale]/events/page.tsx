@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Calendar, ExternalLink, Loader2, Plus, Pencil } from 'lucide-react';
-import { getPublicEventUrl } from '@/app/lib/events/config';
+import { getPublicEventUrl, parseBooleanField } from '@/app/lib/events/config';
 import type { MyuniEvent } from '@/app/types/events';
 
 const texts = {
@@ -19,6 +19,9 @@ const texts = {
     edit: 'Düzenle',
     viewSite: 'Sitede gör',
     attendees: 'katılımcı',
+    registrationOpen: 'Kayıt açık',
+    registrationClosed: 'Kayıt kapalı',
+    toggleRegistration: 'Kayıt durumunu değiştir',
   },
   en: {
     title: 'Event Management',
@@ -32,6 +35,9 @@ const texts = {
     edit: 'Edit',
     viewSite: 'View on site',
     attendees: 'attendees',
+    registrationOpen: 'Registration open',
+    registrationClosed: 'Registration closed',
+    toggleRegistration: 'Toggle registration',
   },
 };
 
@@ -43,6 +49,7 @@ export default function EventsListPage({
   const [locale, setLocale] = useState('tr');
   const [events, setEvents] = useState<MyuniEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
   const t = texts[locale as keyof typeof texts] || texts.tr;
 
   useEffect(() => {
@@ -57,6 +64,27 @@ export default function EventsListPage({
       })
       .finally(() => setLoading(false));
   }, []);
+
+  const toggleRegistration = async (event: MyuniEvent) => {
+    const nextOpen = !parseBooleanField(event.is_registration_open, true);
+    setTogglingId(event.id);
+    try {
+      const res = await fetch(`/api/events/${event.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_registration_open: nextOpen }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      setEvents((prev) =>
+        prev.map((item) => (item.id === event.id ? (data.event as MyuniEvent) : item))
+      );
+    } catch {
+      // keep list unchanged on failure
+    } finally {
+      setTogglingId(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -92,7 +120,9 @@ export default function EventsListPage({
         </div>
       ) : (
         <div className="space-y-4">
-          {events.map((event) => (
+          {events.map((event) => {
+            const registrationOpen = parseBooleanField(event.is_registration_open, true);
+            return (
             <div
               key={event.id}
               className="rounded-xl border bg-white dark:bg-neutral-800/50 p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4"
@@ -128,9 +158,34 @@ export default function EventsListPage({
                       {t.featured}
                     </span>
                   )}
+                  <span
+                    className={`text-xs px-2 py-1 rounded-full ${
+                      registrationOpen
+                        ? 'bg-blue-100 text-blue-800'
+                        : 'bg-orange-100 text-orange-800'
+                    }`}
+                  >
+                    {registrationOpen ? t.registrationOpen : t.registrationClosed}
+                  </span>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => toggleRegistration(event)}
+                  disabled={togglingId === event.id}
+                  title={t.toggleRegistration}
+                  className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm border rounded-lg disabled:opacity-50 ${
+                    registrationOpen
+                      ? 'border-orange-300 text-orange-800 hover:bg-orange-50'
+                      : 'border-blue-300 text-blue-800 hover:bg-blue-50'
+                  }`}
+                >
+                  {togglingId === event.id ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : null}
+                  {registrationOpen ? t.registrationClosed : t.registrationOpen}
+                </button>
                 {event.is_active && (
                   <a
                     href={getPublicEventUrl(locale, event.slug)}
@@ -151,7 +206,8 @@ export default function EventsListPage({
                 </Link>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

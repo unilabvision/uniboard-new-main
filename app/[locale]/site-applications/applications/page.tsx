@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import {
   Search,
   RefreshCw,
@@ -14,14 +13,9 @@ import {
   ChevronRight,
   FileText,
 } from 'lucide-react';
-import { siteApplicationsDb, type SiteApplicationStatus } from '@/app/lib/siteApplications/config';
+import { type SiteApplicationStatus } from '@/app/lib/siteApplications/config';
 import type { SiteApplication } from '@/app/types/siteApplications';
 import type { SiteApplicationForm } from '@/app/types/siteApplicationForms';
-
-const supabase = createClientComponentClient({
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL2 || '',
-  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY2 || '',
-});
 
 const STATUS_FILTERS: SiteApplicationStatus[] = [
   'pending',
@@ -176,30 +170,20 @@ export default function SiteApplicationsListPage({
       setLoading(true);
       setError(null);
 
-      let query = supabase
-        .from(siteApplicationsDb.applications)
-        .select('*', { count: 'exact' })
-        .order('created_at', { ascending: false });
+      const params = new URLSearchParams({
+        page: String(page),
+        perPage: String(perPage),
+      });
+      if (formFilter !== 'all') params.set('form', formFilter);
+      if (statusFilter) params.set('status', statusFilter);
+      if (search.trim()) params.set('search', search.trim());
 
-      if (formFilter !== 'all') {
-        query = query.eq('application_type', formFilter);
-      }
+      const res = await fetch(`/api/site-applications/applications?${params.toString()}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
 
-      if (statusFilter) {
-        query = query.eq('status', statusFilter);
-      }
-
-      if (search.trim()) {
-        const q = `%${search.trim()}%`;
-        query = query.or(`first_name.ilike.${q},last_name.ilike.${q},email.ilike.${q}`);
-      }
-
-      const from = (page - 1) * perPage;
-      const { data, error: qErr, count } = await query.range(from, from + perPage - 1);
-      if (qErr) throw qErr;
-
-      setApps((data as SiteApplication[]) || []);
-      setTotal(count || 0);
+      setApps((data.applications as SiteApplication[]) || []);
+      setTotal(data.total || 0);
     } catch {
       setError(t.error);
     } finally {

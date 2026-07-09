@@ -3,7 +3,6 @@
 import React, { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { useUser } from '@clerk/nextjs';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import {
   ArrowLeft,
   Mail,
@@ -16,15 +15,8 @@ import {
   Download,
   Loader2,
 } from 'lucide-react';
-import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
 import type { SiteApplication, SiteApplicationStatusHistory } from '@/app/types/siteApplications';
 import { formatFileSize } from '@/app/lib/siteApplications';
-import { getSiteApplicationAttachmentUrl } from '@/app/lib/siteApplications/attachmentDownload';
-
-const supabase = createClientComponentClient({
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL2 || '',
-  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY2 || '',
-});
 
 const texts = {
   tr: {
@@ -116,68 +108,48 @@ export default function SiteApplicationDetailPage({
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const { data, error } = await supabase
-          .from(siteApplicationsDb.applications)
-          .select('*')
-          .eq('id', id)
-          .single();
+        const res = await fetch(`/api/site-applications/applications/${id}`);
+        const data = await res.json();
+        if (!res.ok || !data.application) throw new Error(data.error || 'Not found');
 
-        if (error || !data) throw error;
-        setApp(data as SiteApplication);
-        setNewStatus(data.status);
-        setNotes(data.admin_notes || '');
-
-        const { data: hist } = await supabase
-          .from(siteApplicationsDb.statusHistory)
-          .select('*')
-          .eq('application_id', id)
-          .order('created_at', { ascending: false });
-
-        setHistory((hist as SiteApplicationStatusHistory[]) || []);
+        setApp(data.application as SiteApplication);
+        setNewStatus(data.application.status);
+        setNotes(data.application.admin_notes || '');
+        setHistory((data.history as SiteApplicationStatusHistory[]) || []);
+        setAttachmentUrl(data.attachment_url || null);
       } catch {
         setApp(null);
+        setLoadError(t.notFound);
       } finally {
         setLoading(false);
       }
     };
     load();
-  }, [id]);
+  }, [id, t.notFound]);
 
   const updateStatus = async () => {
     if (!app || !user || newStatus === app.status) return;
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from(siteApplicationsDb.applications)
-        .update({
+      const res = await fetch(`/api/site-applications/applications/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           status: newStatus,
-          reviewed_by: user.id,
           reviewed_by_email: user.primaryEmailAddress?.emailAddress,
-          reviewed_at: new Date().toISOString(),
-        })
-        .eq('id', id);
-
-      if (error) throw error;
-
-      await supabase.from(siteApplicationsDb.statusHistory).insert({
-        application_id: id,
-        old_status: app.status,
-        new_status: newStatus,
-        changed_by: user.id,
-        changed_by_email: user.primaryEmailAddress?.emailAddress,
+        }),
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
 
-      setApp((prev) => (prev ? { ...prev, status: newStatus as SiteApplication['status'] } : prev));
-      const { data: hist } = await supabase
-        .from(siteApplicationsDb.statusHistory)
-        .select('*')
-        .eq('application_id', id)
-        .order('created_at', { ascending: false });
-      setHistory((hist as SiteApplicationStatusHistory[]) || []);
+      setApp(data.application as SiteApplication);
+      setHistory((data.history as SiteApplicationStatusHistory[]) || []);
     } finally {
       setSaving(false);
     }
@@ -187,12 +159,14 @@ export default function SiteApplicationDetailPage({
     if (!app || !user) return;
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from(siteApplicationsDb.applications)
-        .update({ admin_notes: notes })
-        .eq('id', id);
-      if (error) throw error;
-      setApp((prev) => (prev ? { ...prev, admin_notes: notes } : prev));
+      const res = await fetch(`/api/site-applications/applications/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ admin_notes: notes }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      setApp(data.application as SiteApplication);
     } finally {
       setSaving(false);
     }
@@ -208,7 +182,13 @@ export default function SiteApplicationDetailPage({
     setDownloading(true);
     setAttachmentError(null);
     try {
-      const url = await getSiteApplicationAttachmentUrl(supabase, app.attachment_storage_path);
+      let url = attachmentUrl;
+      if (!url) {
+        const res = await fetch(`/api/site-applications/applications/${id}`);
+        const data = await res.json();
+        url = data.attachment_url || null;
+        setAttachmentUrl(url);
+      }
       if (!url) throw new Error('URL missing');
       window.open(url, '_blank', 'noopener');
     } catch {
@@ -225,7 +205,7 @@ export default function SiteApplicationDetailPage({
   if (!app) {
     return (
       <div className="p-8 text-center">
-        <p className="text-neutral-600 dark:text-neutral-400 mb-4">{t.notFound}</p>
+        <p className="text-neutral-600 dark:text-neutral-400 mb-4">{loadError || t.notFound}</p>
         <Link href={`/${locale}/site-applications/applications`} className="text-[#990000]">
           {t.back}
         </Link>

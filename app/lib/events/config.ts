@@ -62,3 +62,30 @@ export function slugifyEventTitle(value: string): string {
     .replace(/^-+|-+$/g, '')
     .slice(0, 80);
 }
+
+export function parseBooleanField(value: unknown, defaultValue = false): boolean {
+  if (value === true || value === 'true' || value === 1 || value === '1') return true;
+  if (value === false || value === 'false' || value === 0 || value === '0') return false;
+  if (value == null) return defaultValue;
+  return Boolean(value);
+}
+
+function toIsoDateTime(value: string, fieldLabel: string): string {
+  if (!value?.trim()) {
+    throw new Error(`${fieldLabel} is required`);
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`Invalid ${fieldLabel}`);
+  }
+  return date.toISOString();
+}
+
+function toIsoDateTimeOptional(value: string): string | null {
+  if (!value?.trim()) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
+
+export { toIsoDateTime, toIsoDateTimeOptional };

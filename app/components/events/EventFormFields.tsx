@@ -6,7 +6,10 @@ import {
   EVENT_STATUSES,
   EVENT_TYPES,
   getPublicEventUrl,
+  parseBooleanField,
   slugifyEventTitle,
+  toIsoDateTime,
+  toIsoDateTimeOptional,
 } from '@/app/lib/events/config';
 import type { EventStatus, EventType, MyuniEvent } from '@/app/types/events';
 
@@ -156,25 +159,25 @@ export function eventToFormState(event: MyuniEvent): EventFormState {
     end_date: event.end_date ? event.end_date.slice(0, 16) : '',
     timezone: event.timezone || 'Europe/Istanbul',
     duration_minutes: event.duration_minutes != null ? String(event.duration_minutes) : '',
-    is_online: event.is_online,
+    is_online: parseBooleanField(event.is_online, true),
     location_name: event.location_name || '',
     location_address: event.location_address || '',
     meeting_url: event.meeting_url || '',
-    is_paid: event.is_paid,
+    is_paid: parseBooleanField(event.is_paid),
     price: event.price != null ? String(event.price) : '',
     max_attendees: event.max_attendees != null ? String(event.max_attendees) : '',
     registration_deadline: event.registration_deadline
       ? event.registration_deadline.slice(0, 16)
       : '',
-    is_registration_open: event.is_registration_open,
+    is_registration_open: parseBooleanField(event.is_registration_open, true),
     thumbnail_url: event.thumbnail_url || '',
     banner_url: event.banner_url || '',
     organizer_name: event.organizer_name || '',
     organizer_email: event.organizer_email || '',
     organizer_linkedin: event.organizer_linkedin || '',
     category: event.category || '',
-    is_active: event.is_active,
-    is_featured: event.is_featured,
+    is_active: parseBooleanField(event.is_active, true),
+    is_featured: parseBooleanField(event.is_featured),
   };
 }
 
@@ -188,8 +191,8 @@ export function formStateToPayload(form: EventFormState) {
     description: form.description.trim() || null,
     event_type: form.event_type,
     status: form.status,
-    start_date: new Date(form.start_date).toISOString(),
-    end_date: form.end_date ? new Date(form.end_date).toISOString() : null,
+    start_date: toIsoDateTime(form.start_date, 'start_date'),
+    end_date: toIsoDateTimeOptional(form.end_date),
     timezone: form.timezone,
     duration_minutes: form.duration_minutes ? Number(form.duration_minutes) : null,
     is_online: form.is_online,
@@ -199,9 +202,7 @@ export function formStateToPayload(form: EventFormState) {
     is_paid: form.is_paid,
     price: form.is_paid && form.price ? Number(form.price) : null,
     max_attendees: form.max_attendees ? Number(form.max_attendees) : null,
-    registration_deadline: form.registration_deadline
-      ? new Date(form.registration_deadline).toISOString()
-      : null,
+    registration_deadline: toIsoDateTimeOptional(form.registration_deadline),
     is_registration_open: form.is_registration_open,
     thumbnail_url: form.thumbnail_url.trim() || null,
     banner_url: form.banner_url.trim() || null,
@@ -232,6 +233,10 @@ export default function EventFormFields({
   const t = texts[locale as keyof typeof texts] || texts.tr;
   const [showCustomSlug, setShowCustomSlug] = useState(false);
 
+  const patch = (partial: Partial<EventFormState>) => {
+    setForm((prev) => ({ ...prev, ...partial }));
+  };
+
   const previewSlug = form.slug || slugifyEventTitle(form.title) || t.slugPlaceholder;
   const previewUrl = getPublicEventUrl(locale, previewSlug);
 
@@ -241,7 +246,7 @@ export default function EventFormFields({
       if (!isEdit) {
         setSlugTouched(false);
         if (form.title) {
-          setForm((prev) => ({ ...prev, slug: slugifyEventTitle(form.title) }));
+          setForm((prev) => ({ ...prev, slug: slugifyEventTitle(prev.title) }));
         }
       }
       return;
@@ -251,7 +256,7 @@ export default function EventFormFields({
 
   useEffect(() => {
     if (!slugTouched && form.title) {
-      setForm((prev) => ({ ...prev, slug: slugifyEventTitle(form.title) }));
+      setForm((prev) => ({ ...prev, slug: slugifyEventTitle(prev.title) }));
     }
   }, [form.title, slugTouched, setForm]);
 
@@ -261,7 +266,7 @@ export default function EventFormFields({
         <h2 className="font-semibold text-neutral-800 dark:text-neutral-200">{t.basic}</h2>
         <div className="grid sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
-            <Field label={t.title} value={form.title} onChange={(v) => setForm({ ...form, title: v })} required />
+            <Field label={t.title} value={form.title} onChange={(v) => patch({ title: v })} required />
           </div>
           <div className="sm:col-span-2">
             <p className="block text-sm font-medium mb-1">{t.slug}</p>
@@ -285,7 +290,7 @@ export default function EventFormFields({
                   value={form.slug}
                   onChange={(v) => {
                     setSlugTouched(true);
-                    setForm({ ...form, slug: slugifyEventTitle(v) });
+                    patch({ slug: slugifyEventTitle(v) });
                   }}
                   required
                 />
@@ -296,7 +301,7 @@ export default function EventFormFields({
             <label className="block text-sm font-medium mb-1">{t.description}</label>
             <textarea
               value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              onChange={(e) => patch({ description: e.target.value })}
               rows={5}
               className="w-full rounded-lg border px-3 py-2 text-sm dark:bg-neutral-800 dark:border-neutral-600"
             />
@@ -304,55 +309,55 @@ export default function EventFormFields({
           <Select
             label={t.eventType}
             value={form.event_type}
-            onChange={(v) => setForm({ ...form, event_type: v as EventType })}
+            onChange={(v) => patch({ event_type: v as EventType })}
             options={EVENT_TYPES}
           />
           <Select
             label={t.status}
             value={form.status}
-            onChange={(v) => setForm({ ...form, status: v as EventStatus })}
+            onChange={(v) => patch({ status: v as EventStatus })}
             options={EVENT_STATUSES}
           />
-          <Field label={t.category} value={form.category} onChange={(v) => setForm({ ...form, category: v })} />
+          <Field label={t.category} value={form.category} onChange={(v) => patch({ category: v })} />
         </div>
       </section>
 
       <section className="space-y-4">
         <h2 className="font-semibold">{t.schedule}</h2>
         <div className="grid sm:grid-cols-2 gap-4">
-          <Field label={t.startDate} type="datetime-local" value={form.start_date} onChange={(v) => setForm({ ...form, start_date: v })} required />
-          <Field label={t.endDate} type="datetime-local" value={form.end_date} onChange={(v) => setForm({ ...form, end_date: v })} />
-          <Field label={t.timezone} value={form.timezone} onChange={(v) => setForm({ ...form, timezone: v })} />
-          <Field label={t.duration} value={form.duration_minutes} onChange={(v) => setForm({ ...form, duration_minutes: v })} />
-          <Toggle label={t.online} checked={form.is_online} onChange={(v) => setForm({ ...form, is_online: v })} />
-          <Field label={t.locationName} value={form.location_name} onChange={(v) => setForm({ ...form, location_name: v })} />
-          <Field label={t.locationAddress} value={form.location_address} onChange={(v) => setForm({ ...form, location_address: v })} />
-          <Field label={t.meetingUrl} value={form.meeting_url} onChange={(v) => setForm({ ...form, meeting_url: v })} />
-          <Toggle label={t.paid} checked={form.is_paid} onChange={(v) => setForm({ ...form, is_paid: v })} />
+          <Field label={t.startDate} type="datetime-local" value={form.start_date} onChange={(v) => patch({ start_date: v })} required />
+          <Field label={t.endDate} type="datetime-local" value={form.end_date} onChange={(v) => patch({ end_date: v })} />
+          <Field label={t.timezone} value={form.timezone} onChange={(v) => patch({ timezone: v })} />
+          <Field label={t.duration} value={form.duration_minutes} onChange={(v) => patch({ duration_minutes: v })} />
+          <Toggle label={t.online} checked={form.is_online} onChange={(v) => patch({ is_online: v })} />
+          <Field label={t.locationName} value={form.location_name} onChange={(v) => patch({ location_name: v })} />
+          <Field label={t.locationAddress} value={form.location_address} onChange={(v) => patch({ location_address: v })} />
+          <Field label={t.meetingUrl} value={form.meeting_url} onChange={(v) => patch({ meeting_url: v })} />
+          <Toggle label={t.paid} checked={form.is_paid} onChange={(v) => patch({ is_paid: v })} />
           {form.is_paid && (
-            <Field label={t.price} value={form.price} onChange={(v) => setForm({ ...form, price: v })} />
+            <Field label={t.price} value={form.price} onChange={(v) => patch({ price: v })} />
           )}
-          <Field label={t.maxAttendees} value={form.max_attendees} onChange={(v) => setForm({ ...form, max_attendees: v })} />
-          <Field label={t.registrationDeadline} type="datetime-local" value={form.registration_deadline} onChange={(v) => setForm({ ...form, registration_deadline: v })} />
-          <Toggle label={t.registrationOpen} checked={form.is_registration_open} onChange={(v) => setForm({ ...form, is_registration_open: v })} />
+          <Field label={t.maxAttendees} value={form.max_attendees} onChange={(v) => patch({ max_attendees: v })} />
+          <Field label={t.registrationDeadline} type="datetime-local" value={form.registration_deadline} onChange={(v) => patch({ registration_deadline: v })} />
+          <Toggle label={t.registrationOpen} checked={form.is_registration_open} onChange={(v) => patch({ is_registration_open: v })} />
         </div>
       </section>
 
       <section className="space-y-4">
         <h2 className="font-semibold">{t.media}</h2>
         <div className="grid sm:grid-cols-2 gap-4">
-          <Field label={t.thumbnail} value={form.thumbnail_url} onChange={(v) => setForm({ ...form, thumbnail_url: v })} />
-          <Field label={t.banner} value={form.banner_url} onChange={(v) => setForm({ ...form, banner_url: v })} />
-          <Field label={t.organizerName} value={form.organizer_name} onChange={(v) => setForm({ ...form, organizer_name: v })} />
-          <Field label={t.organizerEmail} value={form.organizer_email} onChange={(v) => setForm({ ...form, organizer_email: v })} />
-          <Field label={t.organizerLinkedin} value={form.organizer_linkedin} onChange={(v) => setForm({ ...form, organizer_linkedin: v })} />
+          <Field label={t.thumbnail} value={form.thumbnail_url} onChange={(v) => patch({ thumbnail_url: v })} />
+          <Field label={t.banner} value={form.banner_url} onChange={(v) => patch({ banner_url: v })} />
+          <Field label={t.organizerName} value={form.organizer_name} onChange={(v) => patch({ organizer_name: v })} />
+          <Field label={t.organizerEmail} value={form.organizer_email} onChange={(v) => patch({ organizer_email: v })} />
+          <Field label={t.organizerLinkedin} value={form.organizer_linkedin} onChange={(v) => patch({ organizer_linkedin: v })} />
         </div>
       </section>
 
       <section className="space-y-3">
         <h2 className="font-semibold">{t.publish}</h2>
-        <Toggle label={t.active} checked={form.is_active} onChange={(v) => setForm({ ...form, is_active: v })} />
-        <Toggle label={t.featured} checked={form.is_featured} onChange={(v) => setForm({ ...form, is_featured: v })} />
+        <Toggle label={t.active} checked={form.is_active} onChange={(v) => patch({ is_active: v })} />
+        <Toggle label={t.featured} checked={form.is_featured} onChange={(v) => patch({ is_featured: v })} />
         {form.slug && form.is_active && (
           <p className="text-sm text-neutral-600">
             Site:{' '}

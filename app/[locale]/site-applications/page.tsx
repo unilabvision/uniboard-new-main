@@ -2,15 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Users, Clock, CheckCircle, ChevronRight, FormInput } from 'lucide-react';
-import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
 import type { SiteApplication } from '@/app/types/siteApplications';
-
-const supabase = createClientComponentClient({
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL2 || '',
-  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY2 || '',
-});
 
 const texts = {
   tr: {
@@ -59,22 +52,12 @@ export default function SiteApplicationsDashboard({
   useEffect(() => {
     const load = async () => {
       try {
-        const [{ count: total }, { count: pending }, { count: accepted }, { count: forms }, { data }] =
-          await Promise.all([
-            supabase.from(siteApplicationsDb.applications).select('*', { count: 'exact', head: true }),
-            supabase.from(siteApplicationsDb.applications).select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-            supabase.from(siteApplicationsDb.applications).select('*', { count: 'exact', head: true }).eq('status', 'accepted'),
-            supabase.from(siteApplicationsDb.forms).select('*', { count: 'exact', head: true }).eq('is_active', true),
-            supabase.from(siteApplicationsDb.applications).select('*').order('created_at', { ascending: false }).limit(5),
-          ]);
+        const res = await fetch('/api/site-applications/stats');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed');
 
-        setApps((data as SiteApplication[]) || []);
-        setStats({
-          total: total || 0,
-          forms: forms || 0,
-          pending: pending || 0,
-          accepted: accepted || 0,
-        });
+        setApps((data.recent as SiteApplication[]) || []);
+        setStats(data.stats || { total: 0, forms: 0, pending: 0, accepted: 0 });
       } finally {
         setLoading(false);
       }

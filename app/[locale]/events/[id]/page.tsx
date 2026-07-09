@@ -79,6 +79,7 @@ export default function EditEventPage({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
+      if (data.event) setForm(eventToFormState(data.event));
       setMessage(locale === 'tr' ? 'Kaydedildi' : 'Saved');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error');
