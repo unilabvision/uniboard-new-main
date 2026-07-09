@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import {
   siteApplicationsDb,
-  getSiteApplicationPublicPath,
   getEventApplicationPath,
 } from '@/app/lib/siteApplications/config';
 import { attachLinkedEventsToForms } from '@/app/lib/siteApplications/events';
