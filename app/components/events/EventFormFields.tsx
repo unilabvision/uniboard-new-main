@@ -5,6 +5,8 @@ import Link from 'next/link';
 import {
   EVENT_STATUSES,
   EVENT_TYPES,
+  EVENT_BANNER_HEIGHT,
+  EVENT_BANNER_WIDTH,
   getPublicEventUrl,
   parseBooleanField,
   slugifyEventTitle,
@@ -43,6 +45,8 @@ const texts = {
     registrationOpen: 'Kayıt açık (kapalıysa sitede görünür, kayıt alınmaz)',
     thumbnail: 'Küçük görsel URL',
     banner: 'Banner URL',
+    bannerHint: 'Önerilen boyut: 1920×600 px (sitede tam oturur)',
+    bannerPreview: 'Sitede görünüm önizlemesi',
     organizerName: 'Organizatör',
     organizerEmail: 'Organizatör e-posta',
     organizerLinkedin: 'LinkedIn',
@@ -79,6 +83,8 @@ const texts = {
     registrationOpen: 'Registration open (if off, event stays visible; no new sign-ups)',
     thumbnail: 'Thumbnail URL',
     banner: 'Banner URL',
+    bannerHint: 'Recommended size: 1920×600 px (fits the site exactly)',
+    bannerPreview: 'Site preview',
     organizerName: 'Organizer',
     organizerEmail: 'Organizer email',
     organizerLinkedin: 'LinkedIn',
@@ -347,7 +353,28 @@ export default function EventFormFields({
         <h2 className="font-semibold">{t.media}</h2>
         <div className="grid sm:grid-cols-2 gap-4">
           <Field label={t.thumbnail} value={form.thumbnail_url} onChange={(v) => patch({ thumbnail_url: v })} />
-          <Field label={t.banner} value={form.banner_url} onChange={(v) => patch({ banner_url: v })} />
+          <div className="sm:col-span-2">
+            <Field label={t.banner} value={form.banner_url} onChange={(v) => patch({ banner_url: v })} />
+            <p className="text-xs text-neutral-500 mt-1">{t.bannerHint}</p>
+            {form.banner_url.trim() && (
+              <div className="mt-3">
+                <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">{t.bannerPreview}</p>
+                <div className="relative w-full max-w-full overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-600 bg-neutral-100 dark:bg-neutral-900">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={form.banner_url.trim()}
+                    alt=""
+                    width={EVENT_BANNER_WIDTH}
+                    height={EVENT_BANNER_HEIGHT}
+                    className="block w-full h-auto max-w-full"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
           <Field label={t.organizerName} value={form.organizer_name} onChange={(v) => patch({ organizer_name: v })} />
           <Field label={t.organizerEmail} value={form.organizer_email} onChange={(v) => patch({ organizer_email: v })} />
           <Field label={t.organizerLinkedin} value={form.organizer_linkedin} onChange={(v) => patch({ organizer_linkedin: v })} />

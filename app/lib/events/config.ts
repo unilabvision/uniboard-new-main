@@ -20,6 +20,11 @@ export const EVENT_STATUSES = [
   'cancelled',
 ] as const;
 
+/** myunilab.net etkinlik detay banner ölçüsü (Supabase ile aynı olmalı). */
+export const EVENT_BANNER_WIDTH = 1920;
+export const EVENT_BANNER_HEIGHT = 600;
+export const EVENT_BANNER_ASPECT_CLASS = 'aspect-[1920/600]';
+
 export function getPublicEventPath(locale: string, slug: string): string {
   const segment = locale === 'en' ? 'event' : 'etkinlik';
   return `/${locale}/${segment}/${slug}`;
