@@ -681,7 +681,7 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
           .from('myuni_courses')
           .select(`
             *,
-            myuni_course_sections!inner(
+            myuni_course_sections(
               id,
               myuni_course_lessons(
                 id,

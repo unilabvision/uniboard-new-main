@@ -2,10 +2,9 @@ import {
   Home,
   Settings,
   BarChart3,
-  Award,
   PlusCircle,
-  Library,
   Shield,
+  Video,
 } from 'lucide-react';
 
 export const lmsSidebarContent = {
@@ -13,9 +12,14 @@ export const lmsSidebarContent = {
     title: "Eğitim Yönetim Sistemi",
     items: [
       {
-        name: "Ana Sayfa",
+        name: "Kurs Yönetimi",
         href: "/",
         icon: Home
+      },
+      {
+        name: "Kurs Oluştur",
+        href: "/create",
+        icon: PlusCircle
       },
       {
         name: "İlerleme Takibi",
@@ -23,19 +27,9 @@ export const lmsSidebarContent = {
         icon: BarChart3
       },
       {
-        name: "Sertifikalarım",
-        href: "/certificates",
-        icon: Award
-      },
-      {
-        name: "Kurs Şablonları",
-        href: "/templates",
-        icon: Library
-      },
-      {
-        name: "Kurs Oluştur",
-        href: "/create",
-        icon: PlusCircle
+        name: "Öğrenci Paneli",
+        href: "/my-courses",
+        icon: Video
       },
       {
         name: "Ayarlar",
@@ -53,9 +47,14 @@ export const lmsSidebarContent = {
     title: "Learning Management System",
     items: [
       {
-        name: "Home",
+        name: "Course Management",
         href: "/",
         icon: Home
+      },
+      {
+        name: "Create Course",
+        href: "/create",
+        icon: PlusCircle
       },
       {
         name: "Progress Tracking",
@@ -63,19 +62,9 @@ export const lmsSidebarContent = {
         icon: BarChart3
       },
       {
-        name: "My Certificates",
-        href: "/certificates",
-        icon: Award
-      },
-      {
-        name: "Course Templates",
-        href: "/templates",
-        icon: Library
-      },
-      {
-        name: "Create Course",
-        href: "/create",
-        icon: PlusCircle
+        name: "Student Panel",
+        href: "/my-courses",
+        icon: Video
       },
       {
         name: "Settings",

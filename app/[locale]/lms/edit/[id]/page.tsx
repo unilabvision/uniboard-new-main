@@ -91,7 +91,7 @@ export default function EditCoursePage() {
           .from('myuni_courses')
           .select(`
             *,
-            myuni_course_sections!inner(
+            myuni_course_sections(
               *,
               myuni_course_lessons(
                 *,

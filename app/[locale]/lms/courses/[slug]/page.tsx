@@ -10,7 +10,10 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { useUser } from '@clerk/nextjs';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { enrollUser, getUserEnrollment } from '@/app/lib/lms/enrollmentService';
 
 // Supabase client
 const supabase = createClientComponentClient({
@@ -378,9 +381,11 @@ export default function CourseDetailPage({ params }: { params: Promise<{ locale:
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const [locale, setLocale] = useState<string>('');
   const [slug, setSlug] = useState<string>('');
+  const [isEnrolled, setIsEnrolled] = useState(false);
+  const [enrolling, setEnrolling] = useState(false);
   
-  // Clerk user hook
-  // const { user } = useUser();
+  const { user } = useUser();
+  const router = useRouter();
   const t = texts[locale as keyof typeof texts] || texts.tr;
 
   // Resolve params
@@ -406,7 +411,7 @@ export default function CourseDetailPage({ params }: { params: Promise<{ locale:
           .from('myuni_courses')
           .select(`
             *,
-            myuni_course_sections!inner(
+            myuni_course_sections(
               *,
               myuni_course_lessons(
                 *,
@@ -451,6 +456,11 @@ export default function CourseDetailPage({ params }: { params: Promise<{ locale:
         setCourse(cleanCourse);
         setSections(processedSections);
         
+        if (user) {
+          const enrollment = await getUserEnrollment(user.id, cleanCourse.id);
+          setIsEnrolled(!!enrollment);
+        }
+        
         // Expand first section by default
         if (processedSections.length > 0) {
           setExpandedSections(new Set([processedSections[0].id]));
@@ -465,7 +475,26 @@ export default function CourseDetailPage({ params }: { params: Promise<{ locale:
     };
     
     fetchCourse();
-  }, [slug]);
+  }, [slug, user]);
+
+  const handleEnroll = async () => {
+    if (!user || !course) {
+      router.push(`/${locale}/sign-in`);
+      return;
+    }
+
+    try {
+      setEnrolling(true);
+      await enrollUser(user.id, course.id);
+      setIsEnrolled(true);
+      router.push(`/${locale}/watch/${course.slug}`);
+    } catch (err) {
+      console.error('Enrollment error:', err);
+      alert(locale === 'en' ? 'Enrollment failed' : 'Kayıt işlemi başarısız oldu');
+    } finally {
+      setEnrolling(false);
+    }
+  };
 
   // Toggle section expansion
   const toggleSection = (sectionId: string) => {
@@ -781,9 +810,21 @@ export default function CourseDetailPage({ params }: { params: Promise<{ locale:
                     >
                       {t.courseFull}
                     </button>
+                  ) : isEnrolled ? (
+                    <Link
+                      href={`/${locale}/watch/${course.slug}`}
+                      className="w-full px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors flex items-center justify-center"
+                    >
+                      <PlayCircle className="w-4 h-4 mr-2" />
+                      {t.enrolled}
+                    </Link>
                   ) : (
-                    <button className="w-full px-4 py-3 bg-[#990000] hover:bg-[#880000] text-white rounded-lg font-medium transition-colors">
-                      {t.enrollNow}
+                    <button
+                      onClick={handleEnroll}
+                      disabled={enrolling}
+                      className="w-full px-4 py-3 bg-[#990000] hover:bg-[#880000] text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+                    >
+                      {enrolling ? '...' : t.enrollNow}
                     </button>
                   )}
                 </div>
