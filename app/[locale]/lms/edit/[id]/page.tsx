@@ -12,11 +12,12 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import VideoUploadModal from '../../../../components/lms/VideoUploadModal';
-import NoteUploadModal from '../../../../components/lms/NoteUploadModal';
-import QuizUploadModal from '../../../../components/lms/QuizUploadModal';
-import ModuleSelectionModal from '../../../../components/lms/ModuleSelectionModal';
-import { Course, CourseSection, CourseLesson, CourseVideo, CourseNote, CourseQuiz, ModuleType } from '../../../../types/course';
+import VideoUploadModal from '@/app/components/lms/VideoUploadModal';
+import NoteUploadModal from '@/app/components/lms/NoteUploadModal';
+import QuizUploadModal from '@/app/components/lms/QuizUploadModal';
+import ModuleSelectionModal from '@/app/components/lms/ModuleSelectionModal';
+import { Course, CourseSection, CourseLesson, CourseVideo, CourseNote, CourseQuiz, ModuleType } from '@/app/types/course';
+import { buildCourseUpdatePayload } from '@/app/lib/lms/courseUtils';
 
 // Supabase client
 const supabase = createClientComponentClient({
@@ -75,13 +76,18 @@ export default function EditCoursePage() {
   const { user: clerkUser, isLoaded } = useUser();
   
   const courseId = params?.id as string;
-  const locale = 'tr';
+  const locale = (params?.locale as string) || 'tr';
   const t = texts[locale as keyof typeof texts] || texts.tr;
 
   // Fetch course data
   useEffect(() => {
     const fetchData = async () => {
-      if (!courseId || !isLoaded || !clerkUser) return;
+      if (!courseId || !isLoaded) return;
+
+      if (!clerkUser) {
+        setLoading(false);
+        return;
+      }
       
       try {
         setLoading(true);
@@ -157,10 +163,7 @@ export default function EditCoursePage() {
       
       const { error } = await supabase
         .from('myuni_courses')
-        .update({
-          ...course,
-          updated_at: new Date().toISOString()
-        })
+        .update(buildCourseUpdatePayload(course))
         .eq('id', courseId);
       
       if (error) throw error;
@@ -199,6 +202,14 @@ export default function EditCoursePage() {
     );
   }
 
+  if (!clerkUser) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-lg text-red-600">Lütfen giriş yapınız.</div>
+      </div>
+    );
+  }
+
   // Error state
   if (error || !course) {
     return (
@@ -227,14 +238,6 @@ export default function EditCoursePage() {
             </p>
           </div>
         </div>
-      </div>
-    );
-  }
-
-  if (!clerkUser) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-lg text-red-600">Lütfen giriş yapınız.</div>
       </div>
     );
   }

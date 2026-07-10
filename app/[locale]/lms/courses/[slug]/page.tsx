@@ -6,7 +6,7 @@ import {
   Calendar, BookOpen, ChevronDown,
   ChevronRight, Video, FileText, 
   User, Mail, Linkedin,
-  CheckCircle, Lock, Eye
+  CheckCircle, Lock, Eye, Edit2, AlertCircle
 } from 'lucide-react';
 import Link from 'next/link';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
@@ -129,6 +129,8 @@ const texts = {
     loading: "Yükleniyor...",
     error: "Bir hata oluştu",
     notFound: "Kurs bulunamadı",
+    editCourse: "Kursu Düzenle",
+    draftNotice: "Bu kurs taslak modunda — öğrenciler göremez. Yayınlamak için düzenleme sayfasından aktifleştirin.",
     courseTypes: {
       online: "Online",
       live: "Canlı",
@@ -169,6 +171,8 @@ const texts = {
     loading: "Loading...",
     error: "An error occurred",
     notFound: "Course not found",
+    editCourse: "Edit Course",
+    draftNotice: "This course is in draft mode — students cannot see it. Activate it from the edit page to publish.",
     courseTypes: {
       online: "Online",
       live: "Live",
@@ -420,7 +424,6 @@ export default function CourseDetailPage({ params }: { params: Promise<{ locale:
             )
           `)
           .eq('slug', slug)
-          .eq('is_active', true)
           .single();
         
         if (courseError) {
@@ -586,13 +589,29 @@ export default function CourseDetailPage({ params }: { params: Promise<{ locale:
     <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 py-8 sm:py-12">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Back Navigation */}
-        <Link 
-          href={`/${locale}/lms`} 
-          className="inline-flex items-center text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 mb-6"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          {t.backToCourses}
-        </Link>
+        <div className="flex items-center justify-between mb-6">
+          <Link 
+            href={`/${locale}/lms`} 
+            className="inline-flex items-center text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            {t.backToCourses}
+          </Link>
+          <Link
+            href={`/${locale}/lms/edit/${course.id}`}
+            className="inline-flex items-center px-4 py-2 bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 rounded-lg hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors text-sm"
+          >
+            <Edit2 className="w-4 h-4 mr-2" />
+            {t.editCourse}
+          </Link>
+        </div>
+
+        {!course.is_active && (
+          <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+            <p className="text-amber-800 dark:text-amber-200 text-sm">{t.draftNotice}</p>
+          </div>
+        )}
 
         {/* Course Header */}
         <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden mb-8">

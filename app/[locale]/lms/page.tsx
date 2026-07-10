@@ -10,6 +10,7 @@ import {
   TrendingUp
 } from 'lucide-react';
 import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import Image from 'next/image';
@@ -394,7 +395,7 @@ const CourseCard = ({
           {showMenu && (
             <div className="absolute right-0 bottom-full mb-2 w-40 bg-white dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700 shadow-lg z-10">
               <Link
-                href={`/lms/courses/${course.slug}`}
+                href={`/${locale}/lms/courses/${course.slug}`}
                 className="w-full px-3 py-2 text-left text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md flex items-center text-sm"
                 onClick={() => setShowMenu(false)}
               >
@@ -637,7 +638,9 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
   
   // Clerk user hook
   const { user: clerkUser, isLoaded } = useUser();
-  const locale = 'tr'; // You can get this from params or context
+  const params = useParams();
+  const router = useRouter();
+  const locale = (params?.locale as string) || 'tr';
   const t = texts[locale as keyof typeof texts] || texts.tr;
 
   // Handle search params
@@ -833,8 +836,7 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
 
   // Handle edit course
   const handleEditCourse = (course: Course) => {
-    // Redirect to edit page
-    window.location.href = `/${locale}/lms/edit/${course.id}`;
+    router.push(`/${locale}/lms/edit/${course.id}`);
   };
 
   // Handle delete course
