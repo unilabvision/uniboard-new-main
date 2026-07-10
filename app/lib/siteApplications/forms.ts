@@ -2,7 +2,43 @@ import type {
   PublicSiteApplicationForm,
   SiteApplicationForm,
   SiteApplicationFormField,
+  SiteApplicationFormFieldOption,
 } from '@/app/types/siteApplicationForms';
+
+export function normalizeFieldOptions(options: unknown): SiteApplicationFormFieldOption[] {
+  if (!options) return [];
+
+  if (typeof options === 'string') {
+    const trimmed = options.trim();
+    if (!trimmed) return [];
+    try {
+      return normalizeFieldOptions(JSON.parse(trimmed));
+    } catch {
+      return [];
+    }
+  }
+
+  if (!Array.isArray(options)) return [];
+
+  return options
+    .map((opt) => {
+      if (typeof opt === 'string') {
+        const value = opt.trim();
+        if (!value) return null;
+        return { value, label_tr: value, label_en: value };
+      }
+      if (opt && typeof opt === 'object') {
+        const row = opt as Record<string, unknown>;
+        const value = String(row.value ?? '').trim();
+        if (!value) return null;
+        const labelTr = String(row.label_tr ?? row.label ?? value).trim() || value;
+        const labelEn = String(row.label_en ?? row.label ?? labelTr).trim() || value;
+        return { value, label_tr: labelTr, label_en: labelEn };
+      }
+      return null;
+    })
+    .filter((opt): opt is SiteApplicationFormFieldOption => opt !== null);
+}
 
 export function toPublicForm(
   form: SiteApplicationForm,
@@ -28,7 +64,7 @@ export function toPublicForm(
         placeholder: isEn ? field.placeholder_en : field.placeholder_tr,
         required: field.required,
         order_index: field.order_index,
-        options: (field.options || []).map((opt) => ({
+        options: normalizeFieldOptions(field.options).map((opt) => ({
           value: opt.value,
           label: isEn ? opt.label_en : opt.label_tr,
         })),

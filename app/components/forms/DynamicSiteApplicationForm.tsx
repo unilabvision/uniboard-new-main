@@ -448,7 +448,7 @@ export default function DynamicSiteApplicationForm({
                         className={inputClass}
                       >
                         <option value="">{t.select}</option>
-                        {field.options.map((opt) => (
+                        {(field.options || []).map((opt) => (
                           <option key={opt.value} value={opt.value}>
                             {opt.label}
                           </option>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
 import { requireSiteApplicationsSuperAdmin } from '@/app/api/site-applications/access/_helpers';
 import type { SiteApplicationFormFieldInput } from '@/app/types/siteApplicationForms';
+import { normalizeFieldOptions } from '@/app/lib/siteApplications/forms';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -46,6 +47,15 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     if (!field.label_tr?.trim() || !field.label_en?.trim()) {
       return NextResponse.json({ error: 'Field labels are required' }, { status: 400 });
     }
+    if (field.field_type === 'select') {
+      const options = normalizeFieldOptions(field.options);
+      if (options.length === 0) {
+        return NextResponse.json(
+          { error: `Select field "${key}" requires at least one option` },
+          { status: 400 }
+        );
+      }
+    }
   }
 
   const hasEmail = fields.some((f) => f.field_type === 'email');
@@ -73,7 +83,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     placeholder_en: field.placeholder_en?.trim() || null,
     required: field.required ?? false,
     order_index: field.order_index ?? index,
-    options: field.options ?? [],
+    options: normalizeFieldOptions(field.options),
     is_contact: field.is_contact ?? false,
   }));
 

@@ -14,10 +14,12 @@ import {
   TEAM_DEFAULT_FIELDS,
   type SiteApplicationFormType,
 } from '@/app/lib/siteApplications/formTypes';
+import { normalizeFieldOptions } from '@/app/lib/siteApplications/forms';
 import type {
   SiteApplicationForm,
   SiteApplicationFormField,
   SiteApplicationFormFieldInput,
+  SiteApplicationFormFieldOption,
   SiteApplicationFieldType,
 } from '@/app/types/siteApplicationForms';
 import {
@@ -74,6 +76,13 @@ const texts = {
     defaultEventFields: 'Varsayılan alanları ekle',
     linkedEvent: 'Bağlı etkinlik',
     noEvent: 'Etkinlik seçilmedi',
+    selectOptions: 'Seçenekler',
+    optionValue: 'Değer',
+    optionLabelTr: 'Etiket (TR)',
+    optionLabelEn: 'Etiket (EN)',
+    addOption: 'Seçenek ekle',
+    removeOption: 'Seçeneği sil',
+    selectOptionsHint: 'Select alanı için en az bir seçenek ekleyin.',
   },
   en: {
     back: 'Back to Forms',
@@ -108,6 +117,13 @@ const texts = {
     defaultEventFields: 'Add default fields',
     linkedEvent: 'Linked event',
     noEvent: 'No event selected',
+    selectOptions: 'Options',
+    optionValue: 'Value',
+    optionLabelTr: 'Label (TR)',
+    optionLabelEn: 'Label (EN)',
+    addOption: 'Add option',
+    removeOption: 'Remove option',
+    selectOptionsHint: 'Add at least one option for select fields.',
   },
 };
 
@@ -154,7 +170,7 @@ export default function EditSiteApplicationFormPage({
               placeholder_en: f.placeholder_en || undefined,
               required: f.required,
               order_index: f.order_index,
-              options: f.options,
+              options: normalizeFieldOptions(f.options),
               is_contact: f.is_contact,
             })) || []
           );
@@ -400,7 +416,16 @@ export default function EditSiteApplicationFormPage({
                   <label className="text-xs text-neutral-500">{t.type}</label>
                   <select
                     value={field.field_type}
-                    onChange={(e) => updateField(index, { field_type: e.target.value as SiteApplicationFieldType }, setFields)}
+                    onChange={(e) => {
+                      const nextType = e.target.value as SiteApplicationFieldType;
+                      const patch: Partial<SiteApplicationFormFieldInput> = { field_type: nextType };
+                      if (nextType === 'select' && !field.options?.length) {
+                        patch.options = [
+                          { value: 'option_1', label_tr: 'Seçenek 1', label_en: 'Option 1' },
+                        ];
+                      }
+                      updateField(index, patch, setFields);
+                    }}
                     className="w-full rounded border px-2 py-1.5 text-sm"
                   >
                     {FIELD_TYPES.map((ft) => (
@@ -410,6 +435,62 @@ export default function EditSiteApplicationFormPage({
                 </div>
                 <Input label={t.order} value={String(field.order_index ?? index)} onChange={(v) => updateField(index, { order_index: Number(v) || 0 }, setFields)} />
               </div>
+              {field.field_type === 'select' && (
+                <div className="rounded-lg border border-dashed border-neutral-300 dark:border-neutral-600 p-3 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300">{t.selectOptions}</p>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateField(
+                          index,
+                          {
+                            options: [
+                              ...(field.options || []),
+                              {
+                                value: `option_${(field.options?.length || 0) + 1}`,
+                                label_tr: `Seçenek ${(field.options?.length || 0) + 1}`,
+                                label_en: `Option ${(field.options?.length || 0) + 1}`,
+                              },
+                            ],
+                          },
+                          setFields
+                        )
+                      }
+                      className="text-xs px-2.5 py-1 border rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800"
+                    >
+                      {t.addOption}
+                    </button>
+                  </div>
+                  <p className="text-xs text-neutral-500">{t.selectOptionsHint}</p>
+                  {(field.options || []).map((opt, optIndex) => (
+                    <div key={`${field.field_key}-opt-${optIndex}`} className="grid sm:grid-cols-4 gap-2 items-end">
+                      <Input
+                        label={t.optionValue}
+                        value={opt.value}
+                        onChange={(v) => updateSelectOption(index, optIndex, { value: v }, setFields)}
+                      />
+                      <Input
+                        label={t.optionLabelTr}
+                        value={opt.label_tr}
+                        onChange={(v) => updateSelectOption(index, optIndex, { label_tr: v }, setFields)}
+                      />
+                      <Input
+                        label={t.optionLabelEn}
+                        value={opt.label_en}
+                        onChange={(v) => updateSelectOption(index, optIndex, { label_en: v }, setFields)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeSelectOption(index, optIndex, setFields)}
+                        className="text-xs text-red-600 hover:underline mb-1"
+                      >
+                        {t.removeOption}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <Check label={t.required} checked={!!field.required} onChange={(v) => updateField(index, { required: v }, setFields)} />
                 <button type="button" onClick={() => setFields((prev) => prev.filter((_, i) => i !== index))} className="p-2 text-red-600">
@@ -439,6 +520,38 @@ function updateField(
   setFields: React.Dispatch<React.SetStateAction<SiteApplicationFormFieldInput[]>>
 ) {
   setFields((prev) => prev.map((f, i) => (i === index ? { ...f, ...patch } : f)));
+}
+
+function updateSelectOption(
+  fieldIndex: number,
+  optionIndex: number,
+  patch: Partial<SiteApplicationFormFieldOption>,
+  setFields: React.Dispatch<React.SetStateAction<SiteApplicationFormFieldInput[]>>
+) {
+  setFields((prev) =>
+    prev.map((field, i) => {
+      if (i !== fieldIndex) return field;
+      const options = [...(field.options || [])];
+      options[optionIndex] = { ...options[optionIndex], ...patch };
+      return { ...field, options };
+    })
+  );
+}
+
+function removeSelectOption(
+  fieldIndex: number,
+  optionIndex: number,
+  setFields: React.Dispatch<React.SetStateAction<SiteApplicationFormFieldInput[]>>
+) {
+  setFields((prev) =>
+    prev.map((field, i) => {
+      if (i !== fieldIndex) return field;
+      return {
+        ...field,
+        options: (field.options || []).filter((_, idx) => idx !== optionIndex),
+      };
+    })
+  );
 }
 
 function Input({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {

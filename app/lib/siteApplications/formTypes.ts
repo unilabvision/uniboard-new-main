@@ -18,14 +18,50 @@ export const TEAM_FORM_DEFAULT_SUBTITLES = {
   en: 'Apply to join the UNILAB Vision team.',
 } as const;
 
+export const EVENT_FORM_LEGACY_SLUGS = {
+  tr: 'etkinlik-basvuru',
+  en: 'event-application',
+} as const;
+
+const EVENT_FORM_HINT = /(?:^|[\s_-])(etkinlik|event)(?:[\s_-]|$)/i;
+const TEAM_FORM_HINT = /(?:^|[\s_-])(ekip|team)(?:[\s_-]|$)/i;
+
+function isLegacyEventFormSlug(slug?: string | null): boolean {
+  if (!slug) return false;
+  const normalized = slug.trim().toLowerCase();
+  return (
+    normalized === EVENT_FORM_LEGACY_SLUGS.tr ||
+    normalized === EVENT_FORM_LEGACY_SLUGS.en ||
+    normalized.includes('etkinlik-basvuru') ||
+    normalized.includes('event-application')
+  );
+}
+
 export function inferFormType(form: {
   event_id?: string | null;
   form_type?: string | null;
+  slug_tr?: string | null;
+  slug_en?: string | null;
+  title_tr?: string | null;
+  title_en?: string | null;
 }): SiteApplicationFormType {
   if (form.form_type === 'team' || form.form_type === 'event') {
     return form.form_type;
   }
-  return form.event_id ? 'event' : 'team';
+  if (form.event_id) return 'event';
+  if (isLegacyEventFormSlug(form.slug_tr) || isLegacyEventFormSlug(form.slug_en)) {
+    return 'event';
+  }
+
+  const blob = `${form.slug_tr || ''} ${form.slug_en || ''} ${form.title_tr || ''} ${form.title_en || ''}`;
+  const hasEventHint = EVENT_FORM_HINT.test(blob);
+  const hasTeamHint = TEAM_FORM_HINT.test(blob);
+
+  if (hasEventHint && !hasTeamHint) return 'event';
+  if (hasTeamHint && !hasEventHint) return 'team';
+  if (hasEventHint) return 'event';
+
+  return 'team';
 }
 
 export function getTeamFormPublicPath(locale: string, slug: string): string {
