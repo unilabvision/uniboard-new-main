@@ -42,7 +42,6 @@ export async function POST(request: NextRequest) {
       locale,
       fields,
       honeypot: body.honeypot,
-      hCaptchaToken: body.hCaptchaToken,
       attachmentStoragePath: body.attachmentStoragePath,
       attachmentFileName: body.attachmentFileName,
       attachmentMimeType: body.attachmentMimeType,

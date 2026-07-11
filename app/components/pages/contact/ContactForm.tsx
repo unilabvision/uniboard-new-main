@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import HCaptcha from '@hcaptcha/react-hcaptcha';
-import { Shield, CheckCircle, AlertCircle, Loader } from 'lucide-react';
+import { CheckCircle, AlertCircle, Loader } from 'lucide-react';
 
 interface ContactFormProps {
   locale: string;
@@ -28,7 +27,6 @@ interface FormErrors {
   phone?: string;
   message?: string;
   general?: string;
-  captcha?: string;
 }
 
 const ContactForm: React.FC<ContactFormProps> = ({ locale }) => {
@@ -52,8 +50,6 @@ const ContactForm: React.FC<ContactFormProps> = ({ locale }) => {
       requiredFieldError: "Bu alan zorunludur",
       invalidEmailError: "Geçerli bir e-posta adresi giriniz",
       invalidPhoneError: "Geçerli bir telefon numarası giriniz",
-      spamProtectionText: "Bu formda spam koruması ve güvenlik doğrulaması bulunmaktadır.",
-      hcaptchaError: "Lütfen robot olmadığınızı doğrulayın.",
       tryAgainButton: "Tekrar Dene",
     },
     en: {
@@ -75,8 +71,6 @@ const ContactForm: React.FC<ContactFormProps> = ({ locale }) => {
       requiredFieldError: "This field is required",
       invalidEmailError: "Please enter a valid email address",
       invalidPhoneError: "Please enter a valid phone number",
-      spamProtectionText: "This form has spam protection and security verification.",
-      hcaptchaError: "Please verify that you are not a robot.",
       tryAgainButton: "Try Again",
     },
   };
@@ -100,23 +94,8 @@ const ContactForm: React.FC<ContactFormProps> = ({ locale }) => {
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [submissionId, setSubmissionId] = useState<string>('');
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   
   const formRef = useRef<HTMLFormElement>(null);
-  const captchaRef = useRef<HCaptcha>(null);
-
-  // Load hCaptcha script - removed since we're using @hcaptcha/react-hcaptcha
-  // useEffect(() => {
-  //   const loadHCaptcha = () => {
-  //     // No need to load script manually with @hcaptcha/react-hcaptcha
-  //   };
-  //   loadHCaptcha();
-  // }, []);
-
-  // Initialize hCaptcha widget - removed since @hcaptcha/react-hcaptcha handles this
-  // useEffect(() => {
-  //   // No need to manually initialize with @hcaptcha/react-hcaptcha
-  // }, []);
 
   useEffect(() => {
     const detectBrowser = () => {
@@ -224,11 +203,6 @@ const ContactForm: React.FC<ContactFormProps> = ({ locale }) => {
       newErrors.message = t.requiredFieldError;
     }
 
-    // hCaptcha validation
-    if (!captchaToken) {
-      newErrors.captcha = t.hcaptchaError;
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -260,20 +234,12 @@ const ContactForm: React.FC<ContactFormProps> = ({ locale }) => {
     if (formRef.current) {
       formRef.current.reset();
     }
-    
-    // Don't reset hCaptcha here - it will be reset when needed
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!validateForm()) {
-      return;
-    }
-
-    // Get hCaptcha response
-    if (!captchaToken) {
-      setErrors({ captcha: t.hcaptchaError });
       return;
     }
 
@@ -295,7 +261,6 @@ const ContactForm: React.FC<ContactFormProps> = ({ locale }) => {
         deviceType: formData.deviceType,
         honeypot: formData.honeypot,
         timestamp: formData.timestamp,
-        hCaptchaToken: captchaToken,
       };
 
       const response = await fetch('/api/contact', {
@@ -320,17 +285,7 @@ const ContactForm: React.FC<ContactFormProps> = ({ locale }) => {
         console.error('API returned error:', errorData);
         
         if (response.status === 400) {
-          // Check if it's a captcha error
-          if (errorData.error?.includes('Captcha') || errorData.error?.includes('verification')) {
-            setErrors({ captcha: t.hcaptchaError });
-            // Reset hCaptcha on error
-            if (captchaRef.current) {
-              captchaRef.current.resetCaptcha();
-            }
-            setCaptchaToken(null);
-          } else {
-            setErrors({ general: errorData.error || t.errorMessage });
-          }
+          setErrors({ general: errorData.error || t.errorMessage });
         } else if (response.status >= 500) {
           setErrors({ general: t.networkErrorMessage });
         } else {
@@ -362,12 +317,6 @@ const ContactForm: React.FC<ContactFormProps> = ({ locale }) => {
       }
       
       setSubmitStatus('error');
-      
-      // Reset hCaptcha on error
-      if (captchaRef.current) {
-        captchaRef.current.resetCaptcha();
-      }
-      setCaptchaToken(null);
     } finally {
       setIsSubmitting(false);
     }
@@ -376,12 +325,6 @@ const ContactForm: React.FC<ContactFormProps> = ({ locale }) => {
   const handleTryAgain = () => {
     setSubmitStatus('idle');
     setErrors({});
-    
-    // Reset hCaptcha when trying again
-    if (captchaRef.current) {
-      captchaRef.current.resetCaptcha();
-    }
-    setCaptchaToken(null);
   };
 
   return (
@@ -554,46 +497,10 @@ const ContactForm: React.FC<ContactFormProps> = ({ locale }) => {
             )}
           </div>
 
-          {/* hCaptcha Widget */}
-          <div className="md:col-span-2">
-            <HCaptcha
-              ref={captchaRef}
-              sitekey={process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY || '7dbc4a24-2176-4928-8222-a65c5504acdc'}
-              onVerify={(token) => {
-                setCaptchaToken(token);
-                if (errors.captcha) {
-                  setErrors(prev => ({ ...prev, captcha: '' }));
-                }
-              }}
-              onExpire={() => {
-                setCaptchaToken(null);
-                setErrors(prev => ({ ...prev, captcha: t.hcaptchaError }));
-              }}
-              onError={() => {
-                setCaptchaToken(null);
-                setErrors(prev => ({ ...prev, captcha: t.hcaptchaError }));
-              }}
-              onLoad={() => console.log('hCaptcha loaded')}
-              theme="light"
-              size="normal"
-            />
-            {errors.captcha && (
-              <p className="mt-2 text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
-                <AlertCircle className="w-4 h-4" />
-                {errors.captcha}
-              </p>
-            )}
-          </div>
-
-          <div className="text-xs text-neutral-500 dark:text-neutral-400 flex items-center">
-            <Shield className="w-4 h-4 mr-2 flex-shrink-0" />
-            {t.spamProtectionText}
-          </div>
-
           <div>
             <button
               type="submit"
-              disabled={isSubmitting || !captchaToken}
+              disabled={isSubmitting}
               className="bg-[#a90013] hover:bg-[#8a0010] dark:bg-[#a90013] dark:hover:bg-[#8a0010] text-white py-3 px-8 rounded-sm text-md font-medium transition-colors flex items-center disabled:opacity-70 disabled:cursor-not-allowed"
             >
               {isSubmitting ? (
