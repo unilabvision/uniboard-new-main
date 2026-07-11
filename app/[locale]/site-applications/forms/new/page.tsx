@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useUserModules } from '../../../../hooks/useUserModules';
 import { slugifyFormValue } from '@/app/lib/siteApplications/config';
 import {
+  buildEventFormSlugs,
   emptyEventFormState,
   emptyTeamFormState,
   getTeamFormPublicPath,
@@ -200,9 +201,12 @@ function NewSiteApplicationFormContent({ locale }: { locale: string }) {
               onChange={(e) => {
                 const eventId = e.target.value;
                 const selected = events.find((ev) => ev.id === eventId);
+                const slugs = selected ? buildEventFormSlugs(selected.slug) : { slug_tr: '', slug_en: '' };
                 setForm((prev) => ({
                   ...prev,
                   event_id: eventId,
+                  slug_tr: slugs.slug_tr || prev.slug_tr,
+                  slug_en: slugs.slug_en || prev.slug_en,
                   title_tr: prev.title_tr || (selected ? `${selected.title} Başvurusu` : prev.title_tr),
                   title_en: prev.title_en || (selected ? `${selected.title} Application` : prev.title_en),
                 }));

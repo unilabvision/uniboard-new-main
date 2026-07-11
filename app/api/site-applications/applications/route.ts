@@ -14,11 +14,18 @@ export async function GET(request: NextRequest) {
   const search = searchParams.get('search')?.trim() || '';
   const formFilter = searchParams.get('form') || 'all';
   const status = searchParams.get('status');
+  const category = searchParams.get('category');
 
   let query = authResult.supabase
     .from(siteApplicationsDb.applications)
     .select('*', { count: 'exact' })
     .order('created_at', { ascending: false });
+
+  if (category === 'event') {
+    query = query.eq('source', 'event_website');
+  } else if (category === 'team') {
+    query = query.eq('source', 'website');
+  }
 
   if (formFilter !== 'all') {
     query = query.eq('application_type', formFilter);

@@ -47,6 +47,9 @@ const ui = {
     error: 'Başvuru gönderilirken bir hata oluştu.',
     required: 'Bu alan zorunludur',
     invalidEmail: 'Geçerli bir e-posta giriniz',
+    invalidUrl: 'Geçerli bir web adresi giriniz',
+    invalidTel: 'Geçerli bir telefon numarası giriniz',
+    invalidNumber: 'Geçerli bir sayı giriniz',
     captcha: 'Lütfen robot olmadığınızı doğrulayın.',
     spamNote: 'Bu form spam koruması içerir.',
     select: 'Seçiniz',
@@ -74,6 +77,9 @@ const ui = {
     error: 'An error occurred while submitting your application.',
     required: 'This field is required',
     invalidEmail: 'Please enter a valid email',
+    invalidUrl: 'Please enter a valid URL',
+    invalidTel: 'Please enter a valid phone number',
+    invalidNumber: 'Please enter a valid number',
     captcha: 'Please verify you are not a robot.',
     spamNote: 'This form includes spam protection.',
     select: 'Select',
@@ -190,6 +196,17 @@ export default function DynamicSiteApplicationForm({
     return Math.round((filled / required.length) * 100);
   }, [formConfig, values]);
 
+  const updateValue = (fieldKey: string, value: string) => {
+    setValues((prev) => ({ ...prev, [fieldKey]: value }));
+    setErrors((prev) => {
+      if (!prev[fieldKey]) return prev;
+      const next = { ...prev };
+      delete next[fieldKey];
+      return next;
+    });
+    if (generalError) setGeneralError(null);
+  };
+
   const validateClient = () => {
     if (!formConfig) return { valid: false, fieldErrors: {} as Record<string, string> };
     const nextErrors: Record<string, string> = {};
@@ -198,9 +215,26 @@ export default function DynamicSiteApplicationForm({
       const value = values[field.field_key]?.trim() || '';
       if (field.required && !value) {
         nextErrors[field.field_key] = t.required;
+        continue;
       }
-      if (field.field_type === 'email' && value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      if (!value) continue;
+
+      if (field.field_type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
         nextErrors[field.field_key] = t.invalidEmail;
+      }
+      if (field.field_type === 'url') {
+        try {
+          const parsed = new URL(value.startsWith('http') ? value : `https://${value}`);
+          if (!parsed.hostname) nextErrors[field.field_key] = t.invalidUrl;
+        } catch {
+          nextErrors[field.field_key] = t.invalidUrl;
+        }
+      }
+      if (field.field_type === 'tel' && value.replace(/\D/g, '').length < 7) {
+        nextErrors[field.field_key] = t.invalidTel;
+      }
+      if (field.field_type === 'number' && !Number.isFinite(Number(value))) {
+        nextErrors[field.field_key] = t.invalidNumber;
       }
     }
 
@@ -316,7 +350,11 @@ export default function DynamicSiteApplicationForm({
                 ? t.required
                 : code === 'invalid_email'
                   ? t.invalidEmail
-                  : t.error;
+                  : code === 'invalid_url'
+                    ? t.invalidUrl
+                    : code === 'invalid_option'
+                      ? t.error
+                      : t.error;
           }
           setErrors(mapped);
           scrollToFirstError(mapped);
@@ -478,9 +516,13 @@ export default function DynamicSiteApplicationForm({
 
               {formConfig.fields.map((field) => {
                 const Icon = fieldIcon[field.field_type] || FileText;
+                const inputId = `field-${field.field_key}`;
                 return (
                   <div key={field.field_key} className="group" data-field-key={field.field_key}>
-                    <label className="flex items-center gap-2 text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                    <label
+                      htmlFor={inputId}
+                      className="flex items-center gap-2 text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2"
+                    >
                       <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#990000]/8 text-[#990000] group-focus-within:bg-[#990000]/15 transition-colors">
                         <Icon className="w-3.5 h-3.5" />
                       </span>
@@ -490,20 +532,18 @@ export default function DynamicSiteApplicationForm({
 
                     {field.field_type === 'textarea' ? (
                       <textarea
+                        id={inputId}
                         rows={4}
                         value={values[field.field_key] || ''}
-                        onChange={(e) =>
-                          setValues((prev) => ({ ...prev, [field.field_key]: e.target.value }))
-                        }
+                        onChange={(e) => updateValue(field.field_key, e.target.value)}
                         placeholder={field.placeholder || ''}
                         className={inputClass}
                       />
                     ) : field.field_type === 'select' ? (
                       <select
+                        id={inputId}
                         value={values[field.field_key] || ''}
-                        onChange={(e) =>
-                          setValues((prev) => ({ ...prev, [field.field_key]: e.target.value }))
-                        }
+                        onChange={(e) => updateValue(field.field_key, e.target.value)}
                         className={inputClass}
                       >
                         <option value="">{t.select}</option>
@@ -515,6 +555,7 @@ export default function DynamicSiteApplicationForm({
                       </select>
                     ) : (
                       <input
+                        id={inputId}
                         type={
                           field.field_type === 'email'
                             ? 'email'
@@ -529,9 +570,7 @@ export default function DynamicSiteApplicationForm({
                                     : 'text'
                         }
                         value={values[field.field_key] || ''}
-                        onChange={(e) =>
-                          setValues((prev) => ({ ...prev, [field.field_key]: e.target.value }))
-                        }
+                        onChange={(e) => updateValue(field.field_key, e.target.value)}
                         placeholder={field.placeholder || ''}
                         className={inputClass}
                       />
@@ -601,7 +640,15 @@ export default function DynamicSiteApplicationForm({
                 <HCaptcha
                   ref={captchaRef}
                   sitekey={siteKey}
-                  onVerify={(token) => setCaptchaToken(token)}
+                  onVerify={(token) => {
+                    setCaptchaToken(token);
+                    setErrors((prev) => {
+                      if (!prev.captcha) return prev;
+                      const next = { ...prev };
+                      delete next.captcha;
+                      return next;
+                    });
+                  }}
                   onExpire={() => setCaptchaToken(null)}
                 />
                 {errors.captcha && (

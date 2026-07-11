@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
     }
 
     const contact = extractContactFromSubmission(typedFields, normalized);
-    const applicationType = getApplicationTypeSlug(form, locale);
+    const applicationType = getApplicationTypeSlug(form, locale, event);
 
     const row = {
       form_id: form.id,

@@ -142,6 +142,65 @@ export const TEAM_DEFAULT_FIELDS: SiteApplicationFormFieldInput[] = [
   },
 ];
 
+export const EVENT_DEFAULT_FIELDS: SiteApplicationFormFieldInput[] = [
+  {
+    field_key: 'first_name',
+    field_type: 'text',
+    label_tr: 'Ad',
+    label_en: 'First Name',
+    required: true,
+    order_index: 0,
+    is_contact: true,
+  },
+  {
+    field_key: 'last_name',
+    field_type: 'text',
+    label_tr: 'Soyad',
+    label_en: 'Last Name',
+    required: true,
+    order_index: 1,
+    is_contact: true,
+  },
+  {
+    field_key: 'email',
+    field_type: 'email',
+    label_tr: 'E-posta',
+    label_en: 'Email',
+    required: true,
+    order_index: 2,
+    is_contact: true,
+  },
+  {
+    field_key: 'phone',
+    field_type: 'tel',
+    label_tr: 'Telefon',
+    label_en: 'Phone',
+    required: false,
+    order_index: 3,
+    is_contact: true,
+  },
+  {
+    field_key: 'message',
+    field_type: 'textarea',
+    label_tr: 'Mesajınız',
+    label_en: 'Your message',
+    required: false,
+    order_index: 4,
+  },
+];
+
+export function getDefaultFieldsForFormType(type: SiteApplicationFormType): SiteApplicationFormFieldInput[] {
+  return type === 'team' ? TEAM_DEFAULT_FIELDS : EVENT_DEFAULT_FIELDS;
+}
+
+export function buildEventFormSlugs(eventSlug: string): { slug_tr: string; slug_en: string } {
+  const normalized = eventSlug.trim().toLowerCase();
+  return {
+    slug_tr: `etkinlik-${normalized}`,
+    slug_en: `event-${normalized}`,
+  };
+}
+
 export function emptyTeamFormState() {
   return {
     title_tr: TEAM_FORM_DEFAULT_TITLES.tr,

@@ -44,7 +44,8 @@ export function validateSubmissionFields(
 
     if (field.field_type === 'url' && typeof value === 'string') {
       try {
-        new URL(value);
+        const candidate = value.startsWith('http://') || value.startsWith('https://') ? value : `https://${value}`;
+        new URL(candidate);
       } catch {
         errors[field.field_key] = 'invalid_url';
         continue;

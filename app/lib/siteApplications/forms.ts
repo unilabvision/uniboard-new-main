@@ -5,6 +5,24 @@ import type {
   SiteApplicationFormFieldOption,
 } from '@/app/types/siteApplicationForms';
 
+export function fieldKeyFromLabel(label: string, existingKeys: Set<string>): string {
+  const base =
+    label
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_|_$/g, '') || 'field';
+
+  let key = base;
+  let i = 2;
+  while (existingKeys.has(key)) {
+    key = `${base}_${i++}`;
+  }
+  return key;
+}
+
 export function normalizeFieldOptions(options: unknown): SiteApplicationFormFieldOption[] {
   if (!options) return [];
 

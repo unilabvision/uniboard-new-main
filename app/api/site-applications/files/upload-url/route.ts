@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Form not found' }, { status: 400 });
     }
 
-    const { form } = resolved;
+    const { form, event } = resolved;
 
     if (!form.allows_attachment) {
       return NextResponse.json({ error: 'Attachments not allowed' }, { status: 400 });
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const storageSlug = getApplicationTypeSlug(form, locale);
+    const storageSlug = getApplicationTypeSlug(form, locale, event);
     const draftId = randomUUID();
     const { bucket, objectPath, storageRef } = buildAttachmentStoragePath(
       storageSlug,

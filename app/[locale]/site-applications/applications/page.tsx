@@ -13,6 +13,7 @@ import {
   ChevronRight,
   FileText,
 } from 'lucide-react';
+import { inferFormType } from '@/app/lib/siteApplications/formTypes';
 import { type SiteApplicationStatus } from '@/app/lib/siteApplications/config';
 import type { SiteApplication } from '@/app/types/siteApplications';
 import type { SiteApplicationForm } from '@/app/types/siteApplicationForms';
@@ -33,6 +34,10 @@ const texts = {
     titleRejected: 'Reddedilen Başvurular',
     subtitle: 'Site formlarından gelen başvuruları görüntüleyin',
     subtitleFiltered: 'Seçili duruma göre filtrelenmiş liste',
+    tabTeam: 'Ekip Başvuruları',
+    tabEvent: 'Etkinlik Başvuruları',
+    tabAll: 'Tümü',
+    eventLabel: 'Etkinlik',
     all: 'Tümü',
     allForms: 'Tüm formlar',
     clearFilter: 'Filtreyi temizle',
@@ -65,6 +70,10 @@ const texts = {
     titleRejected: 'Rejected Applications',
     subtitle: 'View applications from site forms',
     subtitleFiltered: 'List filtered by selected status',
+    tabTeam: 'Team Applications',
+    tabEvent: 'Event Applications',
+    tabAll: 'All',
+    eventLabel: 'Event',
     all: 'All',
     allForms: 'All forms',
     clearFilter: 'Clear filter',
@@ -123,12 +132,16 @@ export default function SiteApplicationsListPage({
   const perPage = 20;
   const searchParams = useSearchParams();
   const statusParam = searchParams.get('status');
+  const categoryParam = searchParams.get('category');
+  const categoryFilter =
+    categoryParam === 'team' || categoryParam === 'event' ? categoryParam : 'all';
   const statusFilter =
     statusParam && STATUS_FILTERS.includes(statusParam as SiteApplicationStatus)
       ? (statusParam as SiteApplicationStatus)
       : null;
 
   const t = texts[locale as keyof typeof texts] || texts.tr;
+  const baseListPath = `/${locale}/site-applications/applications`;
 
   const pageTitle = useMemo(() => {
     if (!statusFilter) return t.title;
@@ -154,16 +167,25 @@ export default function SiteApplicationsListPage({
 
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, formFilter, search]);
+  }, [statusFilter, formFilter, search, categoryFilter]);
 
   const formTitleBySlug = useCallback(
-    (slug: string) => {
+    (slug: string, app?: SiteApplication) => {
       const form = forms.find((f) => f.slug_tr === slug || f.slug_en === slug);
-      if (!form) return slug;
-      return locale === 'en' ? form.title_en : form.title_tr;
+      if (form) return locale === 'en' ? form.title_en : form.title_tr;
+      if (app?.event_name) return app.event_name;
+      return slug;
     },
     [forms, locale]
   );
+
+  const buildListHref = (params: { status?: string | null; category?: string }) => {
+    const qs = new URLSearchParams();
+    if (params.status) qs.set('status', params.status);
+    if (params.category && params.category !== 'all') qs.set('category', params.category);
+    const query = qs.toString();
+    return query ? `${baseListPath}?${query}` : baseListPath;
+  };
 
   const load = useCallback(async () => {
     try {
@@ -176,6 +198,7 @@ export default function SiteApplicationsListPage({
       });
       if (formFilter !== 'all') params.set('form', formFilter);
       if (statusFilter) params.set('status', statusFilter);
+      if (categoryFilter !== 'all') params.set('category', categoryFilter);
       if (search.trim()) params.set('search', search.trim());
 
       const res = await fetch(`/api/site-applications/applications?${params.toString()}`);
@@ -189,14 +212,21 @@ export default function SiteApplicationsListPage({
     } finally {
       setLoading(false);
     }
-  }, [formFilter, search, page, statusFilter, t.error]);
+  }, [formFilter, search, page, statusFilter, categoryFilter, t.error]);
 
   useEffect(() => {
     load();
   }, [load]);
 
+  const filteredForms = useMemo(() => {
+    if (categoryFilter === 'all') return forms;
+    return forms.filter((form) => {
+      const type = form.form_type ?? inferFormType(form);
+      return categoryFilter === type;
+    });
+  }, [forms, categoryFilter]);
+
   const totalPages = Math.max(1, Math.ceil(total / perPage));
-  const baseListPath = `/${locale}/site-applications/applications`;
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
@@ -223,9 +253,29 @@ export default function SiteApplicationsListPage({
         )}
       </div>
 
+      <div className="flex gap-2 mb-4 border-b border-neutral-200 dark:border-neutral-700">
+        {([
+          ['team', t.tabTeam],
+          ['event', t.tabEvent],
+          ['all', t.tabAll],
+        ] as const).map(([key, label]) => (
+          <Link
+            key={key}
+            href={buildListHref({ status: statusFilter, category: key })}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              categoryFilter === key
+                ? 'border-[#990000] text-[#990000]'
+                : 'border-transparent text-neutral-500 hover:text-neutral-800'
+            }`}
+          >
+            {label}
+          </Link>
+        ))}
+      </div>
+
       <div className="flex flex-wrap gap-2 mb-6">
         <Link
-          href={baseListPath}
+          href={buildListHref({ status: null, category: categoryFilter })}
           className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
             !statusFilter
               ? 'bg-[#990000] text-white'
@@ -237,7 +287,7 @@ export default function SiteApplicationsListPage({
         {STATUS_FILTERS.map((status) => (
           <Link
             key={status}
-            href={`${baseListPath}?status=${status}`}
+            href={buildListHref({ status, category: categoryFilter })}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
               statusFilter === status
                 ? 'bg-[#990000] text-white'
@@ -266,7 +316,7 @@ export default function SiteApplicationsListPage({
             className="px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
           >
             <option value="all">{t.allForms}</option>
-            {forms.map((form) => (
+            {filteredForms.map((form) => (
               <option key={form.id} value={locale === 'en' ? form.slug_en : form.slug_tr}>
                 {locale === 'en' ? form.title_en : form.title_tr}
               </option>
@@ -324,8 +374,13 @@ export default function SiteApplicationsListPage({
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center gap-1 text-neutral-700 dark:text-neutral-300">
                         <FileText className="w-3.5 h-3.5" />
-                        {formTitleBySlug(app.application_type)}
+                        {formTitleBySlug(app.application_type, app)}
                       </span>
+                      {app.event_name && app.source === 'event_website' && (
+                        <div className="text-xs text-neutral-500 mt-0.5">
+                          {t.eventLabel}: {app.event_name}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell">
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColor(app.status)}`}>

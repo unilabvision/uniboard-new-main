@@ -37,7 +37,6 @@ export async function GET(
       .select('*')
       .eq('event_id', event.id)
       .eq('is_active', true)
-      .eq('show_on_website', true)
       .maybeSingle();
 
     if (error) {

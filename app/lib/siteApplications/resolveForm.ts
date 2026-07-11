@@ -28,7 +28,6 @@ export async function resolveActiveForm(
       .select('*')
       .eq('event_id', event.id)
       .eq('is_active', true)
-      .eq('show_on_website', true)
       .maybeSingle();
 
     if (error || !form) return null;
@@ -50,6 +49,15 @@ export async function resolveActiveForm(
   return { form: form as SiteApplicationForm, locale };
 }
 
-export function getApplicationTypeSlug(form: SiteApplicationForm, locale: 'tr' | 'en'): string {
-  return locale === 'en' ? form.slug_en : form.slug_tr;
+export function getApplicationTypeSlug(
+  form: SiteApplicationForm,
+  locale: 'tr' | 'en',
+  event?: { slug: string }
+): string {
+  const slug = (locale === 'en' ? form.slug_en : form.slug_tr)?.trim();
+  if (slug) return slug;
+  if (event?.slug) {
+    return locale === 'en' ? `event-${event.slug}` : `etkinlik-${event.slug}`;
+  }
+  return form.id;
 }
