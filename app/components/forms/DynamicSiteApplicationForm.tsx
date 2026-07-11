@@ -19,14 +19,18 @@ import {
   PartyPopper,
   Heart,
   Clock,
+  Award,
+  Check,
 } from 'lucide-react';
 import type { PublicSiteApplicationForm } from '@/app/types/siteApplicationForms';
 import type { SiteApplicationFieldType } from '@/app/types/siteApplicationForms';
+import type { RegistrationPackageId } from '@/app/lib/siteApplications/packages';
 import {
   SITE_APPLICATION_MAX_FILE_BYTES,
   formatFileSize,
   validateAttachmentFile,
 } from '@/app/lib/siteApplications';
+import { formatPackagePrice } from '@/app/lib/siteApplications/packages';
 
 interface DynamicSiteApplicationFormProps {
   locale: string;
@@ -64,6 +68,9 @@ const ui = {
     badge: 'Açık başvuru',
     secure: 'Verilerin güvende',
     response: 'Genelde 3–5 iş günü içinde dönüş',
+    choosePackage: 'Kayıt paketinizi seçin',
+    packageHint: 'Kayıt ücretsizdir. İsterseniz sertifika paketini ekleyebilirsiniz.',
+    paymentNote: 'Sertifika ücreti ödeme adımında alınacaktır.',
   },
   en: {
     loading: 'Preparing your form...',
@@ -92,6 +99,9 @@ const ui = {
     badge: 'Open application',
     secure: 'Your data is secure',
     response: 'We usually respond within 3–5 business days',
+    choosePackage: 'Choose your registration package',
+    packageHint: 'Registration is free. You can add the certificate package if you wish.',
+    paymentNote: 'Certificate fee will be collected at the payment step.',
   },
 };
 
@@ -145,6 +155,7 @@ export default function DynamicSiteApplicationForm({
   const [attachment, setAttachment] = useState<File | null>(null);
   const [honeypot, setHoneypot] = useState('');
   const [dragOver, setDragOver] = useState(false);
+  const [selectedPackage, setSelectedPackage] = useState<RegistrationPackageId>('free');
 
   useEffect(() => {
     const load = async () => {
@@ -162,6 +173,7 @@ export default function DynamicSiteApplicationForm({
         const data = await res.json();
         setFormConfig(data.form);
         setResolvedFormSlug(data.form?.slug || formSlug || '');
+        setSelectedPackage('free');
       } catch {
         setFormConfig(null);
         setResolvedFormSlug('');
@@ -185,6 +197,9 @@ export default function DynamicSiteApplicationForm({
     const filled = required.filter((f) => values[f.field_key]?.trim()).length;
     return Math.round((filled / required.length) * 100);
   }, [formConfig, values]);
+
+  const packages = formConfig?.packages ?? [];
+  const hasPackageChoice = packages.length > 1;
 
   const updateValue = (fieldKey: string, value: string) => {
     setValues((prev) => ({ ...prev, [fieldKey]: value }));
@@ -311,6 +326,7 @@ export default function DynamicSiteApplicationForm({
           eventSlug: eventSlug || undefined,
           locale,
           fields: values,
+          registrationTier: selectedPackage,
           honeypot,
           ...attachmentMeta,
         }),
@@ -336,6 +352,16 @@ export default function DynamicSiteApplicationForm({
           scrollToFirstError(mapped);
         }
         throw new Error(data.error || t.error);
+      }
+
+      if (data.requiresPayment && data.submissionId) {
+        const paymentBase =
+          process.env.NEXT_PUBLIC_MYUNI_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || '';
+        const checkoutPath = `/${locale}/checkout/event-application?applicationId=${encodeURIComponent(data.submissionId)}${eventSlug ? `&eventSlug=${encodeURIComponent(eventSlug)}` : ''}`;
+        if (paymentBase) {
+          window.location.href = `${paymentBase.replace(/\/$/, '')}${checkoutPath}`;
+          return;
+        }
       }
 
       setSuccess(true);
@@ -485,6 +511,66 @@ export default function DynamicSiteApplicationForm({
                 tabIndex={-1}
                 autoComplete="off"
               />
+
+              {hasPackageChoice && (
+                <div className="space-y-3" data-field-key="registration_package">
+                  <div>
+                    <p className="flex items-center gap-2 text-sm font-semibold text-neutral-800 dark:text-neutral-200">
+                      <Award className="w-4 h-4 text-[#990000]" />
+                      {t.choosePackage}
+                    </p>
+                    <p className="text-xs text-neutral-500 mt-1">{t.packageHint}</p>
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    {packages.map((pkg) => {
+                      const selected = selectedPackage === pkg.id;
+                      return (
+                        <button
+                          key={pkg.id}
+                          type="button"
+                          onClick={() => setSelectedPackage(pkg.id)}
+                          className={`text-left rounded-2xl border-2 p-4 transition-all duration-200 ${
+                            selected
+                              ? 'border-[#990000] bg-[#990000]/5 shadow-md shadow-[#990000]/10'
+                              : 'border-neutral-200 dark:border-neutral-600 hover:border-[#990000]/40'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              {pkg.badge && (
+                                <span className="inline-block text-[10px] font-bold uppercase tracking-wider text-[#990000] mb-1">
+                                  {pkg.badge}
+                                </span>
+                              )}
+                              <p className="font-semibold text-neutral-900 dark:text-neutral-100">
+                                {pkg.title}
+                              </p>
+                            </div>
+                            {selected && (
+                              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#990000] text-white shrink-0">
+                                <Check className="w-3.5 h-3.5" />
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-lg font-bold text-[#990000] mt-2">
+                            {formatPackagePrice(pkg.price, pkg.currency, locale)}
+                          </p>
+                          {pkg.description && (
+                            <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-2 leading-relaxed">
+                              {pkg.description}
+                            </p>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {selectedPackage === 'certificate' && (
+                    <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 rounded-xl px-3 py-2">
+                      {t.paymentNote}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {formConfig.fields.map((field) => {
                 const Icon = fieldIcon[field.field_type] || FileText;

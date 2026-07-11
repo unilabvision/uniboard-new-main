@@ -9,6 +9,13 @@ import {
   getApplicationTypeSlug,
   resolveActiveForm,
 } from '@/app/lib/siteApplications/resolveForm';
+import { inferFormType } from '@/app/lib/siteApplications/formTypes';
+import {
+  getSelectedPackageFromSubmission,
+  parsePackageSettingsFromForm,
+  toPublicPackages,
+  type RegistrationPackageId,
+} from '@/app/lib/siteApplications/packages';
 import type { SiteApplicationFormField } from '@/app/types/siteApplicationForms';
 
 function getSupabase() {
@@ -65,6 +72,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Validation failed', fieldErrors: errors }, { status: 400 });
     }
 
+    const formType = form.form_type ?? inferFormType(form);
+    const registrationTier = (
+      body.registrationTier === 'certificate' ? 'certificate' : 'free'
+    ) as RegistrationPackageId;
+    const packageSettings = parsePackageSettingsFromForm(form);
+    const publicPackages =
+      formType === 'event' ? toPublicPackages(packageSettings, locale) : [];
+    const selectedPackage = getSelectedPackageFromSubmission(publicPackages, registrationTier);
+
+    if (registrationTier === 'certificate') {
+      if (formType !== 'event' || !packageSettings.certificate_enabled) {
+        return NextResponse.json({ error: 'Certificate package is not available' }, { status: 400 });
+      }
+    }
+
     const attachmentStoragePath = body.attachmentStoragePath?.trim() || null;
     const attachmentFileName = body.attachmentFileName?.trim() || null;
     const attachmentMimeType = body.attachmentMimeType?.trim() || null;
@@ -107,6 +129,18 @@ export async function POST(request: NextRequest) {
       submission_data: {
         ...normalized,
         ...(event ? { event_slug: event.slug, event_title: event.title } : {}),
+        ...(formType === 'event'
+          ? {
+              registration_tier: selectedPackage.id,
+              package_title: selectedPackage.title,
+              package_price: selectedPackage.price,
+              package_currency: selectedPackage.currency,
+              payment_status:
+                selectedPackage.id === 'certificate' && selectedPackage.price > 0
+                  ? 'pending'
+                  : 'none',
+            }
+          : {}),
       },
       attachment_file_name: attachmentFileName,
       attachment_storage_path: attachmentStoragePath,
@@ -129,6 +163,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       submissionId: data.id,
+      requiresPayment:
+        formType === 'event' &&
+        selectedPackage.id === 'certificate' &&
+        selectedPackage.price > 0,
+      payment: {
+        amount: selectedPackage.price,
+        currency: selectedPackage.currency,
+        tier: selectedPackage.id,
+        packageTitle: selectedPackage.title,
+      },
     });
   } catch (err) {
     console.error('Form submit error:', err);

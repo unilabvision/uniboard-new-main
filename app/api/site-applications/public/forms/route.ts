@@ -6,6 +6,10 @@ import {
 } from '@/app/lib/siteApplications/config';
 import { attachLinkedEventsToForms } from '@/app/lib/siteApplications/events';
 import { getTeamFormPublicPath } from '@/app/lib/siteApplications/formTypes';
+import {
+  parsePackageSettingsFromForm,
+  toPublicPackages,
+} from '@/app/lib/siteApplications/packages';
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL2;
@@ -24,9 +28,10 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabase
       .from(siteApplicationsDb.forms)
-      .select('id, slug_tr, slug_en, title_tr, title_en, subtitle_tr, subtitle_en, event_id')
+      .select(
+        'id, slug_tr, slug_en, title_tr, title_en, subtitle_tr, subtitle_en, event_id, package_settings, is_active, show_on_website'
+      )
       .eq('is_active', true)
-      .eq('show_on_website', true)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -36,7 +41,7 @@ export async function GET(request: NextRequest) {
     const formsWithEvents = await attachLinkedEventsToForms(supabase, data ?? []);
 
     const standaloneForms = formsWithEvents
-      .filter((form) => !form.event_id)
+      .filter((form) => !form.event_id && form.show_on_website)
       .map((form) => {
         const slug = locale === 'en' ? form.slug_en : form.slug_tr;
         return {
@@ -52,6 +57,8 @@ export async function GET(request: NextRequest) {
       .filter((form) => form.event_id && form.myuni_events)
       .map((form) => {
         const event = form.myuni_events!;
+        const packageSettings = parsePackageSettingsFromForm(form);
+        const packages = toPublicPackages(packageSettings, locale);
         return {
           form_id: form.id,
           event_id: form.event_id,
@@ -59,6 +66,8 @@ export async function GET(request: NextRequest) {
           event_title: event.title,
           form_title: locale === 'en' ? form.title_en : form.title_tr,
           application_url: getEventApplicationPath(locale, event.slug),
+          packages,
+          has_certificate_package: packageSettings.certificate_enabled,
         };
       });
 

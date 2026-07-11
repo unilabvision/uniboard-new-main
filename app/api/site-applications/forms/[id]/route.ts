@@ -6,6 +6,10 @@ import {
   requireSiteApplicationsSuperAdmin,
 } from '@/app/api/site-applications/access/_helpers';
 import type { SiteApplicationFormInput } from '@/app/types/siteApplicationForms';
+import {
+  normalizePackageSettings,
+  validatePackageSettings,
+} from '@/app/lib/siteApplications/packages';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -64,12 +68,46 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (body.allows_attachment !== undefined) updates.allows_attachment = body.allows_attachment;
   if (body.event_id !== undefined) updates.event_id = body.event_id || null;
 
-  const { data, error } = await authResult.supabase!
+  if (body.package_settings !== undefined) {
+    const normalized = normalizePackageSettings(body.package_settings);
+    const formType =
+      body.form_type ??
+      (updates.event_id || body.event_id ? 'event' : undefined);
+    const packageError = validatePackageSettings(normalized, {
+      requireEvent: formType === 'event' || Boolean(updates.event_id ?? body.event_id),
+    });
+    if (packageError) {
+      return NextResponse.json({ error: packageError }, { status: 400 });
+    }
+    updates.package_settings = normalized;
+  }
+
+  let { data, error } = await authResult.supabase!
     .from(siteApplicationsDb.forms)
     .update(updates)
     .eq('id', id)
     .select('*')
     .single();
+
+  if (error && updates.package_settings !== undefined) {
+    const retryUpdates = { ...updates };
+    delete retryUpdates.package_settings;
+    const retry = await authResult.supabase!
+      .from(siteApplicationsDb.forms)
+      .update(retryUpdates)
+      .eq('id', id)
+      .select('*')
+      .single();
+    data = retry.data;
+    error = retry.error;
+    if (!error) {
+      return NextResponse.json({
+        form: data,
+        warning:
+          'package_settings column missing — run scripts/migrations/add-site-application-package-settings.sql in Supabase',
+      });
+    }
+  }
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

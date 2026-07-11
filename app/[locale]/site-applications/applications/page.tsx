@@ -154,6 +154,14 @@ export default function SiteApplicationsListPage({
     return titles[statusFilter];
   }, [statusFilter, t]);
 
+  const visibleStatusFilters = useMemo(
+    () =>
+      categoryFilter === 'event'
+        ? STATUS_FILTERS.filter((status) => status !== 'under_review')
+        : STATUS_FILTERS,
+    [categoryFilter]
+  );
+
   useEffect(() => {
     params.then((p) => setLocale(p.locale));
   }, [params]);
@@ -284,7 +292,7 @@ export default function SiteApplicationsListPage({
         >
           {t.all}
         </Link>
-        {STATUS_FILTERS.map((status) => (
+        {visibleStatusFilters.map((status) => (
           <Link
             key={status}
             href={buildListHref({ status, category: categoryFilter })}

@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
+import {
+  siteApplicationsDb,
+  isEventSiteApplication,
+  type SiteApplicationStatus,
+} from '@/app/lib/siteApplications/config';
 import { requireSiteApplicationsModuleUser } from '@/app/api/site-applications/access/_helpers';
 import { getSiteApplicationAttachmentUrl } from '@/app/lib/siteApplications/attachmentDownload';
-import type { SiteApplicationStatus } from '@/app/lib/siteApplications/config';
+import { sendSiteApplicationApprovalEmail } from '@/app/_services/siteApplicationApprovalEmail';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -76,6 +80,14 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   if (body.status !== undefined && body.status !== existing.status) {
     const nextStatus = body.status as SiteApplicationStatus;
+
+    if (isEventSiteApplication(existing) && nextStatus === 'under_review') {
+      return NextResponse.json(
+        { error: 'Etkinlik başvurularında inceleme adımı kullanılmaz. Doğrudan onaylayın veya reddedin.' },
+        { status: 400 }
+      );
+    }
+
     updates.status = nextStatus;
     updates.reviewed_by = authResult.userId;
     updates.reviewed_by_email = body.reviewed_by_email || null;
@@ -123,5 +135,26 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     .eq('application_id', id)
     .order('created_at', { ascending: false });
 
-  return NextResponse.json({ application: data, history: history ?? [] });
+  let approvalEmail: { success: boolean; error?: string } | null = null;
+  if (
+    body.status !== undefined &&
+    body.status !== existing.status &&
+    body.status === 'accepted' &&
+    existing.status !== 'accepted'
+  ) {
+    approvalEmail = await sendSiteApplicationApprovalEmail({
+      to: data.email,
+      firstName: data.first_name,
+      lastName: data.last_name,
+      locale: data.locale === 'en' ? 'en' : 'tr',
+      eventName: data.event_name,
+      isEvent: isEventSiteApplication(data),
+    });
+  }
+
+  return NextResponse.json({
+    application: data,
+    history: history ?? [],
+    approval_email: approvalEmail,
+  });
 }

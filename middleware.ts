@@ -101,6 +101,7 @@ const isPublicRoute = createRouteMatcher([
   '/api/public/events(.*)',
   '/api/events(.*)',
   '/api/site-applications/files/upload-url',
+  '/api/site-applications/payments/confirm',
   '/api/site-applications/cleanup',
   '/api/contact',
   '/api/newsletter',

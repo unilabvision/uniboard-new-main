@@ -4,6 +4,11 @@ import type {
   SiteApplicationFormField,
   SiteApplicationFormFieldOption,
 } from '@/app/types/siteApplicationForms';
+import {
+  parsePackageSettingsFromForm,
+  toPublicPackages,
+} from '@/app/lib/siteApplications/packages';
+import { inferFormType } from '@/app/lib/siteApplications/formTypes';
 
 export function fieldKeyFromLabel(label: string, existingKeys: Set<string>): string {
   const base =
@@ -65,6 +70,10 @@ export function toPublicForm(
 ): PublicSiteApplicationForm {
   const isEn = locale === 'en';
   const slug = isEn ? form.slug_en : form.slug_tr;
+  const formType = form.form_type ?? inferFormType(form);
+  const packageSettings = parsePackageSettingsFromForm(form);
+  const packages =
+    formType === 'event' ? toPublicPackages(packageSettings, locale) : undefined;
 
   return {
     id: form.id,
@@ -73,6 +82,7 @@ export function toPublicForm(
     subtitle: isEn ? form.subtitle_en : form.subtitle_tr,
     success_message: isEn ? form.success_message_en : form.success_message_tr,
     allows_attachment: form.allows_attachment,
+    packages,
     fields: [...fields]
       .sort((a, b) => a.order_index - b.order_index)
       .map((field) => ({

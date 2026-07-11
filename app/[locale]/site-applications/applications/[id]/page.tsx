@@ -16,7 +16,21 @@ import {
   Loader2,
 } from 'lucide-react';
 import type { SiteApplication, SiteApplicationStatusHistory } from '@/app/types/siteApplications';
-import { formatFileSize } from '@/app/lib/siteApplications';
+import { formatFileSize, getAllowedStatusesForApplication, isEventSiteApplication } from '@/app/lib/siteApplications';
+import { formatPackagePrice } from '@/app/lib/siteApplications/packages';
+
+const INTERNAL_SUBMISSION_KEYS = new Set([
+  'registration_tier',
+  'package_title',
+  'package_price',
+  'package_currency',
+  'payment_status',
+  'payment_method',
+  'order_id',
+  'paid_at',
+  'event_slug',
+  'event_title',
+]);
 
 const texts = {
   tr: {
@@ -27,6 +41,9 @@ const texts = {
     notes: 'Yönetici Notları',
     saveNotes: 'Notları Kaydet',
     changeStatus: 'Durumu Güncelle',
+    approvalEmailSent: 'Onay e-postası başvurana gönderildi.',
+    approvalEmailFailed: 'Durum güncellendi ancak onay e-postası gönderilemedi.',
+    eventFlowHint: 'Etkinlik başvuruları doğrudan onaylanır veya reddedilir; inceleme adımı yoktur.',
     history: 'Durum Geçmişi',
     loading: 'Yükleniyor...',
     notFound: 'Başvuru bulunamadı',
@@ -47,7 +64,18 @@ const texts = {
       portfolio_url: 'Portfolyo',
       motivation: 'Motivasyon',
       message: 'Mesaj',
+      registration_tier: 'Kayıt paketi',
+      package_title: 'Paket',
+      package_price: 'Ücret',
+      package_currency: 'Para birimi',
+      payment_status: 'Ödeme durumu',
     },
+    packageSection: 'Kayıt paketi',
+    packageFree: 'Ücretsiz kayıt',
+    packageCertificate: 'Sertifika paketi',
+    paymentPending: 'Ödeme bekleniyor',
+    paymentNone: 'Ödeme gerekmez',
+    paymentPaid: 'Ödendi',
     attachment: 'Ek Dosya',
     download: 'Dosyayı İndir',
     expires: 'Silinme tarihi',
@@ -62,6 +90,9 @@ const texts = {
     notes: 'Admin Notes',
     saveNotes: 'Save Notes',
     changeStatus: 'Update Status',
+    approvalEmailSent: 'Approval email sent to the applicant.',
+    approvalEmailFailed: 'Status updated but the approval email could not be sent.',
+    eventFlowHint: 'Event applications are approved or rejected directly — no review step.',
     history: 'Status History',
     loading: 'Loading...',
     notFound: 'Application not found',
@@ -82,7 +113,18 @@ const texts = {
       portfolio_url: 'Portfolio',
       motivation: 'Motivation',
       message: 'Message',
+      registration_tier: 'Registration package',
+      package_title: 'Package',
+      package_price: 'Price',
+      package_currency: 'Currency',
+      payment_status: 'Payment status',
     },
+    packageSection: 'Registration package',
+    packageFree: 'Free registration',
+    packageCertificate: 'Certificate package',
+    paymentPending: 'Payment pending',
+    paymentNone: 'No payment required',
+    paymentPaid: 'Paid',
     attachment: 'Attachment',
     download: 'Download File',
     expires: 'Expires on',
@@ -110,6 +152,7 @@ export default function SiteApplicationDetailPage({
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -119,7 +162,12 @@ export default function SiteApplicationDetailPage({
         if (!res.ok || !data.application) throw new Error(data.error || 'Not found');
 
         setApp(data.application as SiteApplication);
-        setNewStatus(data.application.status);
+        const loaded = data.application as SiteApplication;
+        const initialStatus =
+          isEventSiteApplication(loaded) && loaded.status === 'under_review'
+            ? 'pending'
+            : loaded.status;
+        setNewStatus(initialStatus);
         setNotes(data.application.admin_notes || '');
         setHistory((data.history as SiteApplicationStatusHistory[]) || []);
         setAttachmentUrl(data.attachment_url || null);
@@ -136,6 +184,7 @@ export default function SiteApplicationDetailPage({
   const updateStatus = async () => {
     if (!app || !user || newStatus === app.status) return;
     setSaving(true);
+    setStatusMessage(null);
     try {
       const res = await fetch(`/api/site-applications/applications/${id}`, {
         method: 'PATCH',
@@ -150,6 +199,14 @@ export default function SiteApplicationDetailPage({
 
       setApp(data.application as SiteApplication);
       setHistory((data.history as SiteApplicationStatusHistory[]) || []);
+
+      if (newStatus === 'accepted' && data.approval_email) {
+        setStatusMessage(
+          data.approval_email.success ? t.approvalEmailSent : t.approvalEmailFailed
+        );
+      }
+    } catch (err) {
+      setStatusMessage(err instanceof Error ? err.message : 'Error');
     } finally {
       setSaving(false);
     }
@@ -213,10 +270,19 @@ export default function SiteApplicationDetailPage({
     );
   }
 
+  const isEvent = isEventSiteApplication(app);
+  const allowedStatuses = getAllowedStatusesForApplication(app);
+  const registrationTier = app.submission_data?.registration_tier as string | undefined;
+  const packageTitle = app.submission_data?.package_title as string | undefined;
+  const packagePrice = app.submission_data?.package_price as number | undefined;
+  const packageCurrency = (app.submission_data?.package_currency as string | undefined) || 'TRY';
+  const paymentStatus = app.submission_data?.payment_status as string | undefined;
+  const orderId = app.submission_data?.order_id as string | undefined;
+
   const detailFields =
     app.submission_data && Object.keys(app.submission_data).length > 0
-      ? Object.entries(app.submission_data)
-      : app.application_type === 'event'
+      ? Object.entries(app.submission_data).filter(([key]) => !INTERNAL_SUBMISSION_KEYS.has(key))
+      : isEvent
         ? [
             ['event_name', app.event_name],
             ['event_date', app.event_date],
@@ -248,8 +314,14 @@ export default function SiteApplicationDetailPage({
           {app.first_name} {app.last_name}
         </h1>
         <div className="mt-2 flex items-center gap-2 text-sm text-neutral-500">
-          {app.application_type === 'event' ? <PartyPopper className="w-4 h-4" /> : <Users className="w-4 h-4" />}
-          {app.application_type}
+          {isEvent ? <PartyPopper className="w-4 h-4" /> : <Users className="w-4 h-4" />}
+          {isEvent ? t.typeLabels.event : t.typeLabels.team}
+          {app.event_name && (
+            <>
+              <span>·</span>
+              <span>{app.event_name}</span>
+            </>
+          )}
           <span>·</span>
           <Calendar className="w-4 h-4" />
           {new Date(app.created_at).toLocaleString(locale === 'tr' ? 'tr-TR' : 'en-US')}
@@ -272,6 +344,47 @@ export default function SiteApplicationDetailPage({
             )}
           </dl>
         </section>
+
+        {isEvent && registrationTier && (
+          <section className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">
+            <h2 className="font-semibold mb-4">{t.packageSection}</h2>
+            <dl className="grid sm:grid-cols-2 gap-4 text-sm">
+              <div>
+                <dt className="text-neutral-500 mb-1">{t.fields.registration_tier}</dt>
+                <dd className="font-medium text-neutral-900 dark:text-neutral-100">
+                  {registrationTier === 'certificate' ? t.packageCertificate : t.packageFree}
+                  {packageTitle ? ` — ${packageTitle}` : ''}
+                </dd>
+              </div>
+              {registrationTier === 'certificate' && packagePrice != null && (
+                <div>
+                  <dt className="text-neutral-500 mb-1">{t.fields.package_price}</dt>
+                  <dd className="font-medium text-neutral-900 dark:text-neutral-100">
+                    {formatPackagePrice(packagePrice, packageCurrency, locale)}
+                  </dd>
+                </div>
+              )}
+              {paymentStatus && (
+                <div>
+                  <dt className="text-neutral-500 mb-1">{t.fields.payment_status}</dt>
+                  <dd className="font-medium text-neutral-900 dark:text-neutral-100">
+                    {paymentStatus === 'paid'
+                      ? t.paymentPaid
+                      : paymentStatus === 'pending'
+                        ? t.paymentPending
+                        : t.paymentNone}
+                  </dd>
+                </div>
+              )}
+              {orderId && (
+                <div>
+                  <dt className="text-neutral-500 mb-1">Order ID</dt>
+                  <dd className="font-mono text-xs text-neutral-900 dark:text-neutral-100">{orderId}</dd>
+                </div>
+              )}
+            </dl>
+          </section>
+        )}
 
         <section className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">
           <h2 className="font-semibold mb-4">{t.application}</h2>
@@ -349,14 +462,19 @@ export default function SiteApplicationDetailPage({
 
         <section className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">
           <h2 className="font-semibold mb-4">{t.status}</h2>
+          {isEvent && (
+            <p className="text-sm text-neutral-500 mb-3">{t.eventFlowHint}</p>
+          )}
           <div className="flex flex-wrap gap-3 items-end">
             <select
               value={newStatus}
               onChange={(e) => setNewStatus(e.target.value)}
               className="px-4 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900"
             >
-              {Object.entries(t.statusLabels).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
+              {allowedStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {t.statusLabels[status]}
+                </option>
               ))}
             </select>
             <button
@@ -368,6 +486,11 @@ export default function SiteApplicationDetailPage({
               {t.changeStatus}
             </button>
           </div>
+          {statusMessage && (
+            <p className={`mt-3 text-sm ${statusMessage === t.approvalEmailSent ? 'text-green-700 dark:text-green-300' : 'text-amber-700 dark:text-amber-300'}`}>
+              {statusMessage}
+            </p>
+          )}
         </section>
 
         <section className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">

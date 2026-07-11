@@ -18,6 +18,12 @@ import {
 import { normalizeFieldOptions } from '@/app/lib/siteApplications/forms';
 import FormFieldEditor from '@/app/components/site-applications/FormFieldEditor';
 import FormPreviewPanel from '@/app/components/site-applications/FormPreviewPanel';
+import EventPackageSettingsPanel from '@/app/components/site-applications/EventPackageSettingsPanel';
+import {
+  normalizePackageSettings,
+  parsePackageSettingsFromForm,
+  type EventCertificatePackageSettings,
+} from '@/app/lib/siteApplications/packages';
 import type {
   SiteApplicationForm,
   SiteApplicationFormField,
@@ -107,6 +113,9 @@ export default function EditSiteApplicationFormPage({
   const [savingSettings, setSavingSettings] = useState(false);
   const [savingFields, setSavingFields] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [packageSettings, setPackageSettings] = useState<EventCertificatePackageSettings>(
+    normalizePackageSettings(null)
+  );
 
   useEffect(() => {
     const load = async () => {
@@ -115,6 +124,7 @@ export default function EditSiteApplicationFormPage({
         if (formRes.ok) {
           const data = await formRes.json();
           setForm(data.form);
+          setPackageSettings(parsePackageSettingsFromForm(data.form));
           setFields(
             (data.form.fields as SiteApplicationFormField[] | undefined)?.map((f) => ({
               field_key: f.field_key,
@@ -169,13 +179,19 @@ export default function EditSiteApplicationFormPage({
           show_on_website: form.show_on_website,
           allows_attachment: form.allows_attachment,
           event_id: form.event_id,
+          package_settings: packageSettings,
         }),
       });
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error);
       }
-      setMessage(t.saved);
+      const data = await res.json();
+      if (data.warning) {
+        setMessage(data.warning);
+      } else {
+        setMessage(t.saved);
+      }
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Error');
     } finally {
@@ -338,6 +354,13 @@ export default function EditSiteApplicationFormPage({
           )}
           <Toggle label={t.allowsAttachment} checked={form.allows_attachment} onChange={(v) => setForm({ ...form, allows_attachment: v })} />
         </div>
+        {!isTeam && (
+          <EventPackageSettingsPanel
+            locale={locale}
+            settings={packageSettings}
+            onChange={setPackageSettings}
+          />
+        )}
         <button
           onClick={saveSettings}
           disabled={savingSettings}
@@ -380,6 +403,7 @@ export default function EditSiteApplicationFormPage({
             title={displayTitle}
             subtitle={displaySubtitle}
             fields={fields}
+            packages={!isTeam ? packageSettings : undefined}
           />
         </aside>
       </div>

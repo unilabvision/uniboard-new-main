@@ -1,3 +1,8 @@
+import type {
+  PublicRegistrationPackage,
+  EventCertificatePackageSettings,
+} from '@/app/lib/siteApplications/packages';
+
 export type SiteApplicationFieldType =
   | 'text'
   | 'email'
@@ -45,6 +50,7 @@ export interface SiteApplicationForm {
   allows_attachment: boolean;
   event_id: string | null;
   form_type?: 'team' | 'event' | null;
+  package_settings?: EventCertificatePackageSettings | Record<string, unknown> | null;
   created_by: string | null;
   created_by_email: string | null;
   created_at: string;
@@ -66,6 +72,7 @@ export interface SiteApplicationFormInput {
   allows_attachment?: boolean;
   event_id?: string | null;
   form_type?: 'team' | 'event';
+  package_settings?: EventCertificatePackageSettings | null;
 }
 
 export interface SiteApplicationFormFieldInput {
@@ -88,6 +95,7 @@ export interface PublicSiteApplicationForm {
   subtitle: string | null;
   success_message: string | null;
   allows_attachment: boolean;
+  packages?: PublicRegistrationPackage[];
   fields: Array<{
     field_key: string;
     field_type: SiteApplicationFieldType;

@@ -18,6 +18,19 @@ export const SITE_APPLICATION_STATUSES: SiteApplicationStatus[] = [
   'rejected',
 ];
 
+export function isEventSiteApplication(app: { source?: string | null }): boolean {
+  return app.source === 'event_website';
+}
+
+export function getAllowedStatusesForApplication(app: {
+  source?: string | null;
+}): SiteApplicationStatus[] {
+  if (isEventSiteApplication(app)) {
+    return ['pending', 'accepted', 'rejected'];
+  }
+  return SITE_APPLICATION_STATUSES;
+}
+
 /** Maksimum ek dosya boyutu (50 MB) */
 export const SITE_APPLICATION_MAX_FILE_BYTES = 50 * 1024 * 1024;
 
