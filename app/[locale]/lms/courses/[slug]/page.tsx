@@ -14,6 +14,8 @@ import { useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { enrollUser, getUserEnrollment } from '@/app/lib/lms/enrollmentService';
+import HtmlContent from '@/app/components/lms/HtmlContent';
+import { processCourseSectionsForDisplay, type DisplaySection } from '@/app/lib/lms/courseContent';
 
 // Supabase client
 const supabase = createClientComponentClient({
@@ -53,50 +55,9 @@ interface Course {
   is_registration_open: boolean;
 }
 
-interface CourseSection {
-  id: string;
-  course_id: string;
-  title: string;
-  description?: string;
-  order_index: number;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-  lessons: CourseLesson[];
-}
-
-interface CourseLesson {
-  id: string;
-  section_id: string;
-  title: string;
-  description?: string;
-  lesson_type: string;
-  order_index: number;
-  duration_minutes?: number;
-  is_active: boolean;
-  is_locked: boolean;
-  is_completed: boolean;
-  created_at: string;
-  updated_at: string;
-  videos: CourseVideo[];
-}
-
-interface CourseVideo {
-  id: string;
-  lesson_id: string;
-  title: string;
-  vimeo_id?: string;
-  video_url?: string;
-  vimeo_embed_url?: string;
-  vimeo_hash?: string;
-  thumbnail_url?: string;
-  duration_seconds?: number;
-  width: number;
-  height: number;
-  description?: string;
-  order_index: number;
-  created_at: string;
-  updated_at: string;
+interface CourseSection extends DisplaySection {
+  created_at?: string;
+  updated_at?: string;
 }
 
 // Localized texts
@@ -287,12 +248,18 @@ const SectionComponent = ({
   section, 
   isExpanded, 
   onToggle,
-  t 
+  t,
+  locale,
+  courseSlug,
+  isEnrolled,
 }: { 
   section: CourseSection;
   isExpanded: boolean;
   onToggle: () => void;
   t: typeof texts.tr;
+  locale: string;
+  courseSlug: string;
+  isEnrolled: boolean;
 }) => {
   const totalLessons = section.lessons.length;
   const totalDuration = section.lessons.reduce((acc, lesson) => {
@@ -343,6 +310,11 @@ const SectionComponent = ({
                   <h4 className="font-medium text-neutral-900 dark:text-neutral-100">
                     {lesson.title}
                   </h4>
+                  {lesson.videos.length > 0 && (
+                    <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
+                      {lesson.videos.map((video) => video.title).join(' · ')}
+                    </p>
+                  )}
                   {lesson.description && (
                     <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1 line-clamp-1">
                       {lesson.description}
@@ -361,12 +333,23 @@ const SectionComponent = ({
                     {lesson.videos.length}
                   </span>
                 )}
-                <button 
-                  className="p-1 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded"
-                  title="Dersi Görüntüle"
-                >
-                  <Eye className="w-4 h-4" />
-                </button>
+                {isEnrolled && lesson.videos.length > 0 ? (
+                  <Link
+                    href={`/${locale}/watch/${courseSlug}?lesson=${lesson.id}`}
+                    className="p-1 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded text-blue-600"
+                    title="Videoyu İzle"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </Link>
+                ) : (
+                  <button 
+                    className="p-1 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded opacity-40 cursor-default"
+                    title="Video yok"
+                    disabled
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -435,20 +418,10 @@ export default function CourseDetailPage({ params }: { params: Promise<{ locale:
           return;
         }
         
-        // Process the data
-        const processedSections: CourseSection[] = (courseData.myuni_course_sections || [])
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .map((section: any) => ({
-            ...section,
-            lessons: (section.myuni_course_lessons || [])
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              .map((lesson: any) => ({
-                ...lesson,
-                videos: lesson.myuni_videos || []
-              }))
-              .sort((a: CourseLesson, b: CourseLesson) => a.order_index - b.order_index)
-          }))
-          .sort((a: CourseSection, b: CourseSection) => a.order_index - b.order_index);
+        const processedSections = processCourseSectionsForDisplay(
+          courseData.myuni_course_sections,
+          { publicView: false }
+        ) as CourseSection[];
         
         // Remove nested data from course object
         const cleanCourse = {
@@ -666,9 +639,9 @@ export default function CourseDetailPage({ params }: { params: Promise<{ locale:
             )}
 
             {course.description && (
-              <p className="text-neutral-600 dark:text-neutral-400 mb-6">
-                {course.description}
-              </p>
+              <div className="mb-6">
+                <HtmlContent html={course.description} />
+              </div>
             )}
 
             {/* Course Stats */}
@@ -726,6 +699,9 @@ export default function CourseDetailPage({ params }: { params: Promise<{ locale:
                     isExpanded={expandedSections.has(section.id)}
                     onToggle={() => toggleSection(section.id)}
                     t={t}
+                    locale={locale}
+                    courseSlug={course.slug}
+                    isEnrolled={isEnrolled}
                   />
                 ))}
               </div>

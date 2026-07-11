@@ -7,6 +7,7 @@ import {
   validateAttachmentFile,
 } from '@/app/lib/siteApplications';
 import { requireCaptchaInProduction, verifyHCaptcha } from '@/app/lib/siteApplications/captcha';
+import { getApplicationTypeSlug, resolveActiveForm } from '@/app/lib/siteApplications/resolveForm';
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL2;
@@ -21,24 +22,21 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const formSlug = String(body.formSlug || '').trim();
+    const eventSlug = String(body.eventSlug || '').trim();
     const locale = body.locale === 'en' ? 'en' : 'tr';
 
-    if (!formSlug) {
-      return NextResponse.json({ error: 'Form slug required' }, { status: 400 });
+    if (!formSlug && !eventSlug) {
+      return NextResponse.json({ error: 'Form slug or event slug required' }, { status: 400 });
     }
 
     const supabase = getSupabase();
-    const slugColumn = locale === 'en' ? 'slug_en' : 'slug_tr';
-    const { data: form, error: formError } = await supabase
-      .from(siteApplicationsDb.forms)
-      .select('id, allows_attachment')
-      .eq(slugColumn, formSlug)
-      .eq('is_active', true)
-      .single();
+    const resolved = await resolveActiveForm(supabase, { locale, formSlug, eventSlug });
 
-    if (formError || !form) {
+    if (!resolved) {
       return NextResponse.json({ error: 'Form not found' }, { status: 400 });
     }
+
+    const { form } = resolved;
 
     if (!form.allows_attachment) {
       return NextResponse.json({ error: 'Attachments not allowed' }, { status: 400 });
@@ -71,9 +69,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const storageSlug = getApplicationTypeSlug(form, locale);
     const draftId = randomUUID();
     const { bucket, objectPath, storageRef } = buildAttachmentStoragePath(
-      formSlug,
+      storageSlug,
       draftId,
       fileName
     );

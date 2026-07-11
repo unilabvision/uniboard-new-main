@@ -14,22 +14,10 @@ import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import Image from 'next/image';
+import { sanitizeHtml } from '@/app/lib/lms/htmlContent';
 
 // Utility function to sanitize HTML content
-const sanitizeHtml = (htmlString: string) => {
-  // Remove script tags and their content
-  let sanitized = htmlString.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-  
-  // Remove on* event handlers
-  sanitized = sanitized.replace(/\s*on\w+\s*=\s*"[^"]*"/gi, '');
-  sanitized = sanitized.replace(/\s*on\w+\s*=\s*'[^']*'/gi, '');
-  
-  // Remove style attributes for security
-  sanitized = sanitized.replace(/\s*style\s*=\s*"[^"]*"/gi, '');
-  sanitized = sanitized.replace(/\s*style\s*=\s*'[^']*'/gi, '');
-  
-  return sanitized;
-};
+const sanitizeHtmlForCard = sanitizeHtml;
 
 // Supabase client
 const supabase = createClientComponentClient({
@@ -443,7 +431,7 @@ const CourseCard = ({
         {course.description && (
           <div 
             className="text-sm text-neutral-600 dark:text-neutral-400 line-clamp-2 mb-3 prose prose-sm prose-neutral dark:prose-invert max-w-none [&>*]:mb-1 [&>*:last-child]:mb-0"
-            dangerouslySetInnerHTML={{ __html: sanitizeHtml(course.description) }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtmlForCard(course.description) }}
           />
         )}
         

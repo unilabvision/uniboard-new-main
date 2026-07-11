@@ -31,7 +31,10 @@ import {
 
 interface DynamicSiteApplicationFormProps {
   locale: string;
-  formSlug: string;
+  /** Form slug from /basvuru/{slug} or legacy pages */
+  formSlug?: string;
+  /** Event slug from /etkinlik/{eventSlug}/basvuru */
+  eventSlug?: string;
 }
 
 const ui = {
@@ -51,6 +54,7 @@ const ui = {
     attachmentHint: `PDF, Word, görsel vb. — en fazla ${formatFileSize(SITE_APPLICATION_MAX_FILE_BYTES)}. Dosyalar 20 gün sonra otomatik silinir.`,
     attachmentDrop: 'Dosyayı buraya bırakın veya tıklayın',
     uploadFailed: 'Dosya yüklenemedi.',
+    validationError: 'Lütfen zorunlu alanları doldurun ve güvenlik doğrulamasını tamamlayın.',
     sideTitle: 'Başvurun için hazır mısın?',
     sideSubtitle: 'Birkaç dakikada tamamla — sana döneceğiz.',
     step1: 'Bilgilerini doldur',
@@ -77,6 +81,7 @@ const ui = {
     attachmentHint: `PDF, Word, images, etc. — max ${formatFileSize(SITE_APPLICATION_MAX_FILE_BYTES)}. Files are automatically deleted after 20 days.`,
     attachmentDrop: 'Drop a file here or click to browse',
     uploadFailed: 'File upload failed.',
+    validationError: 'Please fill required fields and complete the security check.',
     sideTitle: 'Ready to apply?',
     sideSubtitle: 'Takes just a few minutes — we will get back to you.',
     step1: 'Fill in your details',
@@ -122,12 +127,15 @@ function FormShell({ children }: { children: React.ReactNode }) {
 export default function DynamicSiteApplicationForm({
   locale,
   formSlug,
+  eventSlug,
 }: DynamicSiteApplicationFormProps) {
   const t = ui[locale as keyof typeof ui] || ui.tr;
   const captchaRef = useRef<HCaptcha>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
   const [formConfig, setFormConfig] = useState<PublicSiteApplicationForm | null>(null);
+  const [resolvedFormSlug, setResolvedFormSlug] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [values, setValues] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -145,23 +153,34 @@ export default function DynamicSiteApplicationForm({
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch(
-          `/api/site-applications/public/forms/${encodeURIComponent(formSlug)}?locale=${locale}`
-        );
+        const url = eventSlug
+          ? `/api/site-applications/public/forms/by-event/${encodeURIComponent(eventSlug)}?locale=${locale}`
+          : `/api/site-applications/public/forms/${encodeURIComponent(formSlug || '')}?locale=${locale}`;
+
+        const res = await fetch(url);
         if (!res.ok) {
           setFormConfig(null);
+          setResolvedFormSlug('');
           return;
         }
         const data = await res.json();
         setFormConfig(data.form);
+        setResolvedFormSlug(data.form?.slug || formSlug || '');
       } catch {
         setFormConfig(null);
+        setResolvedFormSlug('');
       } finally {
         setLoading(false);
       }
     };
-    load();
-  }, [formSlug, locale]);
+    if (formSlug || eventSlug) {
+      setLoading(true);
+      load();
+    } else {
+      setFormConfig(null);
+      setLoading(false);
+    }
+  }, [formSlug, eventSlug, locale]);
 
   const progress = useMemo(() => {
     if (!formConfig) return 0;
@@ -172,7 +191,7 @@ export default function DynamicSiteApplicationForm({
   }, [formConfig, values]);
 
   const validateClient = () => {
-    if (!formConfig) return false;
+    if (!formConfig) return { valid: false, fieldErrors: {} as Record<string, string> };
     const nextErrors: Record<string, string> = {};
 
     for (const field of formConfig.fields) {
@@ -185,12 +204,27 @@ export default function DynamicSiteApplicationForm({
       }
     }
 
-    if (!captchaToken && process.env.NODE_ENV === 'production') {
+    const captchaRequired =
+      process.env.NODE_ENV === 'production' ||
+      Boolean(process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY);
+
+    if (captchaRequired && !captchaToken) {
       nextErrors.captcha = t.captcha;
     }
 
     setErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
+    return { valid: Object.keys(nextErrors).length === 0, fieldErrors: nextErrors };
+  };
+
+  const scrollToFirstError = (errorKeys: Record<string, string>) => {
+    const firstKey = Object.keys(errorKeys)[0];
+    if (!firstKey || !formRef.current) return;
+    if (firstKey === 'captcha') {
+      formRef.current.querySelector('[data-captcha]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    const el = formRef.current.querySelector(`[data-field-key="${firstKey}"]`);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
   const handleFile = (file: File | undefined) => {
@@ -211,7 +245,14 @@ export default function DynamicSiteApplicationForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formConfig || !validateClient()) return;
+    if (!formConfig) return;
+
+    const { valid, fieldErrors } = validateClient();
+    if (!valid) {
+      setGeneralError(t.validationError);
+      scrollToFirstError(fieldErrors);
+      return;
+    }
 
     setSubmitting(true);
     setGeneralError(null);
@@ -224,7 +265,8 @@ export default function DynamicSiteApplicationForm({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            formSlug,
+            formSlug: resolvedFormSlug || formSlug,
+            eventSlug: eventSlug || undefined,
             locale,
             fileName: attachment.name,
             fileSize: attachment.size,
@@ -254,7 +296,8 @@ export default function DynamicSiteApplicationForm({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          formSlug,
+          formSlug: resolvedFormSlug || formSlug,
+          eventSlug: eventSlug || undefined,
           locale,
           fields: values,
           honeypot,
@@ -264,7 +307,22 @@ export default function DynamicSiteApplicationForm({
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || t.error);
+      if (!res.ok) {
+        if (data.fieldErrors && typeof data.fieldErrors === 'object') {
+          const mapped: Record<string, string> = {};
+          for (const [key, code] of Object.entries(data.fieldErrors as Record<string, string>)) {
+            mapped[key] =
+              code === 'required'
+                ? t.required
+                : code === 'invalid_email'
+                  ? t.invalidEmail
+                  : t.error;
+          }
+          setErrors(mapped);
+          scrollToFirstError(mapped);
+        }
+        throw new Error(data.error || t.error);
+      }
 
       setSuccess(true);
       captchaRef.current?.resetCaptcha();
@@ -380,6 +438,7 @@ export default function DynamicSiteApplicationForm({
         {/* Form kartı */}
         <div className="lg:col-span-8 order-2">
           <form
+            ref={formRef}
             onSubmit={handleSubmit}
             className="rounded-3xl border border-neutral-200/80 dark:border-neutral-700 bg-white/90 dark:bg-neutral-800/70 backdrop-blur-sm shadow-xl shadow-neutral-200/30 dark:shadow-none overflow-hidden"
           >
@@ -420,7 +479,7 @@ export default function DynamicSiteApplicationForm({
               {formConfig.fields.map((field) => {
                 const Icon = fieldIcon[field.field_type] || FileText;
                 return (
-                  <div key={field.field_key} className="group">
+                  <div key={field.field_key} className="group" data-field-key={field.field_key}>
                     <label className="flex items-center gap-2 text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
                       <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#990000]/8 text-[#990000] group-focus-within:bg-[#990000]/15 transition-colors">
                         <Icon className="w-3.5 h-3.5" />
@@ -534,7 +593,7 @@ export default function DynamicSiteApplicationForm({
                 </div>
               )}
 
-              <div className="rounded-2xl bg-neutral-50/80 dark:bg-neutral-900/40 border border-neutral-100 dark:border-neutral-700 p-4">
+              <div className="rounded-2xl bg-neutral-50/80 dark:bg-neutral-900/40 border border-neutral-100 dark:border-neutral-700 p-4" data-captcha>
                 <div className="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400 mb-3">
                   <Shield className="w-4 h-4 text-[#990000]" />
                   {t.spamNote}

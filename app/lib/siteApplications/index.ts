@@ -6,3 +6,4 @@ export * from './forms';
 export * from './validation';
 export * from './attachmentDownload';
 export * from './events';
+export * from './resolveForm';

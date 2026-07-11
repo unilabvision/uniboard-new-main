@@ -7,6 +7,8 @@ import { useRouter, useParams } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { generateCourseSlug } from '@/app/lib/lms/courseUtils';
+import { normalizeDescriptionForStorage } from '@/app/lib/lms/htmlContent';
+import HtmlDescriptionEditor from '@/app/components/lms/HtmlDescriptionEditor';
 
 const supabase = createClientComponentClient({
   supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL2 || 'https://emfvwpztyuykqtepnsfp.supabase.co',
@@ -41,10 +43,11 @@ const texts = {
     },
     placeholders: {
       title: 'Örn: Yapay Zeka Temelleri',
-      description: 'Kursun kısa açıklaması...',
+      description: 'Kursun detaylı açıklamasını yazın...',
       instructor: 'Eğitmen adı soyadı',
       duration: 'Örn: 8 hafta',
     },
+    descriptionHelper: 'Metni biçimlendirebilirsiniz. Siteye HTML olarak kaydedilir ve öğrencilere zengin içerik olarak gösterilir.',
   },
   en: {
     title: 'Create New Course',
@@ -73,10 +76,11 @@ const texts = {
     },
     placeholders: {
       title: 'e.g. AI Fundamentals',
-      description: 'Short course description...',
+      description: 'Write a detailed course description...',
       instructor: 'Instructor full name',
       duration: 'e.g. 8 weeks',
     },
+    descriptionHelper: 'Format your text freely. It is saved as HTML and shown to students as rich content.',
   },
 };
 
@@ -113,7 +117,7 @@ export default function CreateCoursePage() {
         .insert([{
           slug,
           title: title.trim(),
-          description: description.trim() || null,
+          description: normalizeDescriptionForStorage(description),
           instructor_name: instructorName.trim() || null,
           course_type: courseType,
           level,
@@ -232,12 +236,11 @@ export default function CreateCoursePage() {
             <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
               {t.courseDescription}
             </label>
-            <textarea
+            <HtmlDescriptionEditor
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={setDescription}
               placeholder={t.placeholders.description}
-              rows={4}
-              className="w-full px-4 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 focus:ring-2 focus:ring-[#990000] focus:border-transparent resize-none"
+              helperText={t.descriptionHelper}
             />
           </div>
 

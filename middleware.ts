@@ -86,6 +86,8 @@ const isPublicRoute = createRouteMatcher([
   '/en/event-application(.*)',
   '/tr/ekip-basvuru(.*)',
   '/en/team-application(.*)',
+  '/tr/etkinlik/(.*)/basvuru(.*)',
+  '/en/event/(.*)/basvuru(.*)',
   // API routes
   '/api/public(.*)',
   '/api/sitemap.xml',
@@ -229,6 +231,8 @@ const isValidRoute = createRouteMatcher([
   '/en/event-application(.*)',
   '/tr/ekip-basvuru(.*)',
   '/en/team-application(.*)',
+  '/tr/etkinlik/(.*)/basvuru(.*)',
+  '/en/event/(.*)/basvuru(.*)',
   '/tr/search(.*)',
   '/en/search(.*)',
   '/tr/gizlilik(.*)',

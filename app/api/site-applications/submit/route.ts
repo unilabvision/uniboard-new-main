@@ -6,6 +6,10 @@ import {
   extractContactFromSubmission,
   validateSubmissionFields,
 } from '@/app/lib/siteApplications/validation';
+import {
+  getApplicationTypeSlug,
+  resolveActiveForm,
+} from '@/app/lib/siteApplications/resolveForm';
 import type { SiteApplicationFormField } from '@/app/types/siteApplicationForms';
 
 function getSupabase() {
@@ -28,11 +32,12 @@ export async function POST(request: NextRequest) {
     }
 
     const formSlug = String(body.formSlug || '').trim();
+    const eventSlug = String(body.eventSlug || '').trim();
     const locale = body.locale === 'en' ? 'en' : 'tr';
     const fieldValues = (body.fields || {}) as Record<string, unknown>;
 
-    if (!formSlug) {
-      return NextResponse.json({ error: 'Form slug required' }, { status: 400 });
+    if (!formSlug && !eventSlug) {
+      return NextResponse.json({ error: 'Form slug or event slug required' }, { status: 400 });
     }
 
     const captchaToken = body.hCaptchaToken as string | undefined;
@@ -47,18 +52,13 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = getSupabase();
-    const slugColumn = locale === 'en' ? 'slug_en' : 'slug_tr';
+    const resolved = await resolveActiveForm(supabase, { locale, formSlug, eventSlug });
 
-    const { data: form, error: formError } = await supabase
-      .from(siteApplicationsDb.forms)
-      .select('*')
-      .eq(slugColumn, formSlug)
-      .eq('is_active', true)
-      .single();
-
-    if (formError || !form) {
+    if (!resolved) {
       return NextResponse.json({ error: 'Form not found or inactive' }, { status: 404 });
     }
+
+    const { form, event } = resolved;
 
     const { data: fields, error: fieldsError } = await supabase
       .from(siteApplicationsDb.formFields)
@@ -93,21 +93,33 @@ export async function POST(request: NextRequest) {
     }
 
     const contact = extractContactFromSubmission(typedFields, normalized);
+    const applicationType = getApplicationTypeSlug(form, locale);
 
     const row = {
       form_id: form.id,
-      application_type: formSlug,
+      application_type: applicationType,
       first_name: contact.firstName,
       last_name: contact.lastName,
       email: contact.email,
       phone: contact.phone,
       message: typeof normalized.message === 'string' ? normalized.message : null,
       motivation: typeof normalized.motivation === 'string' ? normalized.motivation : null,
+      event_name: event?.title || (typeof normalized.event_name === 'string' ? normalized.event_name : null),
+      event_date: typeof normalized.event_date === 'string' ? normalized.event_date : null,
+      participant_count:
+        typeof normalized.participant_count === 'number' ? normalized.participant_count : null,
+      organization: typeof normalized.organization === 'string' ? normalized.organization : null,
+      role_interest: typeof normalized.role_interest === 'string' ? normalized.role_interest : null,
+      experience: typeof normalized.experience === 'string' ? normalized.experience : null,
+      portfolio_url: typeof normalized.portfolio_url === 'string' ? normalized.portfolio_url : null,
       locale,
-      source: 'website',
+      source: event ? 'event_website' : 'website',
       user_agent: request.headers.get('user-agent'),
       status: 'pending',
-      submission_data: normalized,
+      submission_data: {
+        ...normalized,
+        ...(event ? { event_slug: event.slug, event_title: event.title } : {}),
+      },
       attachment_file_name: attachmentFileName,
       attachment_storage_path: attachmentStoragePath,
       attachment_mime_type: attachmentMimeType,

@@ -18,6 +18,8 @@ import QuizUploadModal from '@/app/components/lms/QuizUploadModal';
 import ModuleSelectionModal from '@/app/components/lms/ModuleSelectionModal';
 import { Course, CourseSection, CourseLesson, CourseVideo, CourseNote, CourseQuiz, ModuleType } from '@/app/types/course';
 import { buildCourseUpdatePayload } from '@/app/lib/lms/courseUtils';
+import { normalizeDescriptionForStorage } from '@/app/lib/lms/htmlContent';
+import HtmlDescriptionEditor from '@/app/components/lms/HtmlDescriptionEditor';
 
 // Supabase client
 const supabase = createClientComponentClient({
@@ -163,7 +165,10 @@ export default function EditCoursePage() {
       
       const { error } = await supabase
         .from('myuni_courses')
-        .update(buildCourseUpdatePayload(course))
+        .update(buildCourseUpdatePayload({
+          ...course,
+          description: normalizeDescriptionForStorage(course.description || '') || undefined,
+        }))
         .eq('id', courseId);
       
       if (error) throw error;
@@ -352,11 +357,11 @@ export default function EditCoursePage() {
                   <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
                     {t.courseDescription}
                   </label>
-                  <textarea
+                  <HtmlDescriptionEditor
                     value={course.description || ''}
-                    onChange={(e) => setCourse({ ...course, description: e.target.value })}
-                    rows={4}
-                    className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 focus:ring-2 focus:ring-[#990000] focus:border-transparent"
+                    onChange={(html) => setCourse({ ...course, description: html })}
+                    placeholder="Kurs açıklamasını yazın..."
+                    helperText="Biçimlendirilmiş metin HTML olarak kaydedilir ve kurs sayfasında zengin içerik olarak gösterilir."
                   />
                 </div>
                 
@@ -574,6 +579,14 @@ const CourseContentManager = ({
   // Lesson editing
   const [editingLesson, setEditingLesson] = useState<string | null>(null);
   const [editingLessonTitle, setEditingLessonTitle] = useState('');
+  const [addingLessonSectionId, setAddingLessonSectionId] = useState<string | null>(null);
+  const [newLessonTitle, setNewLessonTitle] = useState('');
+
+  const startAddingLesson = (sectionId: string) => {
+    setAddingLessonSectionId(sectionId);
+    setNewLessonTitle('');
+    setExpandedSections((prev) => new Set([...prev, sectionId]));
+  };
 
   // Add new section
   const addSection = async () => {
@@ -746,13 +759,9 @@ const CourseContentManager = ({
     }
   };
 
-  // Add new lesson
+  // Add new lesson (video dersi olarak — sitede bölüm altında görünür)
   const addLesson = async (sectionId: string) => {
-    const lessonTitle = prompt('Ders başlığını girin:');
-    if (!lessonTitle?.trim()) return;
-
-    const durationInput = prompt('Ders süresini dakika cinsinden girin (opsiyonel):');
-    const durationMinutes = durationInput ? parseInt(durationInput) : null;
+    if (!newLessonTitle.trim()) return;
 
     try {
       const section = sections.find(s => s.id === sectionId);
@@ -762,10 +771,9 @@ const CourseContentManager = ({
         .from('myuni_course_lessons')
         .insert([{
           section_id: sectionId,
-          title: lessonTitle,
+          title: newLessonTitle.trim(),
           description: '',
-          lesson_type: 'content',
-          duration_minutes: durationMinutes,
+          lesson_type: 'video',
           order_index: section.lessons.length,
           is_active: true,
           is_locked: false,
@@ -776,7 +784,6 @@ const CourseContentManager = ({
 
       if (error) throw error;
 
-      // Update local state
       const newLesson: CourseLesson = {
         ...data,
         videos: [],
@@ -789,6 +796,13 @@ const CourseContentManager = ({
           ? { ...s, lessons: [...s.lessons, newLesson] }
           : s
       ));
+
+      setAddingLessonSectionId(null);
+      setNewLessonTitle('');
+      setExpandedLessons((prev) => new Set([...prev, data.id]));
+      setSelectedLessonForModule(data.id);
+      setSelectedLessonTitle(data.title);
+      setShowVideoUpload(true);
       
     } catch (error) {
       console.error('Error adding lesson:', error);
@@ -1093,12 +1107,22 @@ const CourseContentManager = ({
   };
 
   // Handle video upload
-  const handleVideoUploaded = (uploadedVideo: CourseVideo) => {
+  const handleVideoUploaded = async (uploadedVideo: CourseVideo) => {
+    if (selectedLessonForModule) {
+      await supabase
+        .from('myuni_course_lessons')
+        .update({
+          lesson_type: 'video',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', selectedLessonForModule);
+    }
+
     setSections(sections.map(s => ({
       ...s,
       lessons: s.lessons.map(l => 
         l.id === selectedLessonForModule 
-          ? { ...l, videos: [...(l.videos || []), uploadedVideo] }
+          ? { ...l, lesson_type: 'video', videos: [...(l.videos || []), uploadedVideo] }
           : l
       )
     })));
@@ -1260,7 +1284,7 @@ const CourseContentManager = ({
             Kurs İçeriği
           </h3>
           <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
-            Bölümler, dersler ve içerikleri yönetin
+            Bölüm → Ders → Video yapısı. Eklediğiniz videolar sitede ilgili bölümün altında listelenir.
           </p>
         </div>
         
@@ -1402,9 +1426,9 @@ const CourseContentManager = ({
                     
                     {/* Add lesson */}
                     <button
-                      onClick={() => addLesson(section.id)}
+                      onClick={() => startAddingLesson(section.id)}
                       className="p-1 text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
-                      title="Ders Ekle"
+                      title="Video Dersi Ekle"
                     >
                       <Plus className="w-3 h-3" />
                     </button>
@@ -1424,15 +1448,46 @@ const CourseContentManager = ({
               {/* Section Content */}
               {expandedSections.has(section.id) && (
                 <div className="p-4 space-y-3">
-                  {section.lessons.length === 0 ? (
+                  {addingLessonSectionId === section.id && (
+                    <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg">
+                      <Video className="w-4 h-4 text-green-600 flex-shrink-0" />
+                      <input
+                        type="text"
+                        value={newLessonTitle}
+                        onChange={(e) => setNewLessonTitle(e.target.value)}
+                        placeholder="Ders başlığı (örn: Giriş Videosu)"
+                        className="flex-1 px-3 py-2 text-sm border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800"
+                        onKeyDown={(e) => e.key === 'Enter' && addLesson(section.id)}
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => addLesson(section.id)}
+                        disabled={!newLessonTitle.trim()}
+                        className="px-3 py-2 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg disabled:opacity-50"
+                      >
+                        Ekle & Video Yükle
+                      </button>
+                      <button
+                        onClick={() => {
+                          setAddingLessonSectionId(null);
+                          setNewLessonTitle('');
+                        }}
+                        className="p-2 text-neutral-500 hover:text-neutral-700"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+
+                  {section.lessons.length === 0 && addingLessonSectionId !== section.id ? (
                     <div className="text-center py-8 text-neutral-500 dark:text-neutral-400">
                       <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
                       <p className="text-sm">Bu bölümde henüz ders yok</p>
                       <button
-                        onClick={() => addLesson(section.id)}
+                        onClick={() => startAddingLesson(section.id)}
                         className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 mt-2"
                       >
-                        İlk dersi ekle
+                        İlk video dersini ekle
                       </button>
                     </div>
                   ) : (

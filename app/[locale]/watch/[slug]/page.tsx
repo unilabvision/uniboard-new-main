@@ -12,6 +12,7 @@ import {
 import { VimeoPlayer } from '@/app/components/lms/VimeoPlayer';
 import { ProgressService } from '@/app/[locale]/lms/progress/progressService';
 import { getUserEnrollment } from '@/app/lib/lms/enrollmentService';
+import { processCourseSectionsForDisplay } from '@/app/lib/lms/courseContent';
 
 const supabase = createClientComponentClient({
   supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL2 || 'https://emfvwpztyuykqtepnsfp.supabase.co',
@@ -117,9 +118,9 @@ export default function WatchCoursePage() {
           .select(`
             id, slug, title, description, instructor_name,
             myuni_course_sections (
-              id, title, order_index,
+              id, title, order_index, is_active,
               myuni_course_lessons (
-                id, section_id, title, order_index, is_locked, duration_minutes,
+                id, section_id, title, order_index, is_locked, is_active, duration_minutes,
                 myuni_videos ( id, lesson_id, title, vimeo_id, vimeo_hash, duration_seconds, order_index )
               )
             )
@@ -139,24 +140,13 @@ export default function WatchCoursePage() {
         }
         setIsEnrolled(true);
 
-        const processedSections: CourseSection[] = (courseData.myuni_course_sections || [])
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .map((section: any) => ({
-            id: section.id,
-            title: section.title,
-            order_index: section.order_index,
-            lessons: (section.myuni_course_lessons || [])
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              .map((lesson: any) => ({
-                ...lesson,
-                videos: (lesson.myuni_videos || []).sort((a: { order_index: number }, b: { order_index: number }) => a.order_index - b.order_index),
-              }))
-              .sort((a: { order_index: number }, b: { order_index: number }) => a.order_index - b.order_index),
-          }))
-          .sort((a: { order_index: number }, b: { order_index: number }) => a.order_index - b.order_index);
+        const processedSections = processCourseSectionsForDisplay(
+          courseData.myuni_course_sections,
+          { publicView: true }
+        );
 
         setCourse({ id: courseData.id, slug: courseData.slug, title: courseData.title, description: courseData.description, instructor_name: courseData.instructor_name });
-        setSections(processedSections);
+        setSections(processedSections as CourseSection[]);
 
         const lessonIds = processedSections.flatMap((s) => s.lessons.map((l) => l.id));
         if (lessonIds.length > 0) {
@@ -349,7 +339,12 @@ export default function WatchCoursePage() {
                     ) : (
                       <BookOpen className="w-4 h-4 text-neutral-400 flex-shrink-0" />
                     )}
-                    <span className="flex-1 truncate">{lesson.title}</span>
+                    <span className="flex-1 truncate">
+                      {lesson.title}
+                      {lesson.videos[0]?.title && lesson.videos[0].title !== lesson.title && (
+                        <span className="block text-xs text-neutral-500 truncate">{lesson.videos[0].title}</span>
+                      )}
+                    </span>
                     {isActive && <ChevronRight className="w-4 h-4 text-[#990000] flex-shrink-0" />}
                   </button>
                 );
