@@ -5,7 +5,6 @@ import {
   buildAttachmentStoragePath,
   validateAttachmentFile,
 } from '@/app/lib/siteApplications';
-import { requireCaptchaInProduction, verifyHCaptcha } from '@/app/lib/siteApplications/captcha';
 import { getApplicationTypeSlug, resolveActiveForm } from '@/app/lib/siteApplications/resolveForm';
 
 function getSupabase() {
@@ -55,17 +54,6 @@ export async function POST(request: NextRequest) {
     } as File);
     if (validationError) {
       return NextResponse.json({ error: validationError }, { status: 400 });
-    }
-
-    const captchaToken = body.hCaptchaToken as string | undefined;
-    if (!requireCaptchaInProduction(captchaToken)) {
-      return NextResponse.json({ error: 'Captcha required' }, { status: 400 });
-    }
-    if (captchaToken) {
-      const valid = await verifyHCaptcha(captchaToken);
-      if (!valid) {
-        return NextResponse.json({ error: 'Captcha verification failed' }, { status: 400 });
-      }
     }
 
     const storageSlug = getApplicationTypeSlug(form, locale, event);

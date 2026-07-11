@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import HCaptcha from '@hcaptcha/react-hcaptcha';
 import {
   AlertCircle,
   Loader,
@@ -50,14 +49,12 @@ const ui = {
     invalidUrl: 'Geçerli bir web adresi giriniz',
     invalidTel: 'Geçerli bir telefon numarası giriniz',
     invalidNumber: 'Geçerli bir sayı giriniz',
-    captcha: 'Lütfen robot olmadığınızı doğrulayın.',
-    spamNote: 'Bu form spam koruması içerir.',
     select: 'Seçiniz',
     attachment: 'Ek Dosya (isteğe bağlı)',
     attachmentHint: `PDF, Word, görsel vb. — en fazla ${formatFileSize(SITE_APPLICATION_MAX_FILE_BYTES)}. Dosyalar 20 gün sonra otomatik silinir.`,
     attachmentDrop: 'Dosyayı buraya bırakın veya tıklayın',
     uploadFailed: 'Dosya yüklenemedi.',
-    validationError: 'Lütfen zorunlu alanları doldurun ve güvenlik doğrulamasını tamamlayın.',
+    validationError: 'Lütfen zorunlu alanları doldurun.',
     sideTitle: 'Başvurun için hazır mısın?',
     sideSubtitle: 'Birkaç dakikada tamamla — sana döneceğiz.',
     step1: 'Bilgilerini doldur',
@@ -80,14 +77,12 @@ const ui = {
     invalidUrl: 'Please enter a valid URL',
     invalidTel: 'Please enter a valid phone number',
     invalidNumber: 'Please enter a valid number',
-    captcha: 'Please verify you are not a robot.',
-    spamNote: 'This form includes spam protection.',
     select: 'Select',
     attachment: 'Attachment (optional)',
     attachmentHint: `PDF, Word, images, etc. — max ${formatFileSize(SITE_APPLICATION_MAX_FILE_BYTES)}. Files are automatically deleted after 20 days.`,
     attachmentDrop: 'Drop a file here or click to browse',
     uploadFailed: 'File upload failed.',
-    validationError: 'Please fill required fields and complete the security check.',
+    validationError: 'Please fill in the required fields.',
     sideTitle: 'Ready to apply?',
     sideSubtitle: 'Takes just a few minutes — we will get back to you.',
     step1: 'Fill in your details',
@@ -136,7 +131,6 @@ export default function DynamicSiteApplicationForm({
   eventSlug,
 }: DynamicSiteApplicationFormProps) {
   const t = ui[locale as keyof typeof ui] || ui.tr;
-  const captchaRef = useRef<HCaptcha>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -148,13 +142,9 @@ export default function DynamicSiteApplicationForm({
   const [generalError, setGeneralError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [attachment, setAttachment] = useState<File | null>(null);
   const [honeypot, setHoneypot] = useState('');
   const [dragOver, setDragOver] = useState(false);
-
-  const siteKey =
-    process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY || '7bcc41da-10a0-4fd6-933e-ee34e3787d3a';
 
   useEffect(() => {
     const load = async () => {
@@ -238,14 +228,6 @@ export default function DynamicSiteApplicationForm({
       }
     }
 
-    const captchaRequired =
-      process.env.NODE_ENV === 'production' ||
-      Boolean(process.env.NEXT_PUBLIC_HCAPTCHA_SITE_KEY);
-
-    if (captchaRequired && !captchaToken) {
-      nextErrors.captcha = t.captcha;
-    }
-
     setErrors(nextErrors);
     return { valid: Object.keys(nextErrors).length === 0, fieldErrors: nextErrors };
   };
@@ -253,10 +235,6 @@ export default function DynamicSiteApplicationForm({
   const scrollToFirstError = (errorKeys: Record<string, string>) => {
     const firstKey = Object.keys(errorKeys)[0];
     if (!firstKey || !formRef.current) return;
-    if (firstKey === 'captcha') {
-      formRef.current.querySelector('[data-captcha]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return;
-    }
     const el = formRef.current.querySelector(`[data-field-key="${firstKey}"]`);
     el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
@@ -305,7 +283,6 @@ export default function DynamicSiteApplicationForm({
             fileName: attachment.name,
             fileSize: attachment.size,
             mimeType: attachment.type,
-            hCaptchaToken: captchaToken,
           }),
         });
         const uploadData = await uploadRes.json();
@@ -335,7 +312,6 @@ export default function DynamicSiteApplicationForm({
           locale,
           fields: values,
           honeypot,
-          hCaptchaToken: captchaToken,
           ...attachmentMeta,
         }),
       });
@@ -363,12 +339,8 @@ export default function DynamicSiteApplicationForm({
       }
 
       setSuccess(true);
-      captchaRef.current?.resetCaptcha();
-      setCaptchaToken(null);
     } catch (err) {
       setGeneralError(err instanceof Error ? err.message : t.error);
-      captchaRef.current?.resetCaptcha();
-      setCaptchaToken(null);
     } finally {
       setSubmitting(false);
     }
@@ -631,30 +603,6 @@ export default function DynamicSiteApplicationForm({
                   <p className="text-xs text-neutral-500 mt-2">{t.attachmentHint}</p>
                 </div>
               )}
-
-              <div className="rounded-2xl bg-neutral-50/80 dark:bg-neutral-900/40 border border-neutral-100 dark:border-neutral-700 p-4" data-captcha>
-                <div className="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400 mb-3">
-                  <Shield className="w-4 h-4 text-[#990000]" />
-                  {t.spamNote}
-                </div>
-                <HCaptcha
-                  ref={captchaRef}
-                  sitekey={siteKey}
-                  onVerify={(token) => {
-                    setCaptchaToken(token);
-                    setErrors((prev) => {
-                      if (!prev.captcha) return prev;
-                      const next = { ...prev };
-                      delete next.captcha;
-                      return next;
-                    });
-                  }}
-                  onExpire={() => setCaptchaToken(null)}
-                />
-                {errors.captcha && (
-                  <p className="text-sm text-red-600 mt-2">{errors.captcha}</p>
-                )}
-              </div>
 
               {generalError && (
                 <div className="flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 dark:bg-red-950/30 p-4 text-red-700 dark:text-red-300">

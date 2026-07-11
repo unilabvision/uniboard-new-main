@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { siteApplicationsDb, computeAttachmentExpiresAt } from '@/app/lib/siteApplications';
-import { requireCaptchaInProduction, verifyHCaptcha } from '@/app/lib/siteApplications/captcha';
 import {
   extractContactFromSubmission,
   validateSubmissionFields,
@@ -38,17 +37,6 @@ export async function POST(request: NextRequest) {
 
     if (!formSlug && !eventSlug) {
       return NextResponse.json({ error: 'Form slug or event slug required' }, { status: 400 });
-    }
-
-    const captchaToken = body.hCaptchaToken as string | undefined;
-    if (!requireCaptchaInProduction(captchaToken)) {
-      return NextResponse.json({ error: 'Captcha required' }, { status: 400 });
-    }
-    if (captchaToken) {
-      const valid = await verifyHCaptcha(captchaToken);
-      if (!valid) {
-        return NextResponse.json({ error: 'Captcha verification failed' }, { status: 400 });
-      }
     }
 
     const supabase = getSupabase();

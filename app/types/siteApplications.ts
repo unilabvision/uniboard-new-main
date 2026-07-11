@@ -51,7 +51,6 @@ export interface SiteApplicationSubmitPayload {
   locale?: string;
   fields: Record<string, unknown>;
   honeypot?: string;
-  hCaptchaToken?: string;
   attachmentStoragePath?: string;
   attachmentFileName?: string;
   attachmentMimeType?: string;
