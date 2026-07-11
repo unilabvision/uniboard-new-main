@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
-import { siteApplicationsDb } from '@/app/lib/siteApplications';
 import {
   buildAttachmentStoragePath,
   validateAttachmentFile,
