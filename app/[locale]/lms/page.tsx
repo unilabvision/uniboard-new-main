@@ -7,7 +7,7 @@ import {
   Edit2, Trash2, MoreVertical,
   PlayCircle, Calendar, Clock,
   Users, Video,
-  TrendingUp
+  TrendingUp, Check, X, Tag
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -15,6 +15,8 @@ import { useUser } from '@clerk/nextjs';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import Image from 'next/image';
 import { sanitizeHtml } from '@/app/lib/lms/htmlContent';
+import CourseEnrollmentPanel from '@/app/components/lms/CourseEnrollmentPanel';
+import { updateCoursePrices } from '@/app/lib/lms/enrollmentOverviewService';
 
 // Utility function to sanitize HTML content
 const sanitizeHtmlForCard = sanitizeHtml;
@@ -122,7 +124,15 @@ const texts = {
     },
     loading: "Yükleniyor...",
     error: "Veriler yüklenirken bir hata oluştu",
-    free: "Ücretsiz"
+    free: "Ücretsiz",
+    panelCourses: "Kurslar",
+    panelEnrollments: "Katılımcılar",
+    editPrice: "Fiyatı Düzenle",
+    savePrice: "Kaydet",
+    cancelPrice: "İptal",
+    priceSaved: "Fiyat güncellendi",
+    priceSaveError: "Fiyat kaydedilemedi",
+    originalPriceShort: "Liste"
   },
   en: {
     title: "Course Management",
@@ -182,7 +192,15 @@ const texts = {
     },
     loading: "Loading...",
     error: "An error occurred while loading data",
-    free: "Free"
+    free: "Free",
+    panelCourses: "Courses",
+    panelEnrollments: "Participants",
+    editPrice: "Edit Price",
+    savePrice: "Save",
+    cancelPrice: "Cancel",
+    priceSaved: "Price updated",
+    priceSaveError: "Could not save price",
+    originalPriceShort: "List"
   }
 };
 
@@ -308,15 +326,21 @@ const CourseCard = ({
   locale, 
   t,
   onEdit,
-  onDelete
+  onDelete,
+  onPriceUpdate
 }: { 
   course: Course;
   locale: string;
   t: typeof texts.tr;
   onEdit: (course: Course) => void;
   onDelete: (course: Course) => void;
+  onPriceUpdate: (courseId: string, price: number | null, originalPrice: number | null) => Promise<void>;
 }) => {
   const [showMenu, setShowMenu] = useState(false);
+  const [editingPrice, setEditingPrice] = useState(false);
+  const [priceDraft, setPriceDraft] = useState(String(course.price ?? 0));
+  const [originalPriceDraft, setOriginalPriceDraft] = useState(String(course.original_price ?? ''));
+  const [savingPrice, setSavingPrice] = useState(false);
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -334,6 +358,44 @@ const CourseCard = ({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showMenu]);
+
+  const startPriceEdit = () => {
+    setPriceDraft(String(course.price ?? 0));
+    setOriginalPriceDraft(course.original_price ? String(course.original_price) : '');
+    setEditingPrice(true);
+    setShowMenu(false);
+  };
+
+  const cancelPriceEdit = () => {
+    setEditingPrice(false);
+    setPriceDraft(String(course.price ?? 0));
+    setOriginalPriceDraft(course.original_price ? String(course.original_price) : '');
+  };
+
+  const savePriceEdit = async () => {
+    try {
+      setSavingPrice(true);
+      const nextPrice = priceDraft === '' ? 0 : Number(priceDraft);
+      const nextOriginal =
+        originalPriceDraft === '' ? null : Number(originalPriceDraft);
+
+      if (Number.isNaN(nextPrice) || (nextOriginal !== null && Number.isNaN(nextOriginal))) {
+        throw new Error(t.priceSaveError);
+      }
+
+      await onPriceUpdate(
+        course.id,
+        nextPrice,
+        nextOriginal
+      );
+      setEditingPrice(false);
+    } catch (error) {
+      console.error('Price update failed:', error);
+      alert(t.priceSaveError);
+    } finally {
+      setSavingPrice(false);
+    }
+  };
 
   return (
     <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden hover:shadow-lg transition-all duration-300">
@@ -381,7 +443,7 @@ const CourseCard = ({
           </button>
           
           {showMenu && (
-            <div className="absolute right-0 bottom-full mb-2 w-40 bg-white dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700 shadow-lg z-10">
+            <div className="absolute right-0 bottom-full mb-2 w-44 bg-white dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700 shadow-lg z-10">
               <Link
                 href={`/${locale}/lms/courses/${course.slug}`}
                 className="w-full px-3 py-2 text-left text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md flex items-center text-sm"
@@ -399,6 +461,13 @@ const CourseCard = ({
               >
                 <Edit2 className="w-3 h-3 mr-2" />
                 {t.editCourse}
+              </button>
+              <button
+                onClick={startPriceEdit}
+                className="w-full px-3 py-2 text-left text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-md flex items-center text-sm"
+              >
+                <Tag className="w-3 h-3 mr-2" />
+                {t.editPrice}
               </button>
               <button
                 onClick={() => {
@@ -464,27 +533,84 @@ const CourseCard = ({
         </div>
         
         {/* Price and Registration */}
-        <div className="flex items-center justify-between">
-          <div>
-            {course.price ? (
-              <div className="flex items-center space-x-2">
-                <span className="font-semibold text-lg text-neutral-900 dark:text-neutral-100">
-                  {formatPrice(course.price, locale)}
-                </span>
-                {course.original_price && course.original_price > course.price && (
-                  <span className="text-sm text-neutral-500 dark:text-neutral-400 line-through">
-                    {formatPrice(course.original_price, locale)}
-                  </span>
-                )}
+        <div className="flex items-start justify-between gap-2">
+          {editingPrice ? (
+            <div className="flex-1 space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] text-neutral-500 mb-1">{t.courseDetails.price}</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={priceDraft}
+                    onChange={(e) => setPriceDraft(e.target.value)}
+                    className="w-full px-2 py-1.5 text-sm border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-900"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-neutral-500 mb-1">{t.originalPriceShort}</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={originalPriceDraft}
+                    onChange={(e) => setOriginalPriceDraft(e.target.value)}
+                    className="w-full px-2 py-1.5 text-sm border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-900"
+                    placeholder="—"
+                  />
+                </div>
               </div>
-            ) : (
-              <span className="font-semibold text-lg text-green-600 dark:text-green-400">
-                {t.free}
-              </span>
-            )}
-          </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={savePriceEdit}
+                  disabled={savingPrice}
+                  className="inline-flex items-center px-2.5 py-1 text-xs rounded-md bg-[#990000] text-white disabled:opacity-50"
+                >
+                  <Check className="w-3 h-3 mr-1" />
+                  {savingPrice ? '...' : t.savePrice}
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelPriceEdit}
+                  disabled={savingPrice}
+                  className="inline-flex items-center px-2.5 py-1 text-xs rounded-md bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-200"
+                >
+                  <X className="w-3 h-3 mr-1" />
+                  {t.cancelPrice}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              {course.price ? (
+                <div className="flex items-center space-x-2">
+                  <span className="font-semibold text-lg text-neutral-900 dark:text-neutral-100">
+                    {formatPrice(course.price, locale)}
+                  </span>
+                  {course.original_price && course.original_price > course.price && (
+                    <span className="text-sm text-neutral-500 dark:text-neutral-400 line-through">
+                      {formatPrice(course.original_price, locale)}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <span className="font-semibold text-lg text-green-600 dark:text-green-400">
+                  {t.free}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={startPriceEdit}
+                className="mt-1 text-xs text-[#990000] hover:underline"
+              >
+                {t.editPrice}
+              </button>
+            </div>
+          )}
           
-          {course.course_type === 'live' && (
+          {course.course_type === 'live' && !editingPrice && (
             <div className={`px-2 py-1 rounded-full text-xs font-medium ${
               course.is_registration_open 
                 ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
@@ -617,6 +743,7 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState('date-desc');
   const [currentPage, setCurrentPage] = useState(1);
+  const [managementPanel, setManagementPanel] = useState<'courses' | 'enrollments'>('courses');
   const itemsPerPage = 12; // 4 columns x 3 rows grid
   
   // Delete modal states
@@ -875,6 +1002,25 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
     }
   };
 
+  const handlePriceUpdate = async (
+    courseId: string,
+    price: number | null,
+    originalPrice: number | null
+  ) => {
+    await updateCoursePrices(courseId, price, originalPrice);
+    setCourses((prev) =>
+      prev.map((course) =>
+        course.id === courseId
+          ? {
+              ...course,
+              price: price ?? 0,
+              original_price: originalPrice ?? undefined,
+            }
+          : course
+      )
+    );
+  };
+
   // Auth check
   if (!isLoaded) {
     return null;
@@ -925,6 +1071,42 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
           </div>
         </div>
 
+        {/* Management panel switch — preserves course list state when toggling */}
+        <div className="border-b border-neutral-200 dark:border-neutral-700 mb-6">
+          <nav className="flex gap-6">
+            <button
+              type="button"
+              onClick={() => setManagementPanel('courses')}
+              className={`flex items-center px-1 py-3 border-b-2 text-sm font-medium transition-colors ${
+                managementPanel === 'courses'
+                  ? 'border-[#990000] text-[#990000]'
+                  : 'border-transparent text-neutral-500 hover:text-neutral-700 dark:text-neutral-400'
+              }`}
+            >
+              <BookOpen className="w-4 h-4 mr-2" />
+              {t.panelCourses}
+            </button>
+            <button
+              type="button"
+              onClick={() => setManagementPanel('enrollments')}
+              className={`flex items-center px-1 py-3 border-b-2 text-sm font-medium transition-colors ${
+                managementPanel === 'enrollments'
+                  ? 'border-[#990000] text-[#990000]'
+                  : 'border-transparent text-neutral-500 hover:text-neutral-700 dark:text-neutral-400'
+              }`}
+            >
+              <Users className="w-4 h-4 mr-2" />
+              {t.panelEnrollments}
+            </button>
+          </nav>
+        </div>
+
+        {managementPanel === 'enrollments' ? (
+          <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4 sm:p-6">
+            <CourseEnrollmentPanel locale={locale} />
+          </div>
+        ) : (
+          <>
         {/* Search Bar */}
         <div className="relative mb-4">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-400 dark:text-neutral-500 w-4 h-4" />
@@ -1088,6 +1270,7 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
                   t={t}
                   onEdit={handleEditCourse}
                   onDelete={handleDeleteCourse}
+                  onPriceUpdate={handlePriceUpdate}
                 />
               ))}
             </div>
@@ -1105,6 +1288,8 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
             <div className="text-center mt-3 text-xs text-neutral-500 dark:text-neutral-400">
               {totalItems} kurs • {currentPage}/{totalPages} sayfa
             </div>
+          </>
+        )}
           </>
         )}
       </div>

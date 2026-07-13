@@ -4,11 +4,16 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   BookOpen, Award, Clock, 
   CheckCircle, Users,
-  Search
+  Search, X
 } from 'lucide-react';
 import { useUser } from '@clerk/nextjs';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import Image from 'next/image';
+import {
+  getEnrollmentOverview,
+  type CourseEnrollmentDetail,
+  type ModuleProgressItem,
+} from '@/app/lib/lms/enrollmentOverviewService';
 
 // Batch fetch multiple users
 const fetchMultipleClerkUsers = async (userIds: string[]) => {
@@ -138,7 +143,26 @@ const texts = {
     statusNotStarted: "Başlanmamış",
     statusEnrolled: "Kayıtlı",
     enrollmentDate: "Kayıt Tarihi",
-    loadingUserDetails: "Kullanıcı bilgileri yükleniyor..."
+    loadingUserDetails: "Kullanıcı bilgileri yükleniyor...",
+    studentDetailsTitle: "Öğrenci Detayı",
+    studentEmail: "E-posta",
+    modulesTitle: "Erişebildiği Modüller",
+    purchasedPackages: "Satın alınan paketler",
+    fullAccess: "Tam eğitim erişimi",
+    packageAccess: "Paket erişimi",
+    paymentInfo: "Ödeme bilgisi",
+    amountPaid: "Ödenen tutar",
+    discountCode: "İndirim kodu",
+    discountAmount: "İndirim tutarı",
+    noPayment: "Ödeme kaydı bulunamadı",
+    noDiscount: "İndirim kullanılmadı",
+    noModules: "Bu paket için eşleşen / erişilen modül bulunmuyor",
+    moduleCompleted: "Tamamlandı",
+    moduleInProgress: "Devam ediyor",
+    moduleNotStarted: "Başlanmamış",
+    close: "Kapat",
+    watchTime: "İzleme",
+    quizScore: "Quiz"
   },
   en: {
     title: "Course Progress Analytics",
@@ -173,7 +197,26 @@ const texts = {
     statusNotStarted: "Not Started",
     statusEnrolled: "Enrolled",
     enrollmentDate: "Enrollment Date",
-    loadingUserDetails: "Loading user details..."
+    loadingUserDetails: "Loading user details...",
+    studentDetailsTitle: "Student Details",
+    studentEmail: "Email",
+    modulesTitle: "Entitled Modules",
+    purchasedPackages: "Purchased packages",
+    fullAccess: "Full course access",
+    packageAccess: "Package access",
+    paymentInfo: "Payment info",
+    amountPaid: "Amount paid",
+    discountCode: "Discount code",
+    discountAmount: "Discount amount",
+    noPayment: "No payment record found",
+    noDiscount: "No discount used",
+    noModules: "No entitled modules matched for this purchase",
+    moduleCompleted: "Completed",
+    moduleInProgress: "In progress",
+    moduleNotStarted: "Not started",
+    close: "Close",
+    watchTime: "Watch time",
+    quizScore: "Quiz"
   }
 };
 
@@ -199,6 +242,13 @@ const formatDate = (dateString: string, locale: string) => {
     hour: '2-digit',
     minute: '2-digit'
   });
+};
+
+const formatMoney = (amount: number, locale: string) => {
+  return new Intl.NumberFormat(locale === 'tr' ? 'tr-TR' : 'en-US', {
+    style: 'currency',
+    currency: 'TRY',
+  }).format(amount || 0);
 };
 
 // Progress Circle Component
@@ -405,7 +455,7 @@ const StudentProgressRow = ({
               {student.user_name || 'Anonim Kullanıcı'}
             </div>
             <div className="text-sm text-neutral-600 dark:text-neutral-400 truncate">
-              {student.user_email}
+              {student.user_email ? student.user_email : 'E-posta yok'}
             </div>
             <div className="mt-1">
               {getStatusBadge(student.enrollment_status)}
@@ -469,6 +519,302 @@ const StudentProgressRow = ({
   );
 };
 
+// Student module details modal (was previously only console.log)
+const StudentDetailModal = ({
+  isOpen,
+  onClose,
+  student,
+  courseId,
+  locale,
+  t,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  student: StudentProgress | null;
+  courseId: string | null;
+  locale: string;
+  t: typeof texts.tr;
+}) => {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [courseDetail, setCourseDetail] = useState<CourseEnrollmentDetail | null>(null);
+
+  useEffect(() => {
+    if (!isOpen || !student || !courseId) {
+      setCourseDetail(null);
+      setError(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const overview = await getEnrollmentOverview({ courseId });
+        if (cancelled) return;
+        const person = overview.find((p) => p.user_id === student.user_id);
+        const course = person?.courses.find((c) => c.course_id === courseId) || null;
+        setCourseDetail(course);
+      } catch (err) {
+        if (cancelled) return;
+        console.error('Student detail load error:', err);
+        setError(err instanceof Error ? err.message : t.error);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, student, courseId, t.error]);
+
+  if (!isOpen || !student) return null;
+
+  const moduleStatus = (module: ModuleProgressItem) => {
+    if (module.is_completed) return { label: t.moduleCompleted, className: 'text-green-600 dark:text-green-400' };
+    if (module.watch_time_seconds > 0 || module.quiz_score !== null) {
+      return { label: t.moduleInProgress, className: 'text-amber-600 dark:text-amber-400' };
+    }
+    return { label: t.moduleNotStarted, className: 'text-neutral-500 dark:text-neutral-400' };
+  };
+
+  const resolvedEmail =
+    student.user_email ||
+    courseDetail?.payments.map((p) => p.buyer_email).find((email) => Boolean(email)) ||
+    '';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
+        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-neutral-200 dark:border-neutral-700">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="relative w-11 h-11 rounded-full overflow-hidden bg-neutral-200 dark:bg-neutral-700 shrink-0">
+              {student.user_image ? (
+                <Image src={student.user_image} alt={student.user_name} fill className="object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-sm font-medium">
+                  {student.user_name.slice(0, 2).toUpperCase()}
+                </div>
+              )}
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 truncate">
+                {student.user_name}
+              </h3>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                {t.studentDetailsTitle}
+              </p>
+              <p className="text-sm text-neutral-700 dark:text-neutral-300 mt-1 break-all">
+                <span className="text-neutral-500 dark:text-neutral-400">{t.studentEmail}: </span>
+                {resolvedEmail || '-'}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-700 text-neutral-500"
+            aria-label={t.close}
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="px-5 py-3 border-b border-neutral-200 dark:border-neutral-700 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+          <div className="sm:col-span-2">
+            <div className="text-xs text-neutral-500">{t.studentEmail}</div>
+            <div className="font-medium text-neutral-900 dark:text-neutral-100 break-all">
+              {resolvedEmail || '-'}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-neutral-500">{t.progress}</div>
+            <div className="font-medium text-neutral-900 dark:text-neutral-100">
+              %{Math.round(student.completion_percentage)}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-neutral-500">{t.modulesTitle}</div>
+            <div className="font-medium text-neutral-900 dark:text-neutral-100">
+              {student.completed_lessons}/{student.total_lessons}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-neutral-500">{t.totalWatchTime}</div>
+            <div className="font-medium text-neutral-900 dark:text-neutral-100">
+              {formatDuration(student.total_watch_time, locale)}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-neutral-500">{t.enrollmentDate}</div>
+            <div className="font-medium text-neutral-900 dark:text-neutral-100">
+              {student.enrolled_at ? formatDate(student.enrolled_at, locale) : '-'}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          {courseDetail && (
+            <div className="space-y-4">
+              <div>
+                <div className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-2">
+                  {t.purchasedPackages}
+                  {' · '}
+                  {courseDetail.has_full_access ? t.fullAccess : t.packageAccess}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {courseDetail.purchased_packages.map((pkg) => (
+                    <span
+                      key={`${pkg.tier_id || 'full'}-${pkg.title}`}
+                      className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium ${
+                        pkg.is_full_course
+                          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                          : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
+                      }`}
+                    >
+                      {pkg.title}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-md border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900/40 p-3">
+                <div className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-2">
+                  {t.paymentInfo}
+                </div>
+                {courseDetail.payments.length === 0 ? (
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400">{t.noPayment}</p>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
+                      <div>
+                        <div className="text-xs text-neutral-500">{t.amountPaid}</div>
+                        <div className="font-semibold text-neutral-900 dark:text-neutral-100">
+                          {formatMoney(courseDetail.total_paid, locale)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-neutral-500">{t.discountCode}</div>
+                        <div className="font-medium text-neutral-900 dark:text-neutral-100">
+                          {courseDetail.discount_codes.length > 0
+                            ? courseDetail.discount_codes.join(', ')
+                            : t.noDiscount}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-neutral-500">{t.discountAmount}</div>
+                        <div className="font-medium text-green-700 dark:text-green-400">
+                          {courseDetail.total_discount > 0
+                            ? `-${formatMoney(courseDetail.total_discount, locale)}`
+                            : '-'}
+                        </div>
+                      </div>
+                    </div>
+                    {courseDetail.payments.length > 1 && (
+                      <ul className="text-xs text-neutral-500 dark:text-neutral-400 space-y-1 pt-1 border-t border-neutral-200 dark:border-neutral-700">
+                        {courseDetail.payments.map((payment) => (
+                          <li key={`${payment.order_id}-${payment.tier_id || 'course'}`}>
+                            {formatMoney(payment.amount, locale)}
+                            {payment.discount_code ? ` · ${payment.discount_code}` : ''}
+                            {payment.paid_at ? ` · ${formatDate(payment.paid_at, locale)}` : ''}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div>
+          <h4 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100 mb-3 flex items-center gap-2">
+            <BookOpen className="w-4 h-4 text-[#990000]" />
+            {t.modulesTitle}
+            {courseDetail ? ` · ${courseDetail.course_title}` : ''}
+          </h4>
+
+          {loading ? (
+            <div className="space-y-2 animate-pulse">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="h-14 rounded-md bg-neutral-200 dark:bg-neutral-700" />
+              ))}
+            </div>
+          ) : error ? (
+            <div className="rounded-md border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-3 text-sm text-red-600 dark:text-red-400">
+              {error}
+            </div>
+          ) : !courseDetail || courseDetail.modules.length === 0 ? (
+            <div className="text-sm text-neutral-500 dark:text-neutral-400 py-6 text-center">
+              {t.noModules}
+            </div>
+          ) : (
+            <ul className="space-y-2">
+              {courseDetail.modules.map((module) => {
+                const status = moduleStatus(module);
+                return (
+                  <li
+                    key={module.lesson_id}
+                    className="rounded-md border border-neutral-200 dark:border-neutral-700 px-3 py-2.5 flex items-start justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        {module.is_completed ? (
+                          <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400 shrink-0" />
+                        ) : (
+                          <Clock className="w-4 h-4 text-amber-500 shrink-0" />
+                        )}
+                        <span className="text-sm font-medium text-neutral-900 dark:text-neutral-100 truncate">
+                          {module.lesson_title}
+                        </span>
+                      </div>
+                      <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1 ml-6">
+                        {module.section_title}
+                        {module.lesson_type ? ` · ${module.lesson_type}` : ''}
+                        {module.entitled_by && module.entitled_by.length > 0
+                          ? ` · ${module.entitled_by.join(', ')}`
+                          : ''}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0 text-xs">
+                      <div className={`font-medium ${status.className}`}>{status.label}</div>
+                      {module.watch_time_seconds > 0 && (
+                        <div className="text-neutral-500 mt-0.5">
+                          {t.watchTime}: {formatDuration(module.watch_time_seconds, locale)}
+                        </div>
+                      )}
+                      {module.quiz_score !== null && (
+                        <div className="text-neutral-500 mt-0.5">
+                          {t.quizScore}: %{Math.round(module.quiz_score)}
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          </div>
+        </div>
+
+        <div className="px-5 py-3 border-t border-neutral-200 dark:border-neutral-700 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 rounded-md bg-neutral-200 dark:bg-neutral-700 text-sm font-medium text-neutral-800 dark:text-neutral-100 hover:bg-neutral-300 dark:hover:bg-neutral-600"
+          >
+            {t.close}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Main Component
 export default function ProgressAnalyticsPage() {
   const [coursesOverview, setCoursesOverview] = useState<CourseOverview[]>([]);
@@ -479,6 +825,7 @@ export default function ProgressAnalyticsPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [courseSearchQuery, setCourseSearchQuery] = useState('');
+  const [detailStudent, setDetailStudent] = useState<StudentProgress | null>(null);
   const studentsCacheRef = useRef<Map<string, StudentProgress[]>>(new Map());
   const fetchAbortRef = useRef<AbortController | null>(null);
   const selectedCourseRef = useRef<string | null>(null);
@@ -950,8 +1297,8 @@ export default function ProgressAnalyticsPage() {
 
   // Handle student details view
   const handleViewStudentDetails = (userId: string) => {
-    // Implement student detail modal or navigation
-    console.log('View details for user:', userId);
+    const student = studentsProgress.find((s) => s.user_id === userId) || null;
+    setDetailStudent(student);
   };
 
   // Filter functions
@@ -1174,6 +1521,15 @@ export default function ProgressAnalyticsPage() {
           </div>
         )}
       </div>
+
+      <StudentDetailModal
+        isOpen={Boolean(detailStudent)}
+        onClose={() => setDetailStudent(null)}
+        student={detailStudent}
+        courseId={selectedCourse}
+        locale={locale}
+        t={t}
+      />
     </div>
   );
 }

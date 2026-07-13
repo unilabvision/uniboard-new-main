@@ -6,7 +6,7 @@ import {
   Eye, Calendar, PlayCircle, Plus, Trash2, 
   ChevronDown, ChevronRight,
   Video, FileText, Edit2, Check, X,
-  ArrowUp, ArrowDown, HelpCircle
+  ArrowUp, ArrowDown, HelpCircle, Users
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -16,6 +16,7 @@ import VideoUploadModal from '@/app/components/lms/VideoUploadModal';
 import NoteUploadModal from '@/app/components/lms/NoteUploadModal';
 import QuizUploadModal from '@/app/components/lms/QuizUploadModal';
 import ModuleSelectionModal from '@/app/components/lms/ModuleSelectionModal';
+import CourseEnrollmentPanel from '@/app/components/lms/CourseEnrollmentPanel';
 import { Course, CourseSection, CourseLesson, CourseVideo, CourseNote, CourseQuiz, ModuleType } from '@/app/types/course';
 import { buildCourseUpdatePayload } from '@/app/lib/lms/courseUtils';
 import { normalizeDescriptionForStorage } from '@/app/lib/lms/htmlContent';
@@ -61,7 +62,9 @@ const texts = {
     saving: "Kaydediliyor...",
     saved: "Kurs başarıyla kaydedildi",
     error: "Bir hata oluştu",
-    notFound: "Kurs bulunamadı"
+    notFound: "Kurs bulunamadı",
+    participants: "Katılımcılar",
+    courseContent: "Kurs İçeriği"
   }
 };
 
@@ -72,7 +75,7 @@ export default function EditCoursePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'info' | 'content' | 'settings'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'content' | 'settings' | 'participants'>('info');
   
   const params = useParams();
   const { user: clerkUser, isLoaded } = useUser();
@@ -303,12 +306,13 @@ export default function EditCoursePage() {
           <nav className="flex space-x-8">
             {[
               { key: 'info', label: t.courseInfo, icon: BookOpen },
-              { key: 'content', label: 'Kurs İçeriği', icon: PlayCircle },
+              { key: 'content', label: t.courseContent, icon: PlayCircle },
+              { key: 'participants', label: t.participants, icon: Users },
               { key: 'settings', label: t.liveSettings, icon: Calendar }
             ].map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
-                onClick={() => setActiveTab(key as 'info' | 'content' | 'settings')}
+                onClick={() => setActiveTab(key as 'info' | 'content' | 'settings' | 'participants')}
                 className={`flex items-center px-1 py-4 border-b-2 font-medium text-sm transition-colors ${
                   activeTab === key
                     ? 'border-[#990000] text-[#990000]'
@@ -448,6 +452,14 @@ export default function EditCoursePage() {
               courseId={courseId}
               sections={sections}
               setSections={setSections}
+            />
+          )}
+
+          {activeTab === 'participants' && (
+            <CourseEnrollmentPanel
+              locale={locale}
+              courseId={courseId}
+              showHeader={true}
             />
           )}
 
