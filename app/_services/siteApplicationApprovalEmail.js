@@ -4,6 +4,15 @@ import nodemailer from 'nodemailer';
  * Başvuru onay / etkinlik kayıt bilgilendirme e-postası.
  * - isEvent=true  → etkinlik kaydı maili (ekip başvurularından ayrı)
  * - isEvent=false → UNILAB ekip başvurusu onay maili
+ *
+ * @param {object} params
+ * @param {string} params.to
+ * @param {string} [params.firstName]
+ * @param {string} [params.lastName]
+ * @param {string} [params.locale]
+ * @param {string | null} [params.eventName]
+ * @param {boolean} [params.isEvent]
+ * @returns {Promise<{ success: boolean, messageId?: string, error?: string }>}
  */
 export async function sendSiteApplicationApprovalEmail({
   to,
