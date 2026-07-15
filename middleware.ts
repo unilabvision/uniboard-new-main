@@ -103,6 +103,7 @@ const isPublicRoute = createRouteMatcher([
   '/api/site-applications/files/upload-url',
   '/api/site-applications/payments/confirm',
   '/api/site-applications/cleanup',
+  '/api/certificates/issuance/sync',
   '/api/contact',
   '/api/newsletter',
   '/api/content',

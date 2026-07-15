@@ -25,6 +25,23 @@ export const EVENT_BANNER_WIDTH = 1920;
 export const EVENT_BANNER_HEIGHT = 600;
 export const EVENT_BANNER_ASPECT_CLASS = 'aspect-[1920/600]';
 
+/** Liste / kart küçük görseli için önerilen ölçü. */
+export const EVENT_THUMBNAIL_WIDTH = 800;
+export const EVENT_THUMBNAIL_HEIGHT = 450;
+
+/** Supabase Storage — myunilab bucket altında etkinlik görselleri. */
+export const EVENT_STORAGE_BUCKET =
+  process.env.NEXT_PUBLIC_EVENTS_STORAGE_BUCKET || 'myunilab';
+export const EVENT_STORAGE_FOLDER = 'events';
+export const EVENT_IMAGE_MAX_BYTES = 8 * 1024 * 1024; // 8 MB
+export const EVENT_IMAGE_MIME_TYPES = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+] as const;
+
 export function getPublicEventPath(locale: string, slug: string): string {
   const segment = locale === 'en' ? 'event' : 'etkinlik';
   return `/${locale}/${segment}/${slug}`;

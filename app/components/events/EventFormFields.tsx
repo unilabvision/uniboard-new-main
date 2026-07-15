@@ -1,18 +1,23 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { ImageIcon, Loader2, Upload, X } from 'lucide-react';
 import {
   EVENT_STATUSES,
   EVENT_TYPES,
   EVENT_BANNER_HEIGHT,
   EVENT_BANNER_WIDTH,
+  EVENT_IMAGE_MAX_BYTES,
+  EVENT_THUMBNAIL_HEIGHT,
+  EVENT_THUMBNAIL_WIDTH,
   getPublicEventUrl,
   parseBooleanField,
   slugifyEventTitle,
   toIsoDateTime,
   toIsoDateTimeOptional,
 } from '@/app/lib/events/config';
+import { formatEventImageSize } from '@/app/lib/events/storage';
 import type { EventStatus, EventType, MyuniEvent } from '@/app/types/events';
 
 const texts = {
@@ -43,10 +48,19 @@ const texts = {
     maxAttendees: 'Maks. katılımcı',
     registrationDeadline: 'Kayıt son tarihi',
     registrationOpen: 'Kayıt açık (kapalıysa sitede görünür, kayıt alınmaz)',
-    thumbnail: 'Küçük görsel URL',
-    banner: 'Banner URL',
-    bannerHint: 'Önerilen boyut: 1920×600 px (sitede tam oturur)',
+    thumbnail: 'Küçük görsel',
+    thumbnailHint: `Önerilen boyut: ${EVENT_THUMBNAIL_WIDTH}×${EVENT_THUMBNAIL_HEIGHT} px (liste / kart)`,
+    banner: 'Banner',
+    bannerHint: `Önerilen boyut: ${EVENT_BANNER_WIDTH}×${EVENT_BANNER_HEIGHT} px (sitede tam oturur)`,
     bannerPreview: 'Sitede görünüm önizlemesi',
+    uploadDrop: 'Sürükleyip bırakın veya seçin',
+    uploadFormats: `JPEG, PNG, WebP — en fazla ${formatEventImageSize(EVENT_IMAGE_MAX_BYTES)}`,
+    uploading: 'Yükleniyor…',
+    uploadError: 'Görsel yüklenemedi',
+    removeImage: 'Kaldır',
+    orUrl: 'veya URL yapıştır',
+    hideUrl: 'URL alanını gizle',
+    urlOptional: 'İsteğe bağlı — harici bir link de kullanabilirsiniz',
     organizerName: 'Organizatör',
     organizerEmail: 'Organizatör e-posta',
     organizerLinkedin: 'LinkedIn',
@@ -81,10 +95,19 @@ const texts = {
     maxAttendees: 'Max attendees',
     registrationDeadline: 'Registration deadline',
     registrationOpen: 'Registration open (if off, event stays visible; no new sign-ups)',
-    thumbnail: 'Thumbnail URL',
-    banner: 'Banner URL',
-    bannerHint: 'Recommended size: 1920×600 px (fits the site exactly)',
+    thumbnail: 'Thumbnail',
+    thumbnailHint: `Recommended size: ${EVENT_THUMBNAIL_WIDTH}×${EVENT_THUMBNAIL_HEIGHT} px (list / card)`,
+    banner: 'Banner',
+    bannerHint: `Recommended size: ${EVENT_BANNER_WIDTH}×${EVENT_BANNER_HEIGHT} px (fits the site exactly)`,
     bannerPreview: 'Site preview',
+    uploadDrop: 'Drag & drop or browse',
+    uploadFormats: `JPEG, PNG, WebP — max ${formatEventImageSize(EVENT_IMAGE_MAX_BYTES)}`,
+    uploading: 'Uploading…',
+    uploadError: 'Upload failed',
+    removeImage: 'Remove',
+    orUrl: 'or paste a URL',
+    hideUrl: 'Hide URL field',
+    urlOptional: 'Optional — you can also use an external link',
     organizerName: 'Organizer',
     organizerEmail: 'Organizer email',
     organizerLinkedin: 'LinkedIn',
@@ -351,29 +374,33 @@ export default function EventFormFields({
 
       <section className="space-y-4">
         <h2 className="font-semibold">{t.media}</h2>
-        <div className="grid sm:grid-cols-2 gap-4">
-          <Field label={t.thumbnail} value={form.thumbnail_url} onChange={(v) => patch({ thumbnail_url: v })} />
+        <div className="grid sm:grid-cols-2 gap-6">
+          <EventImageField
+            label={t.thumbnail}
+            hint={t.thumbnailHint}
+            kind="thumbnail"
+            value={form.thumbnail_url}
+            onChange={(v) => patch({ thumbnail_url: v })}
+            eventSlug={previewSlug}
+            texts={t}
+            previewWidth={EVENT_THUMBNAIL_WIDTH}
+            previewHeight={EVENT_THUMBNAIL_HEIGHT}
+            aspectClass="aspect-[16/9]"
+          />
           <div className="sm:col-span-2">
-            <Field label={t.banner} value={form.banner_url} onChange={(v) => patch({ banner_url: v })} />
-            <p className="text-xs text-neutral-500 mt-1">{t.bannerHint}</p>
-            {form.banner_url.trim() && (
-              <div className="mt-3">
-                <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">{t.bannerPreview}</p>
-                <div className="relative w-full max-w-full overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-600 bg-neutral-100 dark:bg-neutral-900">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={form.banner_url.trim()}
-                    alt=""
-                    width={EVENT_BANNER_WIDTH}
-                    height={EVENT_BANNER_HEIGHT}
-                    className="block w-full h-auto max-w-full"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
-                  />
-                </div>
-              </div>
-            )}
+            <EventImageField
+              label={t.banner}
+              hint={t.bannerHint}
+              kind="banner"
+              value={form.banner_url}
+              onChange={(v) => patch({ banner_url: v })}
+              eventSlug={previewSlug}
+              texts={t}
+              previewWidth={EVENT_BANNER_WIDTH}
+              previewHeight={EVENT_BANNER_HEIGHT}
+              aspectClass="aspect-[1920/600]"
+              showSitePreviewLabel={t.bannerPreview}
+            />
           </div>
           <Field label={t.organizerName} value={form.organizer_name} onChange={(v) => patch({ organizer_name: v })} />
           <Field label={t.organizerEmail} value={form.organizer_email} onChange={(v) => patch({ organizer_email: v })} />
@@ -398,6 +425,204 @@ export default function EventFormFields({
           </p>
         )}
       </section>
+    </div>
+  );
+}
+
+function EventImageField({
+  label,
+  hint,
+  kind,
+  value,
+  onChange,
+  eventSlug,
+  texts: t,
+  previewWidth,
+  previewHeight,
+  aspectClass,
+  showSitePreviewLabel,
+}: {
+  label: string;
+  hint: string;
+  kind: 'thumbnail' | 'banner';
+  value: string;
+  onChange: (v: string) => void;
+  eventSlug: string;
+  texts: (typeof texts)['tr'];
+  previewWidth: number;
+  previewHeight: number;
+  aspectClass: string;
+  showSitePreviewLabel?: string;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showUrl, setShowUrl] = useState(false);
+
+  const uploadFile = async (file: File) => {
+    setError(null);
+    setUploading(true);
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      body.append('kind', kind);
+      body.append('eventSlug', eventSlug);
+      const res = await fetch('/api/events/upload', { method: 'POST', body });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || t.uploadError);
+      }
+      onChange(data.url as string);
+      setShowUrl(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.uploadError);
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  };
+
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) void uploadFile(file);
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) void uploadFile(file);
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-baseline justify-between gap-2">
+        <label className="block text-sm font-medium">{label}</label>
+        <span className="text-xs text-neutral-500 dark:text-neutral-400 whitespace-nowrap">
+          {previewWidth}×{previewHeight} px
+        </span>
+      </div>
+      <p className="text-xs text-neutral-500 dark:text-neutral-400">{hint}</p>
+
+      <div
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            inputRef.current?.click();
+          }
+        }}
+        onClick={() => !uploading && inputRef.current?.click()}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={onDrop}
+        className={`relative overflow-hidden rounded-xl border-2 border-dashed transition-colors cursor-pointer ${aspectClass} ${
+          dragging
+            ? 'border-[#990000] bg-[#990000]/5'
+            : 'border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-900/40 hover:border-neutral-400 dark:hover:border-neutral-500'
+        }`}
+      >
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          className="hidden"
+          onChange={onFileChange}
+          disabled={uploading}
+        />
+
+        {value.trim() ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={value.trim()}
+              alt=""
+              width={previewWidth}
+              height={previewHeight}
+              className="absolute inset-0 h-full w-full object-cover"
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.opacity = '0.3';
+              }}
+            />
+            <div className="absolute inset-0 bg-black/0 hover:bg-black/35 transition-colors flex items-center justify-center opacity-0 hover:opacity-100">
+              <span className="inline-flex items-center gap-1.5 rounded-lg bg-white/95 text-neutral-900 text-xs font-medium px-3 py-1.5">
+                <Upload className="w-3.5 h-3.5" />
+                {t.uploadDrop}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onChange('');
+                setError(null);
+              }}
+              className="absolute top-2 right-2 rounded-full bg-black/60 text-white p-1.5 hover:bg-black/80"
+              aria-label={t.removeImage}
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </>
+        ) : (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-4 text-center text-neutral-500 dark:text-neutral-400">
+            {uploading ? (
+              <>
+                <Loader2 className="w-7 h-7 animate-spin text-[#990000]" />
+                <p className="text-sm">{t.uploading}</p>
+              </>
+            ) : (
+              <>
+                <ImageIcon className="w-8 h-8 opacity-60" />
+                <p className="text-sm font-medium text-neutral-700 dark:text-neutral-200">
+                  {t.uploadDrop}
+                </p>
+                <p className="text-xs">{t.uploadFormats}</p>
+              </>
+            )}
+          </div>
+        )}
+
+        {uploading && value.trim() && (
+          <div className="absolute inset-0 bg-white/70 dark:bg-black/50 flex items-center justify-center">
+            <Loader2 className="w-7 h-7 animate-spin text-[#990000]" />
+          </div>
+        )}
+      </div>
+
+      {error && <p className="text-xs text-red-600">{error}</p>}
+
+      {value.trim() && showSitePreviewLabel && (
+        <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+          {showSitePreviewLabel}
+        </p>
+      )}
+
+      <div>
+        <button
+          type="button"
+          onClick={() => setShowUrl((v) => !v)}
+          className="text-xs text-[#990000] hover:underline"
+        >
+          {showUrl ? t.hideUrl : t.orUrl}
+        </button>
+        {showUrl && (
+          <div className="mt-2">
+            <input
+              type="url"
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder="https://…"
+              className="w-full rounded-lg border px-3 py-2 text-sm dark:bg-neutral-800 dark:border-neutral-600"
+            />
+            <p className="text-xs text-neutral-500 mt-1">{t.urlOptional}</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
