@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
 import { requireSiteApplicationsModuleUser } from '@/app/api/site-applications/access/_helpers';
 import { fetchActiveEvents } from '@/app/lib/siteApplications/events';
+import { backfillPendingEventApplications } from '@/app/lib/siteApplications/eventAutoAccept';
 
 type SubmissionData = Record<string, unknown>;
 
@@ -45,6 +46,8 @@ export async function GET() {
   }
 
   const supabase = authResult.supabase;
+
+  await backfillPendingEventApplications(supabase);
 
   const [{ data: apps, error }, eventsResult] = await Promise.all([
     supabase

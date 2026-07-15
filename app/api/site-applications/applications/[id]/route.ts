@@ -7,6 +7,7 @@ import {
 import { requireSiteApplicationsModuleUser } from '@/app/api/site-applications/access/_helpers';
 import { getSiteApplicationAttachmentUrl } from '@/app/lib/siteApplications/attachmentDownload';
 import { sendSiteApplicationApprovalEmail } from '@/app/_services/siteApplicationApprovalEmail';
+import { ensureEventApplicationAccepted } from '@/app/lib/siteApplications/eventAutoAccept';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -17,15 +18,17 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
 
-  const { data: application, error } = await authResult.supabase
+  const { data: loaded, error } = await authResult.supabase
     .from(siteApplicationsDb.applications)
     .select('*')
     .eq('id', id)
     .single();
 
-  if (error || !application) {
+  if (error || !loaded) {
     return NextResponse.json({ error: 'Application not found' }, { status: 404 });
   }
+
+  const application = await ensureEventApplicationAccepted(authResult.supabase, loaded);
 
   const { data: history } = await authResult.supabase
     .from(siteApplicationsDb.statusHistory)

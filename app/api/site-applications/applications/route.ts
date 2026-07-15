@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
 import { requireSiteApplicationsModuleUser } from '@/app/api/site-applications/access/_helpers';
+import { backfillPendingEventApplications } from '@/app/lib/siteApplications/eventAutoAccept';
 
 export async function GET(request: NextRequest) {
   const authResult = await requireSiteApplicationsModuleUser();
   if (authResult.error || !authResult.supabase) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
+
+  // Eski pending etkinlik kayıtlarını accepted yap (çift mail yok)
+  await backfillPendingEventApplications(authResult.supabase);
 
   const { searchParams } = request.nextUrl;
   const page = Math.max(1, Number(searchParams.get('page') || '1'));

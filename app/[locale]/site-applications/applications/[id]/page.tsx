@@ -473,14 +473,28 @@ export default function SiteApplicationDetailPage({
           {isEvent ? (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="px-3 py-1.5 rounded-full text-sm font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                <span
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium ${
+                    app.status === 'accepted'
+                      ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                      : app.status === 'pending'
+                        ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                        : 'bg-neutral-100 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-300'
+                  }`}
+                >
                   {t.statusLabels[app.status as keyof typeof t.statusLabels] || app.status}
                 </span>
-                <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-100 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300">
-                  {t.autoAccepted}
-                </span>
+                {app.status === 'accepted' && (
+                  <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-100 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300">
+                    {t.autoAccepted}
+                  </span>
+                )}
               </div>
-              <p className="text-sm text-neutral-500">{t.autoAcceptedHint}</p>
+              {app.status === 'accepted' ? (
+                <p className="text-sm text-neutral-500">{t.autoAcceptedHint}</p>
+              ) : (
+                <p className="text-sm text-neutral-500">{t.eventFlowHint}</p>
+              )}
             </div>
           ) : (
             <>
