@@ -18,8 +18,11 @@ export const SITE_APPLICATION_STATUSES: SiteApplicationStatus[] = [
   'rejected',
 ];
 
-export function isEventSiteApplication(app: { source?: string | null }): boolean {
-  return app.source === 'event_website';
+export function isEventSiteApplication(app: {
+  source?: string | null;
+  event_id?: string | null;
+}): boolean {
+  return app.source === 'event_website' || Boolean(app.event_id);
 }
 
 export function getAllowedStatusesForApplication(app: {

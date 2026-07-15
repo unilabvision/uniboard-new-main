@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
+import { siteApplicationsDb, isEventSiteApplication } from '@/app/lib/siteApplications/config';
+import { sendSiteApplicationApprovalEmail } from '@/app/_services/siteApplicationApprovalEmail';
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL2;
@@ -41,7 +42,9 @@ export async function POST(request: NextRequest) {
     const supabase = getSupabase();
     const { data: application, error: loadError } = await supabase
       .from(siteApplicationsDb.applications)
-      .select('id, submission_data')
+      .select(
+        'id, status, source, event_id, event_name, email, first_name, last_name, locale, submission_data'
+      )
       .eq('id', applicationId)
       .single();
 
@@ -62,16 +65,43 @@ export async function POST(request: NextRequest) {
       paid_at: new Date().toISOString(),
     };
 
+    const isEvent = isEventSiteApplication(application);
+    const shouldAutoAccept = isEvent && application.status !== 'accepted';
+
+    const updates: Record<string, unknown> = { submission_data };
+    if (shouldAutoAccept) {
+      updates.status = 'accepted';
+    }
+
     const { data, error } = await supabase
       .from(siteApplicationsDb.applications)
-      .update({ submission_data })
+      .update(updates)
       .eq('id', applicationId)
-      .select('id, submission_data')
+      .select('id, status, submission_data')
       .single();
 
     if (error) {
       console.error('Payment confirm update error:', error);
       return NextResponse.json({ error: 'Failed to update application' }, { status: 500 });
+    }
+
+    if (shouldAutoAccept) {
+      await supabase.from(siteApplicationsDb.statusHistory).insert({
+        application_id: applicationId,
+        old_status: application.status,
+        new_status: 'accepted',
+        changed_by: null,
+        changed_by_email: 'system:event-payment-accept',
+      });
+
+      void sendSiteApplicationApprovalEmail({
+        to: application.email,
+        firstName: application.first_name,
+        lastName: application.last_name,
+        locale: application.locale === 'en' ? 'en' : 'tr',
+        eventName: application.event_name,
+        isEvent: true,
+      });
     }
 
     return NextResponse.json({ success: true, application: data });

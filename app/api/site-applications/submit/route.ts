@@ -17,6 +17,7 @@ import {
   type RegistrationPackageId,
 } from '@/app/lib/siteApplications/packages';
 import type { SiteApplicationFormField } from '@/app/types/siteApplicationForms';
+import { sendSiteApplicationApprovalEmail } from '@/app/_services/siteApplicationApprovalEmail';
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL2;
@@ -73,6 +74,7 @@ export async function POST(request: NextRequest) {
     }
 
     const formType = form.form_type ?? inferFormType(form);
+    const isEventApplication = formType === 'event' || Boolean(event) || Boolean(form.event_id);
     const registrationTier = (
       body.registrationTier === 'certificate' ? 'certificate' : 'free'
     ) as RegistrationPackageId;
@@ -104,9 +106,22 @@ export async function POST(request: NextRequest) {
 
     const contact = extractContactFromSubmission(typedFields, normalized);
     const applicationType = getApplicationTypeSlug(form, locale, event);
+    const requiresPayment =
+      formType === 'event' &&
+      selectedPackage.id === 'certificate' &&
+      selectedPackage.price > 0;
+
+    // Events (free): auto-accept. Team: stays pending for manual review.
+    const initialStatus =
+      isEventApplication && !requiresPayment ? 'accepted' : 'pending';
+
+    const eventName =
+      event?.title ||
+      (typeof normalized.event_name === 'string' ? normalized.event_name : null);
 
     const row = {
       form_id: form.id,
+      event_id: event?.id || form.event_id || null,
       application_type: applicationType,
       first_name: contact.firstName,
       last_name: contact.lastName,
@@ -114,7 +129,7 @@ export async function POST(request: NextRequest) {
       phone: contact.phone,
       message: typeof normalized.message === 'string' ? normalized.message : null,
       motivation: typeof normalized.motivation === 'string' ? normalized.motivation : null,
-      event_name: event?.title || (typeof normalized.event_name === 'string' ? normalized.event_name : null),
+      event_name: eventName,
       event_date: typeof normalized.event_date === 'string' ? normalized.event_date : null,
       participant_count:
         typeof normalized.participant_count === 'number' ? normalized.participant_count : null,
@@ -123,9 +138,9 @@ export async function POST(request: NextRequest) {
       experience: typeof normalized.experience === 'string' ? normalized.experience : null,
       portfolio_url: typeof normalized.portfolio_url === 'string' ? normalized.portfolio_url : null,
       locale,
-      source: event ? 'event_website' : 'website',
+      source: isEventApplication ? 'event_website' : 'website',
       user_agent: request.headers.get('user-agent'),
-      status: 'pending',
+      status: initialStatus,
       submission_data: {
         ...normalized,
         ...(event ? { event_slug: event.slug, event_title: event.title } : {}),
@@ -160,13 +175,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to save application' }, { status: 500 });
     }
 
+    if (initialStatus === 'accepted') {
+      await supabase.from(siteApplicationsDb.statusHistory).insert({
+        application_id: data.id,
+        old_status: null,
+        new_status: 'accepted',
+        changed_by: null,
+        changed_by_email: 'system:event-auto-accept',
+      });
+
+      void sendSiteApplicationApprovalEmail({
+        to: contact.email,
+        firstName: contact.firstName,
+        lastName: contact.lastName,
+        locale,
+        eventName,
+        isEvent: true,
+      });
+    }
+
     return NextResponse.json({
       success: true,
       submissionId: data.id,
-      requiresPayment:
-        formType === 'event' &&
-        selectedPackage.id === 'certificate' &&
-        selectedPackage.price > 0,
+      status: initialStatus,
+      requiresPayment,
       payment: {
         amount: selectedPackage.price,
         currency: selectedPackage.currency,
