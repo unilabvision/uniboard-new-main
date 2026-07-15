@@ -7,7 +7,7 @@ import {
   Edit2, Trash2, MoreVertical,
   PlayCircle, Calendar, Clock,
   Users, Video,
-  TrendingUp, Check, X, Tag
+  TrendingUp, Check, X, Tag, Layers
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -16,7 +16,12 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import Image from 'next/image';
 import { sanitizeHtml } from '@/app/lib/lms/htmlContent';
 import CourseEnrollmentPanel from '@/app/components/lms/CourseEnrollmentPanel';
-import { updateCoursePrices } from '@/app/lib/lms/enrollmentOverviewService';
+import {
+  getCoursePackagePrices,
+  updateCoursePrices,
+  updateCourseTierPrices,
+  type CoursePackagePrice,
+} from '@/app/lib/lms/enrollmentOverviewService';
 
 // Utility function to sanitize HTML content
 const sanitizeHtmlForCard = sanitizeHtml;
@@ -128,11 +133,16 @@ const texts = {
     panelCourses: "Kurslar",
     panelEnrollments: "Katılımcılar",
     editPrice: "Fiyatı Düzenle",
+    editPackagePrices: "Paket Fiyatları",
     savePrice: "Kaydet",
     cancelPrice: "İptal",
     priceSaved: "Fiyat güncellendi",
     priceSaveError: "Fiyat kaydedilemedi",
-    originalPriceShort: "Liste"
+    originalPriceShort: "Liste",
+    packagesLoading: "Paketler yükleniyor...",
+    noPackages: "Bu kursa bağlı aktif paket yok",
+    packagePricesSaved: "Paket fiyatları güncellendi",
+    packagePricesSaveError: "Paket fiyatları kaydedilemedi",
   },
   en: {
     title: "Course Management",
@@ -196,11 +206,16 @@ const texts = {
     panelCourses: "Courses",
     panelEnrollments: "Participants",
     editPrice: "Edit Price",
+    editPackagePrices: "Package Prices",
     savePrice: "Save",
     cancelPrice: "Cancel",
     priceSaved: "Price updated",
     priceSaveError: "Could not save price",
-    originalPriceShort: "List"
+    originalPriceShort: "List",
+    packagesLoading: "Loading packages...",
+    noPackages: "No active packages for this course",
+    packagePricesSaved: "Package prices updated",
+    packagePricesSaveError: "Could not save package prices",
   }
 };
 
@@ -342,6 +357,14 @@ const CourseCard = ({
   const [originalPriceDraft, setOriginalPriceDraft] = useState(String(course.original_price ?? ''));
   const [savingPrice, setSavingPrice] = useState(false);
 
+  const [editingPackages, setEditingPackages] = useState(false);
+  const [packagesLoading, setPackagesLoading] = useState(false);
+  const [packages, setPackages] = useState<CoursePackagePrice[]>([]);
+  const [packageDrafts, setPackageDrafts] = useState<
+    Record<string, { price: string; original: string }>
+  >({});
+  const [savingPackages, setSavingPackages] = useState(false);
+
   // Close menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -360,6 +383,7 @@ const CourseCard = ({
   }, [showMenu]);
 
   const startPriceEdit = () => {
+    setEditingPackages(false);
     setPriceDraft(String(course.price ?? 0));
     setOriginalPriceDraft(course.original_price ? String(course.original_price) : '');
     setEditingPrice(true);
@@ -394,6 +418,65 @@ const CourseCard = ({
       alert(t.priceSaveError);
     } finally {
       setSavingPrice(false);
+    }
+  };
+
+  const startPackagePriceEdit = async () => {
+    setEditingPrice(false);
+    setEditingPackages(true);
+    setShowMenu(false);
+    setPackagesLoading(true);
+    try {
+      const rows = await getCoursePackagePrices(course.id);
+      setPackages(rows);
+      const drafts: Record<string, { price: string; original: string }> = {};
+      rows.forEach((pkg) => {
+        drafts[pkg.id] = {
+          price: String(pkg.price ?? 0),
+          original: pkg.original_price != null ? String(pkg.original_price) : '',
+        };
+      });
+      setPackageDrafts(drafts);
+    } catch (error) {
+      console.error('Package load failed:', error);
+      setPackages([]);
+      setPackageDrafts({});
+      alert(t.packagePricesSaveError);
+      setEditingPackages(false);
+    } finally {
+      setPackagesLoading(false);
+    }
+  };
+
+  const cancelPackagePriceEdit = () => {
+    setEditingPackages(false);
+    setPackages([]);
+    setPackageDrafts({});
+  };
+
+  const savePackagePriceEdit = async () => {
+    try {
+      setSavingPackages(true);
+      const updates = packages.map((pkg) => {
+        const draft = packageDrafts[pkg.id] || { price: '0', original: '' };
+        const nextPrice = draft.price === '' ? 0 : Number(draft.price);
+        const nextOriginal = draft.original === '' ? null : Number(draft.original);
+        if (Number.isNaN(nextPrice) || (nextOriginal !== null && Number.isNaN(nextOriginal))) {
+          throw new Error(t.packagePricesSaveError);
+        }
+        return { id: pkg.id, price: nextPrice, original: nextOriginal };
+      });
+
+      await Promise.all(
+        updates.map((u) => updateCourseTierPrices(u.id, u.price, u.original))
+      );
+
+      setEditingPackages(false);
+    } catch (error) {
+      console.error('Package price update failed:', error);
+      alert(t.packagePricesSaveError);
+    } finally {
+      setSavingPackages(false);
     }
   };
 
@@ -443,7 +526,7 @@ const CourseCard = ({
           </button>
           
           {showMenu && (
-            <div className="absolute right-0 bottom-full mb-2 w-44 bg-white dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700 shadow-lg z-10">
+            <div className="absolute right-0 bottom-full mb-2 w-48 bg-white dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700 shadow-lg z-10">
               <Link
                 href={`/${locale}/lms/courses/${course.slug}`}
                 className="w-full px-3 py-2 text-left text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md flex items-center text-sm"
@@ -468,6 +551,15 @@ const CourseCard = ({
               >
                 <Tag className="w-3 h-3 mr-2" />
                 {t.editPrice}
+              </button>
+              <button
+                onClick={() => {
+                  void startPackagePriceEdit();
+                }}
+                className="w-full px-3 py-2 text-left text-violet-700 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 rounded-md flex items-center text-sm"
+              >
+                <Layers className="w-3 h-3 mr-2" />
+                {t.editPackagePrices}
               </button>
               <button
                 onClick={() => {
@@ -582,6 +674,103 @@ const CourseCard = ({
                 </button>
               </div>
             </div>
+          ) : editingPackages ? (
+            <div className="flex-1 space-y-3">
+              {packagesLoading ? (
+                <p className="text-xs text-neutral-500">{t.packagesLoading}</p>
+              ) : packages.length === 0 ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-neutral-500">{t.noPackages}</p>
+                  <button
+                    type="button"
+                    onClick={cancelPackagePriceEdit}
+                    className="inline-flex items-center px-2.5 py-1 text-xs rounded-md bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-200"
+                  >
+                    <X className="w-3 h-3 mr-1" />
+                    {t.cancelPrice}
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                    {packages.map((pkg) => {
+                      const draft = packageDrafts[pkg.id] || { price: '0', original: '' };
+                      return (
+                        <div
+                          key={pkg.id}
+                          className="rounded-md border border-neutral-200 dark:border-neutral-700 p-2 space-y-2"
+                        >
+                          <p className="text-xs font-medium text-neutral-800 dark:text-neutral-200 line-clamp-2">
+                            {pkg.title}
+                          </p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-[11px] text-neutral-500 mb-1">
+                                {t.courseDetails.price}
+                              </label>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={draft.price}
+                                onChange={(e) =>
+                                  setPackageDrafts((prev) => ({
+                                    ...prev,
+                                    [pkg.id]: { ...draft, price: e.target.value },
+                                  }))
+                                }
+                                className="w-full px-2 py-1.5 text-sm border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-900"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[11px] text-neutral-500 mb-1">
+                                {t.originalPriceShort}
+                              </label>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={draft.original}
+                                onChange={(e) =>
+                                  setPackageDrafts((prev) => ({
+                                    ...prev,
+                                    [pkg.id]: { ...draft, original: e.target.value },
+                                  }))
+                                }
+                                className="w-full px-2 py-1.5 text-sm border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-900"
+                                placeholder="—"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void savePackagePriceEdit();
+                      }}
+                      disabled={savingPackages}
+                      className="inline-flex items-center px-2.5 py-1 text-xs rounded-md bg-[#990000] text-white disabled:opacity-50"
+                    >
+                      <Check className="w-3 h-3 mr-1" />
+                      {savingPackages ? '...' : t.savePrice}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={cancelPackagePriceEdit}
+                      disabled={savingPackages}
+                      className="inline-flex items-center px-2.5 py-1 text-xs rounded-md bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-200"
+                    >
+                      <X className="w-3 h-3 mr-1" />
+                      {t.cancelPrice}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           ) : (
             <div>
               {course.price ? (
@@ -600,17 +789,28 @@ const CourseCard = ({
                   {t.free}
                 </span>
               )}
-              <button
-                type="button"
-                onClick={startPriceEdit}
-                className="mt-1 text-xs text-[#990000] hover:underline"
-              >
-                {t.editPrice}
-              </button>
+              <div className="mt-1 flex flex-col items-start gap-0.5">
+                <button
+                  type="button"
+                  onClick={startPriceEdit}
+                  className="text-xs text-[#990000] hover:underline"
+                >
+                  {t.editPrice}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void startPackagePriceEdit();
+                  }}
+                  className="text-xs text-[#990000] hover:underline"
+                >
+                  {t.editPackagePrices}
+                </button>
+              </div>
             </div>
           )}
           
-          {course.course_type === 'live' && !editingPrice && (
+          {course.course_type === 'live' && !editingPrice && !editingPackages && (
             <div className={`px-2 py-1 rounded-full text-xs font-medium ${
               course.is_registration_open 
                 ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'

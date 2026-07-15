@@ -759,3 +759,62 @@ export async function updateCoursePrices(
 
   if (error) throw error;
 }
+
+export type CoursePackagePrice = {
+  id: string;
+  course_id: string;
+  title: string;
+  slug: string | null;
+  price: number;
+  original_price: number | null;
+  is_full_course: boolean;
+  order_index: number;
+  is_active: boolean;
+};
+
+/** Aktif satış paketlerini (tier) fiyat alanlarıyla getirir */
+export async function getCoursePackagePrices(
+  courseId: string
+): Promise<CoursePackagePrice[]> {
+  const { data, error } = await supabase
+    .from('myuni_course_tiers')
+    .select(
+      'id, course_id, title, slug, price, original_price, is_full_course, order_index, is_active'
+    )
+    .eq('course_id', courseId)
+    .eq('is_active', true)
+    .order('order_index', { ascending: true });
+
+  if (error) throw error;
+
+  return ((data || []) as Array<Record<string, unknown>>).map((row) => ({
+    id: String(row.id),
+    course_id: String(row.course_id),
+    title: String(row.title || 'Paket'),
+    slug: row.slug != null ? String(row.slug) : null,
+    price: Number(row.price) || 0,
+    original_price:
+      row.original_price != null && row.original_price !== ''
+        ? Number(row.original_price)
+        : null,
+    is_full_course: row.is_full_course === true,
+    order_index: Number(row.order_index) || 0,
+    is_active: row.is_active !== false,
+  }));
+}
+
+export async function updateCourseTierPrices(
+  tierId: string,
+  price: number | null,
+  originalPrice: number | null
+) {
+  const { error } = await supabase
+    .from('myuni_course_tiers')
+    .update({
+      price,
+      original_price: originalPrice,
+    })
+    .eq('id', tierId);
+
+  if (error) throw error;
+}
