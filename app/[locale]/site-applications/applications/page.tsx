@@ -12,9 +12,12 @@ import {
   ChevronLeft,
   ChevronRight,
   FileText,
+  Award,
+  CalendarDays,
 } from 'lucide-react';
 import { inferFormType } from '@/app/lib/siteApplications/formTypes';
 import { type SiteApplicationStatus } from '@/app/lib/siteApplications/config';
+import { formatPackagePrice } from '@/app/lib/siteApplications/packages';
 import type { SiteApplication } from '@/app/types/siteApplications';
 import type { SiteApplicationForm } from '@/app/types/siteApplicationForms';
 
@@ -34,10 +37,21 @@ const texts = {
     titleRejected: 'Reddedilen Başvurular',
     subtitle: 'Site formlarından gelen başvuruları görüntüleyin',
     subtitleFiltered: 'Seçili duruma göre filtrelenmiş liste',
+    subtitleEvent: 'Bu etkinliğe gelen kayıtlar',
     tabTeam: 'Ekip Başvuruları',
     tabEvent: 'Etkinlik Başvuruları',
     tabAll: 'Tümü',
     eventLabel: 'Etkinlik',
+    package: 'Paket',
+    payment: 'Ödeme',
+    packageFree: 'Ücretsiz',
+    packageCertificate: 'Sertifika',
+    paymentPaid: 'Ödendi',
+    paymentPending: 'Bekliyor',
+    paymentNone: '—',
+    filterPackage: 'Paket filtresi',
+    filterPayment: 'Ödeme filtresi',
+    backToEvents: 'Etkinlik özetine dön',
     all: 'Tümü',
     allForms: 'Tüm formlar',
     clearFilter: 'Filtreyi temizle',
@@ -70,10 +84,21 @@ const texts = {
     titleRejected: 'Rejected Applications',
     subtitle: 'View applications from site forms',
     subtitleFiltered: 'List filtered by selected status',
+    subtitleEvent: 'Registrations for this event',
     tabTeam: 'Team Applications',
     tabEvent: 'Event Applications',
     tabAll: 'All',
     eventLabel: 'Event',
+    package: 'Package',
+    payment: 'Payment',
+    packageFree: 'Free',
+    packageCertificate: 'Certificate',
+    paymentPaid: 'Paid',
+    paymentPending: 'Pending',
+    paymentNone: '—',
+    filterPackage: 'Package filter',
+    filterPayment: 'Payment filter',
+    backToEvents: 'Back to events overview',
     all: 'All',
     allForms: 'All forms',
     clearFilter: 'Clear filter',
@@ -115,6 +140,23 @@ function statusColor(status: string) {
   }
 }
 
+function paymentColor(status: string) {
+  switch (status) {
+    case 'paid':
+      return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
+    case 'pending':
+      return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400';
+    default:
+      return 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400';
+  }
+}
+
+function readSubmission(app: SiteApplication) {
+  return app.submission_data && typeof app.submission_data === 'object'
+    ? app.submission_data
+    : {};
+}
+
 export default function SiteApplicationsListPage({
   params,
 }: {
@@ -133,17 +175,41 @@ export default function SiteApplicationsListPage({
   const searchParams = useSearchParams();
   const statusParam = searchParams.get('status');
   const categoryParam = searchParams.get('category');
+  const eventIdParam = searchParams.get('eventId')?.trim() || '';
+  const eventNameParam = searchParams.get('eventName')?.trim() || '';
+  const registrationTierParam =
+    searchParams.get('registrationTier') === 'certificate' ||
+    searchParams.get('registrationTier') === 'free'
+      ? searchParams.get('registrationTier')!
+      : '';
+  const paymentStatusParam =
+    searchParams.get('paymentStatus') === 'paid' ||
+    searchParams.get('paymentStatus') === 'pending' ||
+    searchParams.get('paymentStatus') === 'none'
+      ? searchParams.get('paymentStatus')!
+      : '';
+
   const categoryFilter =
-    categoryParam === 'team' || categoryParam === 'event' ? categoryParam : 'all';
+    categoryParam === 'team' || categoryParam === 'event'
+      ? categoryParam
+      : eventIdParam || eventNameParam
+        ? 'event'
+        : 'all';
   const statusFilter =
     statusParam && STATUS_FILTERS.includes(statusParam as SiteApplicationStatus)
       ? (statusParam as SiteApplicationStatus)
       : null;
 
+  const showEventColumns = categoryFilter === 'event' || Boolean(eventIdParam || eventNameParam);
+  const hasEventScope = Boolean(eventIdParam || eventNameParam);
+
   const t = texts[locale as keyof typeof texts] || texts.tr;
   const baseListPath = `/${locale}/site-applications/applications`;
+  const eventsOverviewPath = `/${locale}/site-applications/events`;
 
   const pageTitle = useMemo(() => {
+    if (hasEventScope && eventNameParam) return eventNameParam;
+    if (hasEventScope) return t.subtitleEvent;
     if (!statusFilter) return t.title;
     const titles: Record<SiteApplicationStatus, string> = {
       pending: t.titlePending,
@@ -152,7 +218,7 @@ export default function SiteApplicationsListPage({
       rejected: t.titleRejected,
     };
     return titles[statusFilter];
-  }, [statusFilter, t]);
+  }, [statusFilter, t, hasEventScope, eventNameParam]);
 
   const visibleStatusFilters = useMemo(
     () =>
@@ -175,7 +241,16 @@ export default function SiteApplicationsListPage({
 
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, formFilter, search, categoryFilter]);
+  }, [
+    statusFilter,
+    formFilter,
+    search,
+    categoryFilter,
+    eventIdParam,
+    eventNameParam,
+    registrationTierParam,
+    paymentStatusParam,
+  ]);
 
   const formTitleBySlug = useCallback(
     (slug: string, app?: SiteApplication) => {
@@ -187,10 +262,32 @@ export default function SiteApplicationsListPage({
     [forms, locale]
   );
 
-  const buildListHref = (params: { status?: string | null; category?: string }) => {
+  const buildListHref = (overrides: {
+    status?: string | null;
+    category?: string;
+    eventId?: string | null;
+    eventName?: string | null;
+    registrationTier?: string | null;
+    paymentStatus?: string | null;
+  }) => {
     const qs = new URLSearchParams();
-    if (params.status) qs.set('status', params.status);
-    if (params.category && params.category !== 'all') qs.set('category', params.category);
+    const status = overrides.status !== undefined ? overrides.status : statusFilter;
+    const category = overrides.category !== undefined ? overrides.category : categoryFilter;
+    const eventId = overrides.eventId !== undefined ? overrides.eventId : eventIdParam;
+    const eventName = overrides.eventName !== undefined ? overrides.eventName : eventNameParam;
+    const registrationTier =
+      overrides.registrationTier !== undefined
+        ? overrides.registrationTier
+        : registrationTierParam;
+    const paymentStatus =
+      overrides.paymentStatus !== undefined ? overrides.paymentStatus : paymentStatusParam;
+
+    if (status) qs.set('status', status);
+    if (category && category !== 'all') qs.set('category', category);
+    if (eventId) qs.set('eventId', eventId);
+    if (eventName) qs.set('eventName', eventName);
+    if (registrationTier) qs.set('registrationTier', registrationTier);
+    if (paymentStatus) qs.set('paymentStatus', paymentStatus);
     const query = qs.toString();
     return query ? `${baseListPath}?${query}` : baseListPath;
   };
@@ -208,6 +305,10 @@ export default function SiteApplicationsListPage({
       if (statusFilter) params.set('status', statusFilter);
       if (categoryFilter !== 'all') params.set('category', categoryFilter);
       if (search.trim()) params.set('search', search.trim());
+      if (eventIdParam) params.set('eventId', eventIdParam);
+      if (eventNameParam) params.set('eventName', eventNameParam);
+      if (registrationTierParam) params.set('registrationTier', registrationTierParam);
+      if (paymentStatusParam) params.set('paymentStatus', paymentStatusParam);
 
       const res = await fetch(`/api/site-applications/applications?${params.toString()}`);
       const data = await res.json();
@@ -220,7 +321,18 @@ export default function SiteApplicationsListPage({
     } finally {
       setLoading(false);
     }
-  }, [formFilter, search, page, statusFilter, categoryFilter, t.error]);
+  }, [
+    formFilter,
+    search,
+    page,
+    statusFilter,
+    categoryFilter,
+    eventIdParam,
+    eventNameParam,
+    registrationTierParam,
+    paymentStatusParam,
+    t.error,
+  ]);
 
   useEffect(() => {
     load();
@@ -235,41 +347,108 @@ export default function SiteApplicationsListPage({
   }, [forms, categoryFilter]);
 
   const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const colCount = showEventColumns ? 7 : 5;
+
+  const activeEventLabel =
+    eventNameParam ||
+    apps.find((a) => a.event_name)?.event_name ||
+    (eventIdParam ? eventIdParam.slice(0, 8) : null);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
       <div className="mb-8">
+        {hasEventScope && (
+          <Link
+            href={eventsOverviewPath}
+            className="inline-flex items-center gap-1.5 text-sm text-[#990000] hover:underline mb-3"
+          >
+            <CalendarDays className="w-4 h-4" />
+            {t.backToEvents}
+          </Link>
+        )}
         <h1 className="text-2xl sm:text-3xl font-bold text-neutral-900 dark:text-neutral-100">
           {pageTitle}
         </h1>
         <p className="mt-1 text-neutral-600 dark:text-neutral-400">
-          {statusFilter ? t.subtitleFiltered : t.subtitle}
+          {hasEventScope
+            ? t.subtitleEvent
+            : statusFilter
+              ? t.subtitleFiltered
+              : t.subtitle}
         </p>
-        {statusFilter && (
+        {(statusFilter || hasEventScope || registrationTierParam || paymentStatusParam) && (
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <span className="text-xs text-neutral-500">{t.filterActive}:</span>
-            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusColor(statusFilter)}`}>
-              {t.statusLabels[statusFilter]}
-            </span>
+            {hasEventScope && activeEventLabel && (
+              <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-[#990000] dark:bg-red-900/20 dark:text-red-300">
+                {t.eventLabel}: {activeEventLabel}
+              </span>
+            )}
+            {statusFilter && (
+              <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusColor(statusFilter)}`}>
+                {t.statusLabels[statusFilter]}
+              </span>
+            )}
+            {registrationTierParam && (
+              <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-100 dark:bg-neutral-800">
+                {t.filterPackage}:{' '}
+                {registrationTierParam === 'certificate' ? t.packageCertificate : t.packageFree}
+              </span>
+            )}
+            {paymentStatusParam && (
+              <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${paymentColor(paymentStatusParam)}`}>
+                {t.filterPayment}:{' '}
+                {paymentStatusParam === 'paid'
+                  ? t.paymentPaid
+                  : paymentStatusParam === 'pending'
+                    ? t.paymentPending
+                    : t.paymentNone}
+              </span>
+            )}
             <Link
-              href={baseListPath}
+              href={
+                hasEventScope
+                  ? buildListHref({
+                      status: null,
+                      registrationTier: null,
+                      paymentStatus: null,
+                      eventId: eventIdParam || null,
+                      eventName: eventNameParam || null,
+                      category: 'event',
+                    })
+                  : baseListPath
+              }
               className="text-xs text-[#990000] hover:underline"
             >
               {t.clearFilter}
             </Link>
+            {hasEventScope && (
+              <Link href={baseListPath} className="text-xs text-neutral-500 hover:underline">
+                {locale === 'tr' ? 'Tüm başvurular' : 'All applications'}
+              </Link>
+            )}
           </div>
         )}
       </div>
 
       <div className="flex gap-2 mb-4 border-b border-neutral-200 dark:border-neutral-700">
-        {([
-          ['team', t.tabTeam],
-          ['event', t.tabEvent],
-          ['all', t.tabAll],
-        ] as const).map(([key, label]) => (
+        {(
+          [
+            ['team', t.tabTeam],
+            ['event', t.tabEvent],
+            ['all', t.tabAll],
+          ] as const
+        ).map(([key, label]) => (
           <Link
             key={key}
-            href={buildListHref({ status: statusFilter, category: key })}
+            href={buildListHref({
+              status: statusFilter,
+              category: key,
+              eventId: key === 'event' ? eventIdParam || null : null,
+              eventName: key === 'event' ? eventNameParam || null : null,
+              registrationTier: key === 'event' ? registrationTierParam || null : null,
+              paymentStatus: key === 'event' ? paymentStatusParam || null : null,
+            })}
             className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
               categoryFilter === key
                 ? 'border-[#990000] text-[#990000]'
@@ -281,7 +460,7 @@ export default function SiteApplicationsListPage({
         ))}
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-6">
+      <div className="flex flex-wrap gap-2 mb-4">
         <Link
           href={buildListHref({ status: null, category: categoryFilter })}
           className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
@@ -307,12 +486,69 @@ export default function SiteApplicationsListPage({
         ))}
       </div>
 
+      {showEventColumns && (
+        <div className="flex flex-wrap gap-2 mb-6">
+          <span className="text-xs text-neutral-500 self-center mr-1">{t.package}:</span>
+          {(
+            [
+              ['', t.all],
+              ['free', t.packageFree],
+              ['certificate', t.packageCertificate],
+            ] as const
+          ).map(([key, label]) => (
+            <Link
+              key={key || 'all-pkg'}
+              href={buildListHref({
+                registrationTier: key || null,
+                category: 'event',
+              })}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                registrationTierParam === key
+                  ? 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900'
+                  : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300'
+              }`}
+            >
+              {label}
+            </Link>
+          ))}
+          <span className="text-xs text-neutral-500 self-center ml-2 mr-1">{t.payment}:</span>
+          {(
+            [
+              ['', t.all],
+              ['paid', t.paymentPaid],
+              ['pending', t.paymentPending],
+            ] as const
+          ).map(([key, label]) => (
+            <Link
+              key={key || 'all-pay'}
+              href={buildListHref({
+                paymentStatus: key || null,
+                category: 'event',
+                registrationTier: key
+                  ? registrationTierParam || 'certificate'
+                  : registrationTierParam || null,
+              })}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                paymentStatusParam === key
+                  ? 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900'
+                  : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300'
+              }`}
+            >
+              {label}
+            </Link>
+          ))}
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
           <input
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
             placeholder={t.search}
             className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800"
           />
@@ -320,7 +556,10 @@ export default function SiteApplicationsListPage({
         <div className="flex gap-2 items-center">
           <select
             value={formFilter}
-            onChange={(e) => { setFormFilter(e.target.value); setPage(1); }}
+            onChange={(e) => {
+              setFormFilter(e.target.value);
+              setPage(1);
+            }}
             className="px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
           >
             <option value="all">{t.allForms}</option>
@@ -353,6 +592,12 @@ export default function SiteApplicationsListPage({
               <tr>
                 <th className="text-left px-4 py-3 font-medium">{t.applicant}</th>
                 <th className="text-left px-4 py-3 font-medium">{t.form}</th>
+                {showEventColumns && (
+                  <>
+                    <th className="text-left px-4 py-3 font-medium hidden sm:table-cell">{t.package}</th>
+                    <th className="text-left px-4 py-3 font-medium hidden md:table-cell">{t.payment}</th>
+                  </>
+                )}
                 <th className="text-left px-4 py-3 font-medium hidden md:table-cell">{t.status}</th>
                 <th className="text-left px-4 py-3 font-medium hidden lg:table-cell">{t.date}</th>
                 <th className="text-right px-4 py-3 font-medium">{t.actions}</th>
@@ -361,57 +606,103 @@ export default function SiteApplicationsListPage({
             <tbody className="divide-y divide-neutral-200 dark:divide-neutral-700">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-neutral-500">{t.loading}</td>
+                  <td colSpan={colCount} className="px-4 py-12 text-center text-neutral-500">
+                    {t.loading}
+                  </td>
                 </tr>
               ) : apps.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-neutral-500">{t.noResults}</td>
+                  <td colSpan={colCount} className="px-4 py-12 text-center text-neutral-500">
+                    {t.noResults}
+                  </td>
                 </tr>
               ) : (
-                apps.map((app) => (
-                  <tr key={app.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-700/30">
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-neutral-900 dark:text-neutral-100">
-                        {app.first_name} {app.last_name}
-                      </div>
-                      <div className="text-xs text-neutral-500 flex items-center gap-1 mt-0.5">
-                        <Mail className="w-3 h-3" />
-                        {app.email}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center gap-1 text-neutral-700 dark:text-neutral-300">
-                        <FileText className="w-3.5 h-3.5" />
-                        {formTitleBySlug(app.application_type, app)}
-                      </span>
-                      {app.event_name && app.source === 'event_website' && (
-                        <div className="text-xs text-neutral-500 mt-0.5">
-                          {t.eventLabel}: {app.event_name}
+                apps.map((app) => {
+                  const submission = readSubmission(app);
+                  const tier = String(submission.registration_tier || 'free');
+                  const pay = String(submission.payment_status || 'none');
+                  const price = Number(submission.package_price);
+                  const currency = String(submission.package_currency || 'TRY');
+
+                  return (
+                    <tr key={app.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-700/30">
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-neutral-900 dark:text-neutral-100">
+                          {app.first_name} {app.last_name}
                         </div>
+                        <div className="text-xs text-neutral-500 flex items-center gap-1 mt-0.5">
+                          <Mail className="w-3 h-3" />
+                          {app.email}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center gap-1 text-neutral-700 dark:text-neutral-300">
+                          <FileText className="w-3.5 h-3.5" />
+                          {formTitleBySlug(app.application_type, app)}
+                        </span>
+                        {app.event_name && (
+                          <div className="text-xs text-neutral-500 mt-0.5 flex items-center gap-1">
+                            <Award className="w-3 h-3" />
+                            {t.eventLabel}: {app.event_name}
+                          </div>
+                        )}
+                      </td>
+                      {showEventColumns && (
+                        <>
+                          <td className="px-4 py-3 hidden sm:table-cell">
+                            <div className="font-medium text-neutral-800 dark:text-neutral-200">
+                              {tier === 'certificate' ? t.packageCertificate : t.packageFree}
+                            </div>
+                            {tier === 'certificate' && Number.isFinite(price) && price > 0 && (
+                              <div className="text-xs text-neutral-500 mt-0.5">
+                                {formatPackagePrice(price, currency, locale)}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 hidden md:table-cell">
+                            {tier === 'certificate' ? (
+                              <span
+                                className={`px-2 py-1 rounded-full text-xs font-medium ${paymentColor(pay)}`}
+                              >
+                                {pay === 'paid'
+                                  ? t.paymentPaid
+                                  : pay === 'pending'
+                                    ? t.paymentPending
+                                    : t.paymentNone}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-neutral-400">{t.paymentNone}</span>
+                            )}
+                          </td>
+                        </>
                       )}
-                    </td>
-                    <td className="px-4 py-3 hidden md:table-cell">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColor(app.status)}`}>
-                        {t.statusLabels[app.status as keyof typeof t.statusLabels] || app.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 hidden lg:table-cell text-neutral-500">
-                      <span className="inline-flex items-center gap-1">
-                        <Calendar className="w-3.5 h-3.5" />
-                        {new Date(app.created_at).toLocaleDateString(locale === 'tr' ? 'tr-TR' : 'en-US')}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <Link
-                        href={`/${locale}/site-applications/applications/${app.id}`}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-[#990000] dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
-                      >
-                        <Eye className="w-4 h-4" />
-                        {t.view}
-                      </Link>
-                    </td>
-                  </tr>
-                ))
+                      <td className="px-4 py-3 hidden md:table-cell">
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-medium ${statusColor(app.status)}`}
+                        >
+                          {t.statusLabels[app.status as keyof typeof t.statusLabels] || app.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 hidden lg:table-cell text-neutral-500">
+                        <span className="inline-flex items-center gap-1">
+                          <Calendar className="w-3.5 h-3.5" />
+                          {new Date(app.created_at).toLocaleDateString(
+                            locale === 'tr' ? 'tr-TR' : 'en-US'
+                          )}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Link
+                          href={`/${locale}/site-applications/applications/${app.id}`}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-[#990000] dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                        >
+                          <Eye className="w-4 h-4" />
+                          {t.view}
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -419,12 +710,22 @@ export default function SiteApplicationsListPage({
 
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-200 dark:border-neutral-700">
-            <span className="text-sm text-neutral-500">{t.page} {page} {t.of} {totalPages}</span>
+            <span className="text-sm text-neutral-500">
+              {t.page} {page} {t.of} {totalPages}
+            </span>
             <div className="flex gap-2">
-              <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="p-2 rounded-lg border disabled:opacity-40">
+              <button
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+                className="p-2 rounded-lg border disabled:opacity-40"
+              >
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <button disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="p-2 rounded-lg border disabled:opacity-40">
+              <button
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+                className="p-2 rounded-lg border disabled:opacity-40"
+              >
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>

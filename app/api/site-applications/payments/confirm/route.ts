@@ -65,6 +65,8 @@ export async function POST(request: NextRequest) {
       paid_at: new Date().toISOString(),
     };
 
+    // Payment confirm: only update payment fields; status already accepted on submit.
+    // Legacy rows may still be pending — auto-accept those once and send confirmation email.
     const isEvent = isEventSiteApplication(application);
     const shouldAutoAccept = isEvent && application.status !== 'accepted';
 
@@ -94,7 +96,7 @@ export async function POST(request: NextRequest) {
         changed_by_email: 'system:event-payment-accept',
       });
 
-      void sendSiteApplicationApprovalEmail({
+      const emailResult = await sendSiteApplicationApprovalEmail({
         to: application.email,
         firstName: application.first_name,
         lastName: application.last_name,
@@ -102,6 +104,9 @@ export async function POST(request: NextRequest) {
         eventName: application.event_name,
         isEvent: true,
       });
+      if (!emailResult.success) {
+        console.error('Event registration email failed on payment confirm:', emailResult.error);
+      }
     }
 
     return NextResponse.json({ success: true, application: data });

@@ -111,9 +111,9 @@ export async function POST(request: NextRequest) {
       selectedPackage.id === 'certificate' &&
       selectedPackage.price > 0;
 
-    // Events (free): auto-accept. Team: stays pending for manual review.
-    const initialStatus =
-      isEventApplication && !requiresPayment ? 'accepted' : 'pending';
+    // Events: always auto-accept (no admin review). Certificate fee is tracked via payment_status.
+    // Team: stays pending for manual review.
+    const initialStatus = isEventApplication ? 'accepted' : 'pending';
 
     const eventName =
       event?.title ||
@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to save application' }, { status: 500 });
     }
 
-    if (initialStatus === 'accepted') {
+    if (isEventApplication && initialStatus === 'accepted') {
       await supabase.from(siteApplicationsDb.statusHistory).insert({
         application_id: data.id,
         old_status: null,
@@ -184,7 +184,7 @@ export async function POST(request: NextRequest) {
         changed_by_email: 'system:event-auto-accept',
       });
 
-      void sendSiteApplicationApprovalEmail({
+      const emailResult = await sendSiteApplicationApprovalEmail({
         to: contact.email,
         firstName: contact.firstName,
         lastName: contact.lastName,
@@ -192,6 +192,9 @@ export async function POST(request: NextRequest) {
         eventName,
         isEvent: true,
       });
+      if (!emailResult.success) {
+        console.error('Event registration email failed:', emailResult.error);
+      }
     }
 
     return NextResponse.json({

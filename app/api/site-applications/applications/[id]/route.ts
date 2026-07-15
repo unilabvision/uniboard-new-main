@@ -79,14 +79,17 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   }
 
   if (body.status !== undefined && body.status !== existing.status) {
-    const nextStatus = body.status as SiteApplicationStatus;
-
-    if (isEventSiteApplication(existing) && nextStatus === 'under_review') {
+    if (isEventSiteApplication(existing)) {
       return NextResponse.json(
-        { error: 'Etkinlik başvurularında inceleme adımı kullanılmaz. Doğrudan onaylayın veya reddedin.' },
+        {
+          error:
+            'Etkinlik kayıtları otomatik onaylanır; durum admin tarafından değiştirilemez. Ödeme durumu paket bölümünden takip edilir.',
+        },
         { status: 400 }
       );
     }
+
+    const nextStatus = body.status as SiteApplicationStatus;
 
     updates.status = nextStatus;
     updates.reviewed_by = authResult.userId;

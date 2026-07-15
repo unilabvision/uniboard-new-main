@@ -3,6 +3,7 @@ import type { SiteApplicationStatus } from '@/app/lib/siteApplications/config';
 export interface SiteApplication {
   id: string;
   form_id: string | null;
+  event_id?: string | null;
   application_type: string;
   first_name: string;
   last_name: string;

@@ -7,6 +7,7 @@ import {
   FileText,
   Shield,
   FormInput,
+  CalendarDays,
 } from 'lucide-react';
 
 export const siteApplicationsSidebarContent = {
@@ -14,6 +15,7 @@ export const siteApplicationsSidebarContent = {
     title: 'Site Başvuruları',
     items: [
       { name: 'Dashboard', href: '/', icon: Home },
+      { name: 'Etkinlik Özeti', href: '/events', icon: CalendarDays },
       { name: 'Başvurular', href: '/applications', icon: Users },
       { name: 'Formlar', href: '/forms', icon: FormInput },
       { name: 'Bekleyenler', href: '/applications?status=pending', icon: Clock },
@@ -27,6 +29,7 @@ export const siteApplicationsSidebarContent = {
     title: 'Site Applications',
     items: [
       { name: 'Dashboard', href: '/', icon: Home },
+      { name: 'Events Overview', href: '/events', icon: CalendarDays },
       { name: 'Applications', href: '/applications', icon: Users },
       { name: 'Forms', href: '/forms', icon: FormInput },
       { name: 'Pending', href: '/applications?status=pending', icon: Clock },
