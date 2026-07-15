@@ -21,8 +21,30 @@ export const SITE_APPLICATION_STATUSES: SiteApplicationStatus[] = [
 export function isEventSiteApplication(app: {
   source?: string | null;
   event_id?: string | null;
+  event_name?: string | null;
+  submission_data?: Record<string, unknown> | null;
 }): boolean {
-  return app.source === 'event_website' || Boolean(app.event_id);
+  if (app.source === 'event_website') return true;
+  if (app.event_id) return true;
+  if (typeof app.event_name === 'string' && app.event_name.trim()) return true;
+  const tier = app.submission_data?.registration_tier;
+  if (tier === 'free' || tier === 'certificate') return true;
+  return false;
+}
+
+/** PostgREST filter fragments for list/stats queries */
+export const eventApplicationOrFilter =
+  'source.eq.event_website,event_id.not.is.null,event_name.not.is.null';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function applyTeamApplicationsFilter(query: any) {
+  // Ekip = website kaynağı + etkinlik bağlı değil + isim alanı boş
+  return query.eq('source', 'website').is('event_id', null).is('event_name', null);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function applyEventApplicationsFilter(query: any) {
+  return query.or(eventApplicationOrFilter);
 }
 
 export function getAllowedStatusesForApplication(app: {

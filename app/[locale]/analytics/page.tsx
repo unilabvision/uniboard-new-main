@@ -45,6 +45,12 @@ interface OrderRow {
   status: string;
   created_at: string;
   useremail: string;
+  enrolled?: boolean | null;
+  custom_data?: {
+    itemType?: string;
+    siteApplicationId?: string;
+    eventSlug?: string;
+  } | null;
 }
 
 interface EnrollmentRow {
@@ -77,6 +83,46 @@ interface CourseStat {
   orders: number;
   avg_progress: number;
   completed: number;
+  /** Etkinlik sertifika satışı (LMS enrollment değil) */
+  is_certificate?: boolean;
+}
+
+/** Sertifika / etkinlik paket siparişlerini kurs UUID yerine isimle grupla */
+function getOrderAggregation(order: OrderRow): {
+  key: string;
+  name: string;
+  isEventCertificate: boolean;
+} {
+  const name = (order.coursename || '').trim();
+  const isEventCertificate =
+    order.custom_data?.itemType === 'event_certificate' ||
+    /^sertifika\s*[-–—]/i.test(name);
+
+  if (isEventCertificate && name) {
+    return {
+      key: `cert:${name.toLocaleLowerCase('tr')}`,
+      name,
+      isEventCertificate: true,
+    };
+  }
+
+  return {
+    key: order.courseid,
+    name: name || `Kurs ${String(order.courseid || '').slice(0, 8)}`,
+    isEventCertificate: false,
+  };
+}
+
+function dedupeOrders(orders: OrderRow[]): OrderRow[] {
+  const seen = new Set<string>();
+  const out: OrderRow[] = [];
+  for (const order of orders) {
+    const id = order.id || order.courseid + order.created_at + order.useremail;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(order);
+  }
+  return out;
 }
 
 interface DashboardMetrics {
@@ -138,6 +184,8 @@ const texts = {
     error: 'Veriler yüklenirken hata oluştu.',
     salesSection: 'Satış Özeti',
     enrollmentsSection: 'Eğitim Katılımı',
+    enrollmentsSectionHint:
+      'Sertifika satırında Kayıt ve Öğrenci aynıdır (benzersiz alıcı). Sipariş tekrar alımları da sayar. Kurs satırlarında ilerleme LMS’den gelir.',
     trendsSection: 'Trend Analizi',
   },
   en: {
@@ -187,6 +235,8 @@ const texts = {
     error: 'An error occurred while loading data.',
     salesSection: 'Sales Summary',
     enrollmentsSection: 'Training Participation',
+    enrollmentsSectionHint:
+      'On certificate rows, Registrations and Students match (unique buyers). Orders still include repeat purchases. Course progress comes from the LMS.',
     trendsSection: 'Trend Analysis',
   },
 };
@@ -462,8 +512,24 @@ export default function AnalyticsPage({
       const courseTitleMap = new Map(
         courses.map((course) => [course.id, course.title])
       );
+      const titleToCourseId = new Map(
+        courses.map((course) => [
+          course.title.trim().toLocaleLowerCase('tr'),
+          course.id,
+        ])
+      );
 
-      const filteredOrders = orders.filter((order) =>
+      const uniqueOrders = dedupeOrders(orders).filter((order) => {
+        const status = String(order.status || '').toLowerCase();
+        const paidLike =
+          status === 'completed' ||
+          status === 'success' ||
+          status === 'paid' ||
+          order.enrolled === true;
+        return paidLike;
+      });
+
+      const filteredOrders = uniqueOrders.filter((order) =>
         isInPeriod(order.created_at, period)
       );
       const filteredEnrollments = enrollments.filter((enrollment) =>
@@ -555,6 +621,7 @@ export default function AnalyticsPage({
           orders: 0,
           avg_progress: 0,
           completed: 0,
+          is_certificate: false,
         };
         existing.enrollments += 1;
         statsMap.set(enrollment.course_id, existing);
@@ -582,27 +649,75 @@ export default function AnalyticsPage({
         }
       });
 
+      const resolveOrderTarget = (order: OrderRow) => {
+        const agg = getOrderAggregation(order);
+        if (agg.isEventCertificate) return agg;
+
+        if (courseTitleMap.has(order.courseid)) {
+          return {
+            key: order.courseid,
+            name: courseTitleMap.get(order.courseid)!,
+            isEventCertificate: false,
+          };
+        }
+
+        const byTitle = titleToCourseId.get(agg.name.toLocaleLowerCase('tr'));
+        if (byTitle) {
+          return {
+            key: byTitle,
+            name: courseTitleMap.get(byTitle) || agg.name,
+            isEventCertificate: false,
+          };
+        }
+
+        return agg;
+      };
+
       filteredOrders.forEach((order) => {
-        const stat = statsMap.get(order.courseid) || {
-          course_id: order.courseid,
-          course_name:
-            order.coursename ||
-            courseTitleMap.get(order.courseid) ||
-            `Kurs ${order.courseid.slice(0, 8)}`,
+        const { key, name, isEventCertificate } = resolveOrderTarget(order);
+
+        const stat = statsMap.get(key) || {
+          course_id: key,
+          course_name: name,
           enrollments: 0,
           unique_students: 0,
           revenue: 0,
           orders: 0,
           avg_progress: 0,
           completed: 0,
+          is_certificate: isEventCertificate,
         };
+
+        if (isEventCertificate) {
+          stat.is_certificate = true;
+          // Benzersiz alıcıları topla — Kayıt/Öğrenci sonra aynı yapılacak
+          if (!studentsPerCourse.has(key)) {
+            studentsPerCourse.set(key, new Set());
+          }
+          if (order.useremail) {
+            studentsPerCourse.get(key)!.add(order.useremail.toLowerCase());
+          } else {
+            // e-posta yoksa her sipariş ayrı kişi sayılır
+            studentsPerCourse.get(key)!.add(`order:${order.id || `${order.created_at}-${stat.orders}`}`);
+          }
+        }
+
         stat.revenue += order.amount - (order.discountamount || 0);
         stat.orders += 1;
-        statsMap.set(order.courseid, stat);
+        if (!stat.course_name) stat.course_name = name;
+        statsMap.set(key, stat);
       });
 
       statsMap.forEach((stat, courseId) => {
-        stat.unique_students = studentsPerCourse.get(courseId)?.size || 0;
+        const people = studentsPerCourse.get(courseId)?.size || 0;
+        stat.unique_students = people;
+        if (stat.is_certificate) {
+          // Sertifika: Kayıt = Öğrenci (benzersiz alıcı); Sipariş ayrı (tekrar alımlar dahil)
+          stat.enrollments = people;
+          stat.avg_progress = 0;
+          stat.completed = 0;
+          return;
+        }
         const progresses = progressPerCourse.get(courseId) || [];
         stat.avg_progress =
           progresses.length > 0
@@ -626,9 +741,10 @@ export default function AnalyticsPage({
         supabase
           .from('orders')
           .select(
-            'id, courseid, coursename, amount, discountamount, status, created_at, useremail'
+            'id, courseid, coursename, amount, discountamount, status, created_at, useremail, enrolled, custom_data'
           )
-          .eq('enrolled', true)
+          // Normal kurslar: enrolled=true | Etkinlik sertifikası: status=completed
+          .or('enrolled.eq.true,status.eq.completed')
           .order('created_at', { ascending: false }),
         supabase
           .from('myuni_enrollments')
@@ -856,6 +972,7 @@ export default function AnalyticsPage({
             <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
               {t.enrollmentsSection}
             </h2>
+            <p className="text-xs text-neutral-500 mt-1">{t.enrollmentsSectionHint}</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -884,7 +1001,14 @@ export default function AnalyticsPage({
                       className="border-t border-neutral-100 dark:border-neutral-700"
                     >
                       <td className="px-6 py-3 text-neutral-900 dark:text-neutral-100">
-                        {course.course_name}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span>{course.course_name}</span>
+                          {course.is_certificate && (
+                            <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                              {locale === 'tr' ? 'Sertifika satışı' : 'Certificate sale'}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-right">{course.enrollments}</td>
                       <td className="px-4 py-3 text-right">{course.unique_students}</td>
@@ -892,10 +1016,12 @@ export default function AnalyticsPage({
                         {formatCurrency(course.revenue, locale)}
                       </td>
                       <td className="px-4 py-3 text-right">{course.orders}</td>
-                      <td className="px-4 py-3 text-right">
-                        {course.avg_progress.toFixed(1)}%
+                      <td className="px-4 py-3 text-right text-neutral-600 dark:text-neutral-400">
+                        {course.is_certificate ? '—' : `${course.avg_progress.toFixed(1)}%`}
                       </td>
-                      <td className="px-6 py-3 text-right">{course.completed}</td>
+                      <td className="px-6 py-3 text-right">
+                        {course.is_certificate ? '—' : course.completed}
+                      </td>
                     </tr>
                   ))
                 )}

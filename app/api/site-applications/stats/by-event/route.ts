@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
-import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
+import { siteApplicationsDb, eventApplicationOrFilter } from '@/app/lib/siteApplications/config';
 import { requireSiteApplicationsModuleUser } from '@/app/api/site-applications/access/_helpers';
 import { fetchActiveEvents } from '@/app/lib/siteApplications/events';
 import { backfillPendingEventApplications } from '@/app/lib/siteApplications/eventAutoAccept';
+import { syncCertificatePaymentsFromOrders } from '@/app/lib/siteApplications/syncPayments';
 
 type SubmissionData = Record<string, unknown>;
 
@@ -37,7 +38,7 @@ function toNumber(value: unknown): number {
 
 /**
  * Etkinlik bazlı başvuru / sertifika özeti.
- * Kaynak: source=event_website veya event_id dolu kayıtlar.
+ * Kaynak: source=event_website veya event_id / event_name dolu kayıtlar.
  */
 export async function GET() {
   const authResult = await requireSiteApplicationsModuleUser();
@@ -48,6 +49,7 @@ export async function GET() {
   const supabase = authResult.supabase;
 
   await backfillPendingEventApplications(supabase);
+  await syncCertificatePaymentsFromOrders(supabase);
 
   const [{ data: apps, error }, eventsResult] = await Promise.all([
     supabase
@@ -55,7 +57,7 @@ export async function GET() {
       .select(
         'id, event_id, event_name, status, source, submission_data, created_at'
       )
-      .or('source.eq.event_website,event_id.not.is.null')
+      .or(eventApplicationOrFilter)
       .order('created_at', { ascending: false }),
     fetchActiveEvents(supabase),
   ]);

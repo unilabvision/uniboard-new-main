@@ -16,7 +16,10 @@ import {
   CalendarDays,
 } from 'lucide-react';
 import { inferFormType } from '@/app/lib/siteApplications/formTypes';
-import { type SiteApplicationStatus } from '@/app/lib/siteApplications/config';
+import {
+  type SiteApplicationStatus,
+  isEventSiteApplication,
+} from '@/app/lib/siteApplications/config';
 import { formatPackagePrice } from '@/app/lib/siteApplications/packages';
 import type { SiteApplication } from '@/app/types/siteApplications';
 import type { SiteApplicationForm } from '@/app/types/siteApplicationForms';
@@ -314,7 +317,15 @@ export default function SiteApplicationsListPage({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
 
-      setApps((data.applications as SiteApplication[]) || []);
+      let rows = (data.applications as SiteApplication[]) || [];
+      // Ek güvenlik: ekip sekmesine etkinlik kaydı sızmasın
+      if (categoryFilter === 'team') {
+        rows = rows.filter((app) => !isEventSiteApplication(app));
+      } else if (categoryFilter === 'event') {
+        rows = rows.filter((app) => isEventSiteApplication(app));
+      }
+
+      setApps(rows);
       setTotal(data.total || 0);
     } catch {
       setError(t.error);

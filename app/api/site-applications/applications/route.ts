@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
+import {
+  siteApplicationsDb,
+  applyTeamApplicationsFilter,
+  applyEventApplicationsFilter,
+} from '@/app/lib/siteApplications/config';
 import { requireSiteApplicationsModuleUser } from '@/app/api/site-applications/access/_helpers';
 import { backfillPendingEventApplications } from '@/app/lib/siteApplications/eventAutoAccept';
+import { syncCertificatePaymentsFromOrders } from '@/app/lib/siteApplications/syncPayments';
 
 export async function GET(request: NextRequest) {
   const authResult = await requireSiteApplicationsModuleUser();
@@ -9,8 +14,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
 
-  // Eski pending etkinlik kayıtlarını accepted yap (çift mail yok)
+  // Eski pending etkinlik kayıtlarını accepted yap + source düzelt + ödeme senkron
   await backfillPendingEventApplications(authResult.supabase);
+  await syncCertificatePaymentsFromOrders(authResult.supabase);
 
   const { searchParams } = request.nextUrl;
   const page = Math.max(1, Number(searchParams.get('page') || '1'));
@@ -30,9 +36,9 @@ export async function GET(request: NextRequest) {
     .order('created_at', { ascending: false });
 
   if (category === 'event') {
-    query = query.or('source.eq.event_website,event_id.not.is.null');
+    query = applyEventApplicationsFilter(query);
   } else if (category === 'team') {
-    query = query.eq('source', 'website');
+    query = applyTeamApplicationsFilter(query);
   }
 
   if (eventId) {
@@ -54,7 +60,6 @@ export async function GET(request: NextRequest) {
     query = query.or(`first_name.ilike.${q},last_name.ilike.${q},email.ilike.${q}`);
   }
 
-  // JSON filters for package/payment (PostgREST)
   if (registrationTier === 'free' || registrationTier === 'certificate') {
     query = query.eq('submission_data->>registration_tier', registrationTier);
   }

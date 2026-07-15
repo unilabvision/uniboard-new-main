@@ -8,6 +8,7 @@ import { requireSiteApplicationsModuleUser } from '@/app/api/site-applications/a
 import { getSiteApplicationAttachmentUrl } from '@/app/lib/siteApplications/attachmentDownload';
 import { sendSiteApplicationApprovalEmail } from '@/app/_services/siteApplicationApprovalEmail';
 import { ensureEventApplicationAccepted } from '@/app/lib/siteApplications/eventAutoAccept';
+import { syncSingleApplicationPayment } from '@/app/lib/siteApplications/syncPayments';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -17,6 +18,8 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   if (authResult.error || !authResult.supabase) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
+
+  await syncSingleApplicationPayment(authResult.supabase, id);
 
   const { data: loaded, error } = await authResult.supabase
     .from(siteApplicationsDb.applications)
