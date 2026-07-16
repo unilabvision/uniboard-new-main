@@ -5,10 +5,12 @@ import {
   Eye, Edit, Copy,
   Clock, Users, DollarSign, Target,
   CheckCircle, Pause, Play,
-  Folder, Tag, Percent
+  Folder, Tag, Percent, Plus
 } from 'lucide-react';
 import { useUser } from '@clerk/nextjs';
+import { useParams } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import Link from 'next/link';
 
 // Supabase clients
 const supabaseMain = createClientComponentClient({
@@ -135,7 +137,7 @@ interface LocalizedTexts {
 const texts: Record<string, LocalizedTexts> = {
   tr: {
     title: "Kampanya & İndirim Kodlarım",
-    subtitle: "Size atanan kampanyaları ve indirim kodlarını görüntüleyin.",
+    subtitle: "Kampanyalarınızı görüntüleyin. Yeni kod oluşturmak ve kullanan e-postaları görmek için Kodlarım sayfasını kullanın.",
     tabs: {
       campaigns: "Kampanyalar",
       codes: "İndirim Kodları"
@@ -187,11 +189,11 @@ const texts: Record<string, LocalizedTexts> = {
     },
     empty: {
       campaignsTitle: "Henüz kampanyanız yok",
-      campaignsSubtitle: "Size atanan kampanyalar burada görünecek",
+      campaignsSubtitle: "Size bağlı kampanyalar burada görünecek",
       campaignsAction: "",
       codesTitle: "Henüz indirim kodunuz yok",
-      codesSubtitle: "Size atanan indirim kodları burada görünecek",
-      codesAction: ""
+      codesSubtitle: "Kod oluşturmak için Kodlarım sayfasına gidin",
+      codesAction: "Kodlarıma git"
     },
     toast: {
       codeCopied: "Kod kopyalandı"
@@ -201,7 +203,7 @@ const texts: Record<string, LocalizedTexts> = {
   },
   en: {
     title: "My Campaigns & Discount Codes",
-    subtitle: "View your assigned campaigns and discount codes.",
+    subtitle: "View your campaigns. Use My Codes to create codes and see which emails used them.",
     tabs: {
       campaigns: "Campaigns",
       codes: "Discount Codes"
@@ -253,11 +255,11 @@ const texts: Record<string, LocalizedTexts> = {
     },
     empty: {
       campaignsTitle: "No campaigns yet",
-      campaignsSubtitle: "Assigned campaigns will appear here",
+      campaignsSubtitle: "Your linked campaigns will appear here",
       campaignsAction: "",
       codesTitle: "No discount codes yet",
-      codesSubtitle: "Assigned discount codes will appear here",
-      codesAction: ""
+      codesSubtitle: "Go to My Codes to create a code",
+      codesAction: "Go to My Codes"
     },
     toast: {
       codeCopied: "Code copied"
@@ -662,7 +664,8 @@ export default function CampaignsPage() {
 
   // Clerk user hook
   const { user: clerkUser, isLoaded } = useUser();
-  const locale = 'tr'; // You can get this from params or context
+  const params = useParams();
+  const locale = (params?.locale as string) || 'tr';
   const t = texts[locale] || texts.tr;
 
   // Toast function
@@ -1002,6 +1005,23 @@ export default function CampaignsPage() {
         </div>
 
         {/* Tabs */}
+        <div className="mb-6">
+          <div className="rounded-lg border border-[#990000]/20 bg-[#990000]/5 dark:bg-[#990000]/10 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <p className="text-sm text-neutral-700 dark:text-neutral-300">
+              {locale === 'en'
+                ? 'Create codes and see which emails used them on My Codes.'
+                : 'Kod oluşturmak ve hangi e-postaların kullandığını görmek için Kodlarım sayfasını kullanın.'}
+            </p>
+            <Link
+              href={`/${locale}/influencer/codes`}
+              className="inline-flex items-center px-3 py-1.5 text-sm rounded-lg bg-[#990000] text-white hover:bg-[#880000] shrink-0"
+            >
+              <Plus className="w-4 h-4 mr-1.5" />
+              {locale === 'en' ? 'My Codes' : 'Kodlarım'}
+            </Link>
+          </div>
+        </div>
+
         <div className="mb-8">
           <div className="flex space-x-1 bg-neutral-100 dark:bg-neutral-800 p-1 rounded-lg w-fit">
             <button
@@ -1174,6 +1194,14 @@ export default function CampaignsPage() {
             <p className="text-neutral-600 dark:text-neutral-400 mb-6 max-w-md mx-auto">
               {activeTab === 'campaigns' ? t.empty.campaignsSubtitle : t.empty.codesSubtitle}
             </p>
+            {activeTab === 'codes' && t.empty.codesAction && (
+              <a
+                href={`/${locale}/influencer/codes`}
+                className="inline-flex items-center px-4 py-2 rounded-lg bg-[#990000] text-white text-sm font-medium hover:bg-[#880000]"
+              >
+                {t.empty.codesAction}
+              </a>
+            )}
           </div>
         )}
 

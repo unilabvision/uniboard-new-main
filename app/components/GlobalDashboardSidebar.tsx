@@ -351,11 +351,20 @@ function GlobalDashboardSidebarInner({ locale, modules }: SidebarProps) {
       ...(content as ModuleContent).items.map((item) => {
         const fullHref = item.href.startsWith('http')
           ? item.href
-          : `${basePath}${item.href}`;
+          : `${basePath}${item.href === '/' ? '' : item.href}`;
         const [itemPath, itemQuery = ''] = fullHref.split('?');
+        const normalizedPath = pathname.replace(/\/$/, '') || pathname;
+        const normalizedItem = itemPath.replace(/\/$/, '') || itemPath;
+        const isModuleHome =
+          normalizedItem === basePath ||
+          normalizedItem === `${basePath}` ||
+          item.href === '/';
         const isActive = itemQuery
-          ? pathname === itemPath && currentQuery === itemQuery
-          : pathname === itemPath && !currentQuery;
+          ? normalizedPath === normalizedItem && currentQuery === itemQuery
+          : isModuleHome
+            ? normalizedPath === basePath
+            : normalizedPath === normalizedItem ||
+              normalizedPath.startsWith(`${normalizedItem}/`);
 
         return {
           name: item.name,

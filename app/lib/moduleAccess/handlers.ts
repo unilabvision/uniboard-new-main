@@ -15,6 +15,7 @@ import {
   findClerkUserByEmail,
   getAppBaseUrl,
   requireModuleAccessManager,
+  searchClerkUsers,
 } from '@/app/lib/moduleAccess/helpers';
 
 async function grantModuleAccess(
@@ -241,11 +242,15 @@ export async function grantModuleAccessMember(
   const extraNoteTr =
     def.primaryModuleKey === 'internship' && addAsReviewer
       ? 'Değerlendirici yetkileri de tanımlandı.'
-      : '';
+      : def.primaryModuleKey === 'influencer'
+        ? 'Panelde Kodlarım bölümünden kendi indirim kodlarınızı oluşturabilir ve kullanan e-postaları görebilirsiniz.'
+        : '';
   const extraNoteEn =
     def.primaryModuleKey === 'internship' && addAsReviewer
       ? 'Reviewer permissions were also granted.'
-      : '';
+      : def.primaryModuleKey === 'influencer'
+        ? 'Use My Codes in the panel to create discount codes and see which emails used them.'
+        : '';
 
   await sendModuleAccessEmail({
     to: targetEmail,
@@ -313,11 +318,7 @@ export async function searchModuleAccessUsers(
     );
   }
 
-  const clerk = await clerkClient();
-  const { data } = isEmailQuery(q)
-    ? await clerk.users.getUserList({ emailAddress: [q.toLowerCase()], limit: 10 })
-    : await clerk.users.getUserList({ query: q, limit: 10 });
-
+  const data = await searchClerkUsers(q, 15);
   const users = await Promise.all(data.map((u) => clerkUserToResult(u)));
 
   return NextResponse.json({ users, query: q });

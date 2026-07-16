@@ -71,7 +71,7 @@ export async function POST(request) {
           }
         }
 
-        // İndirim kodu bilgilerini al
+        // İndirim kodu bilgilerini al (büyük/küçük harf duyarsız)
         const { data: discountCode, error: dcError } = await supabaseMain
           .from('discount_codes')
           .select(`
@@ -84,8 +84,8 @@ export async function POST(request) {
             discount_type,
             is_one_time
           `)
-          .eq('code', order.discountcode)
-          .single();
+          .ilike('code', order.discountcode)
+          .maybeSingle();
 
         if (dcError || !discountCode) {
           console.log(`❌ Discount code not found for order ${order.orderid}: ${order.discountcode}`);

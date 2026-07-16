@@ -1,10 +1,11 @@
-/** Clerk spotlight — yalnızca isim veya e-posta (string) */
-const SEARCH_QUERY_RE = /^[\p{L}\p{M}\s@.\-_']{2,120}$/u;
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** Clerk spotlight — isim veya e-posta (harf, rakam, + tag vb.) */
+const SEARCH_QUERY_RE = /^[\p{L}\p{M}\p{N}\s@.\-_+']{2,120}$/u;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 
 export function isValidAccessSearchQuery(query: string): boolean {
   const trimmed = query.trim();
   if (trimmed.length < 2) return false;
+  // Clerk user id / UUID aramasını engelle (yalnızca isim/e-posta)
   if (/^user_[a-zA-Z0-9]+$/.test(trimmed)) return false;
   if (/^[0-9a-f-]{36}$/i.test(trimmed)) return false;
   return SEARCH_QUERY_RE.test(trimmed);

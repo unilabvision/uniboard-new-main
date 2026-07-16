@@ -1,6 +1,7 @@
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { createClient } from '@supabase/supabase-js';
 import type { ModuleAccessDefinition } from '@/app/lib/moduleAccess/registry';
+import { isEmailQuery } from '@/app/lib/internship/accessQuery';
 
 export function getServiceSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL2;
@@ -69,10 +70,57 @@ export async function clerkUserToResult(user: {
 export async function findClerkUserByEmail(email: string) {
   const clerk = await clerkClient();
   const { data } = await clerk.users.getUserList({
-    emailAddress: [email],
+    emailAddress: [email.toLowerCase()],
     limit: 1,
   });
   return data[0] ?? null;
+}
+
+/**
+ * Clerk kullanıcı araması: e-posta tam eşleşme + genel query.
+ * Sonuçlar id'ye göre birleştirilir.
+ */
+export async function searchClerkUsers(query: string, limit = 15) {
+  const clerk = await clerkClient();
+  const q = query.trim();
+  const byId = new Map<string, Awaited<ReturnType<typeof clerk.users.getUserList>>['data'][number]>();
+
+  const merge = (
+    users: Awaited<ReturnType<typeof clerk.users.getUserList>>['data']
+  ) => {
+    for (const user of users) {
+      if (!byId.has(user.id)) byId.set(user.id, user);
+    }
+  };
+
+  if (isEmailQuery(q)) {
+    const email = q.toLowerCase();
+    const exact = await clerk.users.getUserList({
+      emailAddress: [email],
+      limit,
+    });
+    merge(exact.data);
+
+    // Tam eşleşme yoksa veya eksikse genel arama ile tamamla
+    if (byId.size === 0) {
+      const fuzzy = await clerk.users.getUserList({ query: email, limit });
+      merge(fuzzy.data);
+    }
+  } else {
+    const fuzzy = await clerk.users.getUserList({ query: q, limit });
+    merge(fuzzy.data);
+
+    // "ozden2004" gibi e-posta lokal kısmı yazıldıysa @gmail ile de dene
+    if (byId.size === 0 && !q.includes('@') && q.length >= 3) {
+      const asEmailGuess = await clerk.users.getUserList({
+        query: `${q}@`,
+        limit,
+      });
+      merge(asEmailGuess.data);
+    }
+  }
+
+  return [...byId.values()].slice(0, limit);
 }
 
 export function getAppBaseUrl() {

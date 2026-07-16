@@ -8,8 +8,6 @@ const isPublicRoute = createRouteMatcher([
   '/tr',
   '/en',
   '/tr/hakkimizda(.*)',
-  '/tr/influencer(.*)',
-  '/en/influencer(.*)',
   '/tr/certificates(.*)',
   '/en/certificates(.*)',
   '/tr/internship(.*)',
@@ -147,6 +145,8 @@ const isProtectedRoute = createRouteMatcher([
   '/en/member(.*)', // Member pages
   '/tr/checkout(.*)', // Checkout requires auth
   '/en/checkout(.*)', // Checkout requires auth
+  '/tr/influencer(.*)', // Influencer panel requires auth
+  '/en/influencer(.*)',
 ]);
 
 // Payment-related routes that need special handling
@@ -290,6 +290,14 @@ export default clerkMiddleware(async (auth, req) => {
     const response = NextResponse.next();
     response.headers.set('x-body-size-limit', '1073741824'); // 1GB
     return response;
+  }
+
+  // Influencer APIs require a signed-in session (handlers also check module access)
+  if (pathname.startsWith('/api/influencer')) {
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    return NextResponse.next();
   }
 
   // Course-preview route'larını özel olarak handle et (next.config.js'te rewrite var)

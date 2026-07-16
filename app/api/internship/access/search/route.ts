@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { clerkClient } from '@clerk/nextjs/server';
-import {
-  isEmailQuery,
-  isValidAccessSearchQuery,
-} from '@/app/lib/internship/accessQuery';
+import { isValidAccessSearchQuery } from '@/app/lib/internship/accessQuery';
 import {
   clerkUserToResult,
   requireInternshipAccessManager,
 } from '../_helpers';
+import { searchClerkUsers } from '@/app/lib/moduleAccess/helpers';
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,11 +27,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const clerk = await clerkClient();
-    const { data } = isEmailQuery(q)
-      ? await clerk.users.getUserList({ emailAddress: [q.toLowerCase()], limit: 10 })
-      : await clerk.users.getUserList({ query: q, limit: 10 });
-
+    const data = await searchClerkUsers(q, 15);
     const users = await Promise.all(data.map((u) => clerkUserToResult(u)));
 
     return NextResponse.json({ users, query: q });

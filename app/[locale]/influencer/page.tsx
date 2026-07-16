@@ -890,7 +890,7 @@ const DashboardContent = ({ locale }: { locale: string }) => {
               </div>
             </Link>
             
-            <Link href={`/${locale}/influencer/performance`}>
+            <Link href={`/${locale}/influencer/analytics`}>
               <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6 hover:shadow-lg hover:scale-[1.02] transition-all duration-300 cursor-pointer group">
                 <div className="flex items-start space-x-4">
                   <div className="w-12 h-12 rounded-lg bg-gradient-to-r from-red-500 to-red-600 flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -968,7 +968,7 @@ const DashboardContent = ({ locale }: { locale: string }) => {
                     {t.sections.topCourses}
                   </h2>
                   <Link 
-                    href={`/${locale}/influencer/performance`}
+                    href={`/${locale}/influencer/analytics`}
                     className="text-sm text-[#990000] hover:text-[#770000] font-medium flex items-center"
                   >
                     {t.actions.viewDetails}

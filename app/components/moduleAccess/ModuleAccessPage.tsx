@@ -67,7 +67,7 @@ export default function ModuleAccessPage({
         title: 'Yetkilendirme',
         subtitle: 'Kayıtlı kullanıcıları isim veya e-posta ile arayın',
         placeholder: 'İsim veya e-posta yazın…',
-        hint: 'En az 2 karakter yazarak aramaya başlayın.',
+        hint: 'En az 2 karakter yazın; e-posta veya isim ile arayın.',
         invite: 'Erişim Ver & Davet Gönder',
         inviting: 'Gönderiliyor…',
         reviewer: 'Değerlendirici olarak ekle (oy, durum, not)',
@@ -77,14 +77,14 @@ export default function ModuleAccessPage({
         selected: 'Seçili kullanıcı',
         clear: 'Temizle',
         invalidQuery: 'Geçersiz arama — yalnızca isim veya e-posta kullanın.',
-        noResults: 'Sonuç bulunamadı',
+        noResults: 'Clerk’te eşleşen kullanıcı bulunamadı. E-postayı tam yazıp tekrar deneyin veya davet gönderin.',
         superAdmin: 'Süper yönetici',
       }
     : {
         title: 'Access Control',
         subtitle: 'Search registered users by name or email',
         placeholder: 'Type name or email…',
-        hint: 'Start typing at least 2 characters to search.',
+        hint: 'Type at least 2 characters; search by email or name.',
         invite: 'Grant Access & Send Invite',
         inviting: 'Sending…',
         reviewer: 'Add as reviewer (vote, status, notes)',
@@ -94,7 +94,7 @@ export default function ModuleAccessPage({
         selected: 'Selected user',
         clear: 'Clear',
         invalidQuery: 'Invalid search — use name or email only.',
-        noResults: 'No results found',
+        noResults: 'No matching Clerk user found. Try the full email or send an invite.',
         superAdmin: 'Super admin',
       };
 

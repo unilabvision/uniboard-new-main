@@ -5,6 +5,7 @@ import {
   Home,
   Link2,
   Shield,
+  Tag,
 } from 'lucide-react';
 
 export const influencerSidebarContent = {
@@ -15,6 +16,11 @@ export const influencerSidebarContent = {
         name: "Ana Sayfa",
         href: "/",
         icon: Home
+      },
+      {
+        name: "Kodlarım",
+        href: "/codes",
+        icon: Tag
       },
       {
         name: "Satışlarım",
@@ -50,6 +56,11 @@ export const influencerSidebarContent = {
         name: "Home",
         href: "/",
         icon: Home
+      },
+      {
+        name: "My Codes",
+        href: "/codes",
+        icon: Tag
       },
       {
         name: "My Sales",
