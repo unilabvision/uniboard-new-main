@@ -10,8 +10,8 @@ export async function sendModuleAccessEmail({
   invited = false,
   extraNoteTr = '',
   extraNoteEn = '',
-  ctaLabelTr,
-  ctaLabelEn,
+  ctaLabelTr = undefined,
+  ctaLabelEn = undefined,
 }) {
   try {
     const transporter = nodemailer.createTransport({
