@@ -49,7 +49,9 @@ interface DiscountCode {
   used_at?: string;
   influencer_id: string;
   campaign_id?: string;
-  commission: number; // YENİ ALAN - Komisyon oranı
+  commission: number;
+  max_usage?: number;
+  usage_count?: number;
   created_at: string;
   campaign?: Campaign;
 }
@@ -765,10 +767,11 @@ export default function CampaignsPage() {
           console.error('Error fetching codes:', codesError);
           setDiscountCodes([]);
         } else {
-          // Eğer commission alanı yoksa varsayılan 15 değerini ekle
-          const processedCodes = (codesData || []).map(code => ({
+          // Eğer commission alanı yoksa varsayılan 15; tek kullanım max_usage=1
+          const processedCodes = (codesData || []).map((code) => ({
             ...code,
-            commission: code.commission || 15 // Fallback to 15 if no commission set
+            commission: code.commission || 15,
+            is_one_time: Number(code.max_usage) === 1,
           }));
           setDiscountCodes(processedCodes);
         }

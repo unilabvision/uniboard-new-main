@@ -21,6 +21,7 @@ import { useUser } from '@clerk/nextjs';
 import {
   daysLeft,
   getCodeStatus,
+  isOneTimeCode,
   normalizeDiscountCode,
   type CodeStatus,
   type InfluencerDiscountCode,
@@ -497,8 +498,8 @@ export default function InfluencerCodesPage() {
                       )}
                     </p>
                     <p className="text-xs">
-                      {code.is_one_time ? t.oneTime : t.multiUse}
-                      {code.is_one_time && code.used_by ? ` · ${code.used_by}` : ''}
+                      {isOneTimeCode(code) ? t.oneTime : t.multiUse}
+                      {isOneTimeCode(code) && code.used_by ? ` · ${code.used_by}` : ''}
                     </p>
                     {counts && (
                       <p className="flex items-center gap-1.5 text-xs pt-1">

@@ -21,12 +21,13 @@ export interface DiscountCode {
   discount_type: 'fixed' | 'percentage';
   valid_until: string;
   applicable_courses: string[];
-  is_one_time: boolean;
   is_used: boolean;
   used_by?: string;
   used_at?: string;
   influencer_id?: string;
   created_at: string;
+  max_usage?: number;
+  usage_count?: number;
 }
 
 export interface Influencer {

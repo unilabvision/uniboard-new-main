@@ -82,7 +82,8 @@ export async function POST(request) {
             commission,
             discount_amount,
             discount_type,
-            is_one_time
+            max_usage,
+            usage_count
           `)
           .ilike('code', order.discountcode)
           .maybeSingle();
@@ -157,17 +158,28 @@ export async function POST(request) {
           continue;
         }
 
-        // Tek kullanımlık kodları işaretle
-        if (discountCode.is_one_time) {
+        // Tek kullanımlık kodları işaretle (max_usage === 1)
+        const isOneTime = Number(discountCode.max_usage) === 1;
+        if (isOneTime) {
           await supabaseMain
             .from('discount_codes')
             .update({
               is_used: true,
               used_by: order.useremail,
-              used_at: new Date().toISOString()
+              used_at: new Date().toISOString(),
+              usage_count: (Number(discountCode.usage_count) || 0) + 1
             })
             .eq('id', discountCode.id);
           console.log(`🏷️ Marked discount code as used`);
+        } else {
+          await supabaseMain
+            .from('discount_codes')
+            .update({
+              usage_count: (Number(discountCode.usage_count) || 0) + 1,
+              used_by: order.useremail,
+              used_at: new Date().toISOString()
+            })
+            .eq('id', discountCode.id);
         }
 
         console.log(`✅ Commission created successfully for order ${order.orderid}, amount: ${commissionAmount}`);

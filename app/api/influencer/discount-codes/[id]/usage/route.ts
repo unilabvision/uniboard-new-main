@@ -22,7 +22,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     const { data: code, error: codeError } = await access.supabase
       .from('discount_codes')
       .select(
-        'id, code, discount_amount, discount_type, valid_until, is_one_time, is_used, used_by, used_at, influencer_id, commission, created_at'
+        'id, code, discount_amount, discount_type, valid_until, is_used, used_by, used_at, influencer_id, commission, created_at, max_usage, usage_count'
       )
       .eq('id', id)
       .eq('influencer_id', access.userId)

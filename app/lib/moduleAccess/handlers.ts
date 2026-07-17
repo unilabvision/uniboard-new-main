@@ -13,7 +13,7 @@ import type { ModuleAccessDefinition } from '@/app/lib/moduleAccess/registry';
 import {
   clerkUserToResult,
   findClerkUserByEmail,
-  getAppBaseUrl,
+  buildModuleAccessLinks,
   requireModuleAccessManager,
   searchClerkUsers,
 } from '@/app/lib/moduleAccess/helpers';
@@ -171,8 +171,12 @@ export async function grantModuleAccessMember(
     }
   }
 
-  const appUrl = getAppBaseUrl();
-  const dashboardUrl = `${appUrl}/${locale}/${def.dashboardPath}`;
+  const { panelUrl, loginUrl, signUpUrl } = buildModuleAccessLinks(
+    locale,
+    def.dashboardPath
+  );
+  // Davet mailindeki CTA: kayıtlı kullanıcı → giriş+panel; yeni → kayıt+panel
+  // Asla Vercel preview URL kullanma (vercel.com login’e düşer)
 
   if (!targetUserId) {
     const query = targetEmail || targetName;
@@ -194,17 +198,19 @@ export async function grantModuleAccessMember(
     }
 
     const clerk = await clerkClient();
+    // Clerk tarafında davet kaydı oluştur; kendi mailimiz panel login/kayıt linkini taşır
     await clerk.invitations.createInvitation({
       emailAddress: targetEmail,
-      redirectUrl: dashboardUrl,
+      redirectUrl: signUpUrl,
       publicMetadata: { pendingModule: def.primaryModuleKey },
+      notify: false,
     });
 
     await sendModuleAccessEmail({
       to: targetEmail,
       name: targetName || targetEmail,
       locale,
-      dashboardUrl,
+      dashboardUrl: signUpUrl,
       moduleNameTr: def.nameTr,
       moduleNameEn: def.nameEn,
       invited: true,
@@ -215,8 +221,8 @@ export async function grantModuleAccessMember(
       invited: true,
       message:
         locale === 'tr'
-          ? 'Clerk davet e-postası gönderildi. Kullanıcı kayıt olduktan sonra erişimi tekrar onaylayın.'
-          : 'Clerk invitation sent. Grant access again after the user registers.',
+          ? 'Panel daveti e-postası gönderildi. Kullanıcı kayıt/giriş sonrası panele yönlendirilir.'
+          : 'Panel invitation email sent. After sign-up/sign-in the user is redirected to the panel.',
     });
   }
 
@@ -256,7 +262,7 @@ export async function grantModuleAccessMember(
     to: targetEmail,
     name: targetName,
     locale,
-    dashboardUrl,
+    dashboardUrl: loginUrl,
     moduleNameTr: def.nameTr,
     moduleNameEn: def.nameEn,
     invited: false,
@@ -267,6 +273,7 @@ export async function grantModuleAccessMember(
   return NextResponse.json({
     success: true,
     invited: false,
+    panelUrl,
     user: await clerkUserToResult(clerkUser),
     addAsReviewer: def.primaryModuleKey === 'internship' ? addAsReviewer : undefined,
   });

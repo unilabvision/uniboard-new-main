@@ -419,7 +419,10 @@ const translations: TranslationsType = useMemo(
 
           if (result.status === 'complete' && result.createdSessionId) {
             await setActive({ session: result.createdSessionId });
-            router.push(`/${normalizedLocale}/complete-profile`);
+            const redirectParam = searchParams.get('redirect');
+            router.push(
+              redirectParam || `/${normalizedLocale}/complete-profile`
+            );
           } else {
             setVerificationError(t.signup.verificationError);
           }

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireInfluencerUser } from '@/app/lib/influencer/access';
-import { normalizeDiscountCode } from '@/app/lib/influencer/codes';
+import {
+  DISCOUNT_CODE_SELECT,
+  mapDiscountCodeRow,
+  normalizeDiscountCode,
+} from '@/app/lib/influencer/codes';
 
 const DEFAULT_COMMISSION = 15;
 
@@ -16,10 +20,9 @@ export async function GET() {
 
     const { data, error } = await access.supabase
       .from('discount_codes')
-      .select(
-        'id, code, discount_amount, discount_type, valid_until, applicable_courses, is_one_time, is_used, used_by, used_at, influencer_id, campaign_id, commission, created_at'
-      )
+      .select(DISCOUNT_CODE_SELECT)
       .eq('influencer_id', access.userId)
+      .eq('is_referral', false)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -27,7 +30,9 @@ export async function GET() {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const codes = data || [];
+    const codes = (data || []).map((row) =>
+      mapDiscountCodeRow(row as Record<string, unknown>)
+    );
     const codeStrings = codes.map((c) => c.code).filter(Boolean);
     const codeLookup = new Map(
       codeStrings.map((c) => [c.toLowerCase(), c] as const)
@@ -39,7 +44,6 @@ export async function GET() {
     > = {};
 
     if (codeStrings.length > 0) {
-      // Case-insensitive match without scanning all orders
       const orFilter = codeStrings
         .slice(0, 80)
         .map((c) => `discountcode.ilike.${c.replace(/[,.()]/g, '')}`)
@@ -186,7 +190,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Checkout (myuni) valid_until'ı YYYY-MM-DD olarak karşılaştırır; ISO timestamp kullanma.
+    // Checkout (myuni) valid_until'ı YYYY-MM-DD olarak karşılaştırır
     const dateMatch = validUntil.match(/^(\d{4})-(\d{2})-(\d{2})/);
     const validUntilDate = dateMatch
       ? `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`
@@ -199,18 +203,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Gerçek şema: is_one_time yok → max_usage ile temsil edilir
     const insertPayload = {
       code,
       discount_amount: discountAmount,
       discount_type: discountType,
       valid_until: validUntilDate,
       applicable_courses: applicableCourses,
-      is_one_time: isOneTime,
       is_used: false,
       influencer_id: access.userId,
       campaign_id: campaignId,
       commission,
-      // Checkout yalnızca is_referral=false kodları listeler
       is_referral: false,
       is_campaign: false,
       has_balance_limit: false,
@@ -221,9 +224,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await access.supabase
       .from('discount_codes')
       .insert(insertPayload)
-      .select(
-        'id, code, discount_amount, discount_type, valid_until, applicable_courses, is_one_time, is_used, used_by, used_at, influencer_id, campaign_id, commission, created_at'
-      )
+      .select(DISCOUNT_CODE_SELECT)
       .single();
 
     if (error) {
@@ -234,7 +235,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ code: data }, { status: 201 });
+    return NextResponse.json(
+      { code: mapDiscountCodeRow(data as Record<string, unknown>) },
+      { status: 201 }
+    );
   } catch (err) {
     console.error('Influencer codes POST error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

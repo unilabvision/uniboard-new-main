@@ -123,13 +123,36 @@ export async function searchClerkUsers(query: string, limit = 15) {
   return [...byId.values()].slice(0, limit);
 }
 
+/** Kullanıcıya giden maillerde asla Vercel preview URL kullanma (Deployment Protection → vercel.com login). */
+export const DEFAULT_DASHBOARD_ORIGIN = 'https://dashboard.myunilab.net';
+
 export function getAppBaseUrl() {
-  return (
-    process.env.NEXT_PUBLIC_APP_URL ||
-    (process.env.VERCEL_URL
-      ? process.env.VERCEL_URL.startsWith('http')
-        ? process.env.VERCEL_URL
-        : `https://${process.env.VERCEL_URL}`
-      : 'http://localhost:3000')
-  );
+  const candidates = [
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.NEXT_PUBLIC_DASHBOARD_URL,
+  ];
+
+  for (const raw of candidates) {
+    const value = (raw || '').trim().replace(/\/$/, '');
+    if (!value) continue;
+    if (/vercel\.app|vercel\.com/i.test(value)) continue;
+    return value.startsWith('http') ? value : `https://${value}`;
+  }
+
+  if (process.env.NODE_ENV === 'development') {
+    return 'http://localhost:3000';
+  }
+
+  return DEFAULT_DASHBOARD_ORIGIN;
+}
+
+/** Yetkilendirme maili / Clerk daveti için panel + login/kayıt linkleri */
+export function buildModuleAccessLinks(locale: string, dashboardPath: string) {
+  const base = getAppBaseUrl();
+  const safeLocale = locale === 'en' ? 'en' : 'tr';
+  const panelPath = `/${safeLocale}/${dashboardPath}`.replace(/\/{2,}/g, '/');
+  const panelUrl = `${base}${panelPath}`;
+  const loginUrl = `${base}/${safeLocale}/login?tab=signin&redirect=${encodeURIComponent(panelPath)}`;
+  const signUpUrl = `${base}/${safeLocale}/login?tab=signup&redirect=${encodeURIComponent(panelPath)}`;
+  return { base, panelPath, panelUrl, loginUrl, signUpUrl };
 }

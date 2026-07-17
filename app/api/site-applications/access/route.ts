@@ -14,6 +14,7 @@ import {
   findClerkUserByEmail,
   requireSiteApplicationsAccessManager,
 } from './_helpers';
+import { buildModuleAccessLinks } from '@/app/lib/moduleAccess/helpers';
 
 async function grantModuleAccess(supabase: SupabaseClient, clerkUserId: string) {
   const { data: existing } = await supabase
@@ -142,15 +143,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const appUrl =
-      process.env.NEXT_PUBLIC_APP_URL ||
-      (process.env.VERCEL_URL
-        ? process.env.VERCEL_URL.startsWith('http')
-          ? process.env.VERCEL_URL
-          : `https://${process.env.VERCEL_URL}`
-        : 'http://localhost:3000');
-
-    const dashboardUrl = `${appUrl}/${locale}/site-applications`;
+    const { panelUrl, loginUrl, signUpUrl } = buildModuleAccessLinks(
+      locale,
+      'site-applications'
+    );
 
     if (!targetUserId) {
       const query = targetEmail || targetName;
@@ -174,15 +170,16 @@ export async function POST(request: NextRequest) {
       const clerk = await clerkClient();
       await clerk.invitations.createInvitation({
         emailAddress: targetEmail,
-        redirectUrl: dashboardUrl,
+        redirectUrl: signUpUrl,
         publicMetadata: { pendingModule: 'site-applications' },
+        notify: false,
       });
 
       await sendSiteApplicationsAccessInviteEmail({
         to: targetEmail,
         name: targetName || targetEmail,
         locale,
-        dashboardUrl,
+        dashboardUrl: signUpUrl,
         invited: true,
       });
 
@@ -191,8 +188,8 @@ export async function POST(request: NextRequest) {
         invited: true,
         message:
           locale === 'tr'
-            ? 'Clerk davet e-postası gönderildi. Kullanıcı kayıt olduktan sonra erişimi tekrar onaylayın.'
-            : 'Clerk invitation sent. Grant access again after the user registers.',
+            ? 'Panel daveti e-postası gönderildi. Kullanıcı kayıt/giriş sonrası panele yönlendirilir.'
+            : 'Panel invitation email sent. After sign-up/sign-in the user is redirected to the panel.',
       });
     }
 
@@ -215,13 +212,14 @@ export async function POST(request: NextRequest) {
       to: targetEmail,
       name: targetName,
       locale,
-      dashboardUrl,
+      dashboardUrl: loginUrl,
       invited: false,
     });
 
     return NextResponse.json({
       success: true,
       invited: false,
+      panelUrl,
       user: await clerkUserToResult(clerkUser),
     });
   } catch (err) {

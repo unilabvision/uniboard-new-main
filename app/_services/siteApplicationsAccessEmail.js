@@ -36,11 +36,19 @@ export async function sendSiteApplicationsAccessInviteEmail({
     const greeting = tr ? `Merhaba ${name},` : `Hello ${name},`;
     const body = invited
       ? tr
-        ? 'MyUNI Site Başvuruları paneline davet edildiniz. Hesabınızı oluşturmak için Clerk davet e-postanızdaki bağlantıyı kullanın; ardından aşağıdaki panele erişebilirsiniz.'
-        : 'You have been invited to the MyUNI Site Applications panel. Use the link in your Clerk invitation email to create your account, then access the panel below.'
+        ? 'MyUNI Site Başvuruları paneline davet edildiniz. Aşağıdaki butona tıklayarak hesabınızı oluşturun veya giriş yapın; ardından panele yönlendirileceksiniz.'
+        : 'You have been invited to the MyUNI Site Applications panel. Click the button below to create your account or sign in; you will then be taken to the panel.'
       : tr
-        ? 'Site Başvuruları yönetim paneline erişiminiz açıldı.'
-        : 'Your access to the Site Applications admin panel has been granted.';
+        ? 'Site Başvuruları yönetim paneline erişiminiz açıldı. Panele gitmek için aşağıdaki butonu kullanın.'
+        : 'Your access to the Site Applications admin panel has been granted. Use the button below to open the panel.';
+
+    const cta = invited
+      ? tr
+        ? 'Daveti kabul et / Panele git'
+        : 'Accept invite / Open panel'
+      : tr
+        ? 'Panele Git'
+        : 'Open Panel';
 
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; color: #222;">
@@ -48,9 +56,10 @@ export async function sendSiteApplicationsAccessInviteEmail({
         <p>${body}</p>
         <p style="margin: 24px 0;">
           <a href="${dashboardUrl}" style="background:#990000;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;">
-            ${tr ? 'Panele Git' : 'Open Panel'}
+            ${cta}
           </a>
         </p>
+        <p style="font-size:12px;color:#666;word-break:break-all;">${dashboardUrl}</p>
         <p style="font-size:12px;color:#666;">${tr ? 'Destek' : 'Support'}: info@myunilab.net</p>
       </div>
     `;

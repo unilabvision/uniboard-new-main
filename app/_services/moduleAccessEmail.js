@@ -10,6 +10,8 @@ export async function sendModuleAccessEmail({
   invited = false,
   extraNoteTr = '',
   extraNoteEn = '',
+  ctaLabelTr,
+  ctaLabelEn,
 }) {
   try {
     const transporter = nodemailer.createTransport({
@@ -29,8 +31,8 @@ export async function sendModuleAccessEmail({
     const moduleName = tr ? moduleNameTr : moduleNameEn;
     const subject = invited
       ? tr
-        ? `MyUNI — ${moduleName} davetiniz`
-        : `MyUNI — Your ${moduleName} invitation`
+        ? `MyUNI — ${moduleName} panel davetiniz`
+        : `MyUNI — Your ${moduleName} panel invitation`
       : tr
         ? `MyUNI — ${moduleName} erişiminiz açıldı`
         : `MyUNI — ${moduleName} access granted`;
@@ -38,11 +40,19 @@ export async function sendModuleAccessEmail({
     const greeting = tr ? `Merhaba ${name},` : `Hello ${name},`;
     const body = invited
       ? tr
-        ? `${moduleName} paneline davet edildiniz. Hesabınızı oluşturmak için Clerk davet e-postanızdaki bağlantıyı kullanın; ardından panele erişebilirsiniz.`
-        : `You have been invited to the ${moduleName} panel. Use your Clerk invitation email to create your account, then access the panel.`
+        ? `${moduleName} paneline davet edildiniz. Aşağıdaki butona tıklayarak hesabınızı oluşturun veya giriş yapın; ardından panele yönlendirileceksiniz.${extraNoteTr ? ` ${extraNoteTr}` : ''}`
+        : `You have been invited to the ${moduleName} panel. Click the button below to create your account or sign in; you will then be taken to the panel.${extraNoteEn ? ` ${extraNoteEn}` : ''}`
       : tr
-        ? `${moduleName} yönetim paneline erişiminiz açıldı.${extraNoteTr ? ` ${extraNoteTr}` : ''}`
-        : `Your access to the ${moduleName} admin panel has been granted.${extraNoteEn ? ` ${extraNoteEn}` : ''}`;
+        ? `${moduleName} yönetim paneline erişiminiz açıldı. Panele gitmek için aşağıdaki butonu kullanın.${extraNoteTr ? ` ${extraNoteTr}` : ''}`
+        : `Your access to the ${moduleName} admin panel has been granted. Use the button below to open the panel.${extraNoteEn ? ` ${extraNoteEn}` : ''}`;
+
+    const cta = invited
+      ? tr
+        ? ctaLabelTr || 'Daveti kabul et / Panele git'
+        : ctaLabelEn || 'Accept invite / Open panel'
+      : tr
+        ? ctaLabelTr || 'Panele Git'
+        : ctaLabelEn || 'Open Panel';
 
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto; color: #222;">
@@ -50,9 +60,10 @@ export async function sendModuleAccessEmail({
         <p>${body}</p>
         <p style="margin: 24px 0;">
           <a href="${dashboardUrl}" style="background:#990000;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;">
-            ${tr ? 'Panele Git' : 'Open Panel'}
+            ${cta}
           </a>
         </p>
+        <p style="font-size:12px;color:#666;word-break:break-all;">${dashboardUrl}</p>
         <p style="font-size:12px;color:#666;">${tr ? 'Destek' : 'Support'}: info@myunilab.net</p>
       </div>
     `;
