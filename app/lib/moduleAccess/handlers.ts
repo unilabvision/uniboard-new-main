@@ -16,6 +16,8 @@ import {
   buildModuleAccessLinks,
   requireModuleAccessManager,
   searchClerkUsers,
+  clerkErrorMessage,
+  isClerkIdentifierExistsError,
 } from '@/app/lib/moduleAccess/helpers';
 
 async function grantModuleAccess(
@@ -197,15 +199,34 @@ export async function grantModuleAccessMember(
       );
     }
 
+    // Clerk daveti opsiyonel: kullanıcı zaten varsa / pending invitation varsa hata vermesin
     const clerk = await clerkClient();
-    // Clerk tarafında davet kaydı oluştur; kendi mailimiz panel login/kayıt linkini taşır
-    await clerk.invitations.createInvitation({
-      emailAddress: targetEmail,
-      redirectUrl: signUpUrl,
-      publicMetadata: { pendingModule: def.primaryModuleKey },
-      notify: false,
-    });
+    try {
+      await clerk.invitations.createInvitation({
+        emailAddress: targetEmail,
+        redirectUrl: signUpUrl,
+        publicMetadata: { pendingModule: def.primaryModuleKey },
+        notify: false,
+      });
+    } catch (inviteErr) {
+      console.warn('Clerk invitation skipped/failed:', clerkErrorMessage(inviteErr));
 
+      // Kullanıcı aslında kayıtlıysa → erişim ver + giriş maili
+      if (isClerkIdentifierExistsError(inviteErr)) {
+        const existing = await findClerkUserByEmail(targetEmail);
+        if (existing) {
+          targetUserId = existing.id;
+          targetEmail =
+            existing.emailAddresses[0]?.emailAddress || targetEmail;
+          targetName = targetName || displayClerkName(existing);
+        }
+      }
+      // invitation already exists / redirect hatası → kendi mailimizi yine göndeririz
+    }
+  }
+
+  // Yeni kullanıcı: panel kayıt daveti (Clerk invitation başarısız olsa bile)
+  if (!targetUserId) {
     await sendModuleAccessEmail({
       to: targetEmail,
       name: targetName || targetEmail,
@@ -227,15 +248,24 @@ export async function grantModuleAccessMember(
   }
 
   const clerk = await clerkClient();
-  const { data: clerkUsers } = await clerk.users.getUserList({
-    userId: [targetUserId],
-    limit: 1,
-  });
-  const clerkUser = clerkUsers[0];
+  let clerkUser: Awaited<
+    ReturnType<typeof findClerkUserByEmail>
+  > =
+    (
+      await clerk.users.getUserList({
+        userId: [targetUserId],
+        limit: 1,
+      })
+    ).data[0] ?? null;
+
+  if (!clerkUser && targetEmail) {
+    clerkUser = await findClerkUserByEmail(targetEmail);
+  }
   if (!clerkUser) {
     return NextResponse.json({ error: 'Clerk kullanıcısı bulunamadı.' }, { status: 404 });
   }
 
+  targetUserId = clerkUser.id;
   targetEmail = targetEmail || clerkUser.emailAddresses[0]?.emailAddress || '';
   targetName = targetName || displayClerkName(clerkUser);
 
@@ -278,7 +308,6 @@ export async function grantModuleAccessMember(
     addAsReviewer: def.primaryModuleKey === 'internship' ? addAsReviewer : undefined,
   });
 }
-
 export async function revokeModuleAccessMember(
   def: ModuleAccessDefinition,
   request: NextRequest

@@ -69,11 +69,67 @@ export async function clerkUserToResult(user: {
 
 export async function findClerkUserByEmail(email: string) {
   const clerk = await clerkClient();
-  const { data } = await clerk.users.getUserList({
-    emailAddress: [email.toLowerCase()],
-    limit: 1,
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return null;
+
+  // 1) Tam e-posta filtresi
+  const exact = await clerk.users.getUserList({
+    emailAddress: [normalized],
+    limit: 10,
   });
-  return data[0] ?? null;
+  const exactHit =
+    exact.data.find((u) =>
+      u.emailAddresses.some((e) => e.emailAddress.toLowerCase() === normalized)
+    ) ?? exact.data[0];
+  if (exactHit) return exactHit;
+
+  // 2) Genel query (Clerk spotlight) — filtre bazen kaçırabiliyor
+  const fuzzy = await clerk.users.getUserList({
+    query: normalized,
+    limit: 25,
+  });
+  const fuzzyHit = fuzzy.data.find((u) =>
+    u.emailAddresses.some((e) => e.emailAddress.toLowerCase() === normalized)
+  );
+  if (fuzzyHit) return fuzzyHit;
+
+  // 3) Orijinal casing ile bir kez daha dene
+  if (email.trim() !== normalized) {
+    const cased = await clerk.users.getUserList({
+      emailAddress: [email.trim()],
+      limit: 10,
+    });
+    if (cased.data[0]) return cased.data[0];
+  }
+
+  return null;
+}
+
+function clerkErrorMessage(err: unknown): string {
+  if (!err || typeof err !== 'object') return 'Grant failed';
+  const e = err as {
+    message?: string;
+    errors?: Array<{ message?: string; code?: string; longMessage?: string }>;
+  };
+  const first = e.errors?.[0];
+  return first?.longMessage || first?.message || first?.code || e.message || 'Grant failed';
+}
+
+function isClerkIdentifierExistsError(err: unknown): boolean {
+  const msg = clerkErrorMessage(err).toLowerCase();
+  const code = String(
+    (err as { errors?: Array<{ code?: string }> })?.errors?.[0]?.code || ''
+  ).toLowerCase();
+  return (
+    code.includes('identifier_exists') ||
+    code.includes('form_identifier_exists') ||
+    code.includes('duplicate') ||
+    msg.includes('already exists') ||
+    msg.includes('already been taken') ||
+    msg.includes('is taken') ||
+    msg.includes('already invited') ||
+    msg.includes('invitation')
+  );
 }
 
 /**
@@ -83,7 +139,10 @@ export async function findClerkUserByEmail(email: string) {
 export async function searchClerkUsers(query: string, limit = 15) {
   const clerk = await clerkClient();
   const q = query.trim();
-  const byId = new Map<string, Awaited<ReturnType<typeof clerk.users.getUserList>>['data'][number]>();
+  const byId = new Map<
+    string,
+    Awaited<ReturnType<typeof clerk.users.getUserList>>['data'][number]
+  >();
 
   const merge = (
     users: Awaited<ReturnType<typeof clerk.users.getUserList>>['data']
@@ -94,23 +153,21 @@ export async function searchClerkUsers(query: string, limit = 15) {
   };
 
   if (isEmailQuery(q)) {
-    const email = q.toLowerCase();
-    const exact = await clerk.users.getUserList({
-      emailAddress: [email],
-      limit,
-    });
-    merge(exact.data);
+    const found = await findClerkUserByEmail(q);
+    if (found) merge([found]);
 
-    // Tam eşleşme yoksa veya eksikse genel arama ile tamamla
+    // Ek sonuçlar için query
     if (byId.size === 0) {
-      const fuzzy = await clerk.users.getUserList({ query: email, limit });
+      const fuzzy = await clerk.users.getUserList({
+        query: q.toLowerCase(),
+        limit,
+      });
       merge(fuzzy.data);
     }
   } else {
     const fuzzy = await clerk.users.getUserList({ query: q, limit });
     merge(fuzzy.data);
 
-    // "ozden2004" gibi e-posta lokal kısmı yazıldıysa @gmail ile de dene
     if (byId.size === 0 && !q.includes('@') && q.length >= 3) {
       const asEmailGuess = await clerk.users.getUserList({
         query: `${q}@`,
@@ -122,6 +179,8 @@ export async function searchClerkUsers(query: string, limit = 15) {
 
   return [...byId.values()].slice(0, limit);
 }
+
+export { clerkErrorMessage, isClerkIdentifierExistsError };
 
 /** Kullanıcıya giden maillerde asla Vercel preview URL kullanma (Deployment Protection → vercel.com login). */
 export const DEFAULT_DASHBOARD_ORIGIN = 'https://dashboard.myunilab.net';
