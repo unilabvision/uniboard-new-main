@@ -3,25 +3,7 @@ import { requireSiteApplicationsModuleUser } from '@/app/api/site-applications/a
 import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
 import { syncCertificatePaymentsFromOrders } from '@/app/lib/siteApplications/syncPayments';
 import { sendCertificatePaymentReminderEmail } from '@/app/_services/certificatePaymentReminderEmail';
-
-function getMyuniBaseUrl() {
-  const raw =
-    process.env.NEXT_PUBLIC_MYUNI_BASE_URL ||
-    process.env.NEXT_PUBLIC_BASE_URL ||
-    'https://myunilab.net';
-  return raw.replace(/\/$/, '');
-}
-
-function buildCheckoutUrl(
-  locale: string,
-  applicationId: string,
-  eventSlug?: string | null
-) {
-  const safeLocale = locale === 'en' ? 'en' : 'tr';
-  const qs = new URLSearchParams({ applicationId });
-  if (eventSlug) qs.set('eventSlug', eventSlug);
-  return `${getMyuniBaseUrl()}/${safeLocale}/checkout/event-application?${qs.toString()}`;
-}
+import { buildEventCertificateCheckoutUrl } from '@/app/lib/siteApplications/publicUrls';
 
 function readSubmission(raw: unknown): Record<string, unknown> {
   if (raw && typeof raw === 'object') return raw as Record<string, unknown>;
@@ -169,7 +151,9 @@ export async function POST(request: NextRequest) {
 
     const kind = paymentStatus === 'superseded' ? 'superseded' : 'pending';
     const checkoutUrl =
-      kind === 'pending' ? buildCheckoutUrl(locale, app.id, slug) : null;
+      kind === 'pending'
+        ? buildEventCertificateCheckoutUrl(locale, app.id, slug)
+        : null;
 
     const mail = await sendCertificatePaymentReminderEmail({
       to: email,

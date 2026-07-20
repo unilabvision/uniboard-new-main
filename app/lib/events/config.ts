@@ -1,9 +1,10 @@
+import { getMyuniPublicOrigin } from '@/app/lib/siteApplications/publicUrls';
+
 export const eventsDb = {
   events: 'myuni_events',
 } as const;
 
-export const PUBLIC_SITE_BASE =
-  process.env.NEXT_PUBLIC_SITE_URL || 'https://myunilab.net';
+export const PUBLIC_SITE_BASE = getMyuniPublicOrigin();
 
 export const EVENT_TYPES = [
   'workshop',

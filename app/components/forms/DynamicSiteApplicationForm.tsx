@@ -341,17 +341,20 @@ export default function DynamicSiteApplicationForm({
         // Aynı e-posta ile sertifika zaten ödenmiş → success (tekrar Iyzico yok)
         if (res.status === 409 && data.alreadyPaid && data.applicationId) {
           const paymentBase =
-            process.env.NEXT_PUBLIC_MYUNI_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || '';
-          if (paymentBase) {
+            process.env.NEXT_PUBLIC_BASE_URL || 'https://myunilab.net';
+          const origin = paymentBase.replace(/\/$/, '');
+          if (!/localhost|127\.0\.0\.1/i.test(origin)) {
             const qs = new URLSearchParams({
               type: 'event_application',
               applicationId: String(data.applicationId),
               alreadyPaid: '1',
             });
             if (eventSlug) qs.set('eventSlug', eventSlug);
-            window.location.href = `${paymentBase.replace(/\/$/, '')}/${locale}/payment-success?${qs.toString()}`;
+            window.location.href = `${origin}/${locale}/payment-success?${qs.toString()}`;
             return;
           }
+          window.location.href = `https://myunilab.net/${locale}/payment-success?type=event_application&applicationId=${encodeURIComponent(String(data.applicationId))}${eventSlug ? `&eventSlug=${encodeURIComponent(eventSlug)}` : ''}&alreadyPaid=1`;
+          return;
         }
         if (data.fieldErrors && typeof data.fieldErrors === 'object') {
           const mapped: Record<string, string> = {};
@@ -375,12 +378,14 @@ export default function DynamicSiteApplicationForm({
 
       if (data.requiresPayment && data.submissionId) {
         const paymentBase =
-          process.env.NEXT_PUBLIC_MYUNI_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || '';
+          process.env.NEXT_PUBLIC_BASE_URL || 'https://myunilab.net';
+        const origin = paymentBase.replace(/\/$/, '');
         const checkoutPath = `/${locale}/checkout/event-application?applicationId=${encodeURIComponent(data.submissionId)}${eventSlug ? `&eventSlug=${encodeURIComponent(eventSlug)}` : ''}`;
-        if (paymentBase) {
-          window.location.href = `${paymentBase.replace(/\/$/, '')}${checkoutPath}`;
-          return;
-        }
+        const safeOrigin = /localhost|127\.0\.0\.1/i.test(origin)
+          ? 'https://myunilab.net'
+          : origin;
+        window.location.href = `${safeOrigin}${checkoutPath}`;
+        return;
       }
 
       setSuccess(true);
