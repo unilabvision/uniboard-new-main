@@ -1,6 +1,7 @@
 // app/api/auth/user-modules/route.ts
-import { auth } from '@clerk/nextjs/server';
+import { auth, clerkClient } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
+import { claimPendingModuleFromClerkMetadata } from '@/app/lib/moduleAccess/grantToken';
 
 const DUPLICATE_EVENT_MODULE_KEYS = new Set([
   'etkinlik',
@@ -79,7 +80,7 @@ export async function GET() {
     // 4. Kullanıcının modül erişimlerini çek - DÜZELTME: clerk_user_id kullan
     console.log('🔍 Fetching user modules for clerk_user_id:', userId);
     
-    const { data: userModules, error: userModulesError } = await supabase
+    const { data: userModulesRaw, error: userModulesError } = await supabase
       .from('user_module_access')
       .select(`
         *,
@@ -102,6 +103,40 @@ export async function GET() {
         error: 'Database query error',
         details: userModulesError.message
       }, { status: 500 });
+    }
+
+    let userModules = userModulesRaw;
+
+    // Yeni davet: Clerk publicMetadata.pendingModule → access satırı
+    try {
+      const clerk = await clerkClient();
+      const clerkUser = await clerk.users.getUser(userId);
+      const claimed = await claimPendingModuleFromClerkMetadata(
+        supabase,
+        userId,
+        clerkUser.publicMetadata as Record<string, unknown>
+      );
+      if (claimed) {
+        const { data: refreshed } = await supabase
+          .from('user_module_access')
+          .select(`
+            *,
+            modules (
+              key,
+              name_tr,
+              name_en,
+              description_tr,
+              description_en,
+              icon,
+              is_active
+            )
+          `)
+          .eq('clerk_user_id', userId)
+          .eq('is_enabled', true);
+        userModules = refreshed ?? userModules;
+      }
+    } catch (claimErr) {
+      console.warn('pendingModule claim skipped:', claimErr);
     }
 
     // Super admin kontrolü: user_module_access.is_super_admin = true olan kayıt var mı?
@@ -135,9 +170,37 @@ export async function GET() {
       }
     } else {
       // Normal kullanıcı: Sadece kendi erişimli modülleri
+      // modules join boşsa bile module_key ile erişimi düşürme
       modules = (userModules ?? [])
-        .filter((item: { modules?: { is_active: boolean } | null }) => item.modules && item.modules.is_active)
-        .map((item: { modules: Record<string, unknown> }) => ({ ...item.modules })) as Array<{
+        .map((item: {
+          module_key?: string;
+          modules?: {
+            key: string;
+            name_tr: string;
+            name_en: string;
+            description_tr: string;
+            description_en: string;
+            icon: string;
+            is_active: boolean;
+          } | null;
+        }) => {
+          if (item.modules?.is_active) {
+            return { ...item.modules };
+          }
+          if (item.module_key) {
+            return {
+              key: item.module_key,
+              name_tr: item.module_key,
+              name_en: item.module_key,
+              description_tr: '',
+              description_en: '',
+              icon: 'shield',
+              is_active: true,
+            };
+          }
+          return null;
+        })
+        .filter(Boolean) as Array<{
           key: string;
           name_tr: string;
           name_en: string;

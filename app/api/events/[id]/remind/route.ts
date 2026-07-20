@@ -91,6 +91,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       eventUrl,
       isOnline: event.is_online,
       locationLabel: locationLabel || undefined,
+      meetingUrl: event.meeting_url || undefined,
     });
 
     if (!mail.success) {

@@ -12,6 +12,7 @@ import nodemailer from 'nodemailer';
  * @param {string} [params.eventUrl]
  * @param {boolean|null} [params.isOnline]
  * @param {string} [params.locationLabel]
+ * @param {string} [params.meetingUrl]
  */
 export async function sendEventReminderEmail({
   to,
@@ -23,6 +24,7 @@ export async function sendEventReminderEmail({
   eventUrl = null,
   isOnline = null,
   locationLabel = null,
+  meetingUrl = null,
 }) {
   try {
     if (!to?.trim()) {
@@ -84,10 +86,27 @@ export async function sendEventReminderEmail({
       );
     }
 
+    const safeMeetingUrl =
+      typeof meetingUrl === 'string' && /^https?:\/\//i.test(meetingUrl.trim())
+        ? meetingUrl.trim()
+        : null;
+
+    if (safeMeetingUrl) {
+      details.push(
+        `<p style="margin:8px 0;"><strong>${tr ? 'Toplantı linki' : 'Meeting link'}:</strong> <a href="${safeMeetingUrl}" style="color:#990000;word-break:break-all;">${safeMeetingUrl}</a></p>`
+      );
+    }
+
     const cta = eventUrl
       ? tr
         ? 'Etkinlik sayfasına git'
         : 'Open event page'
+      : null;
+
+    const meetingCta = safeMeetingUrl
+      ? tr
+        ? 'Toplantıya katıl'
+        : 'Join meeting'
       : null;
 
     const htmlContent = `
@@ -100,8 +119,17 @@ export async function sendEventReminderEmail({
           <p>${body}</p>
           ${details.join('')}
           ${
+            meetingCta && safeMeetingUrl
+              ? `<p style="margin:28px 0 12px;">
+                  <a href="${safeMeetingUrl}" style="background:#111;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;">
+                    ${meetingCta}
+                  </a>
+                </p>`
+              : ''
+          }
+          ${
             cta && eventUrl
-              ? `<p style="margin:28px 0;">
+              ? `<p style="margin:${safeMeetingUrl ? '12px' : '28px'} 0;">
                   <a href="${eventUrl}" style="background:#990000;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;">
                     ${cta}
                   </a>
@@ -123,6 +151,10 @@ export async function sendEventReminderEmail({
 
     const textContent = `${greeting}\n\n${title}\n${
       eventDateLabel ? `${tr ? 'Tarih' : 'Date'}: ${eventDateLabel}\n` : ''
+    }${
+      safeMeetingUrl
+        ? `${tr ? 'Toplantı' : 'Meeting'}: ${safeMeetingUrl}\n`
+        : ''
     }${eventUrl ? `${eventUrl}\n` : ''}\nSupport: info@myunilab.net`;
 
     const result = await transporter.sendMail({

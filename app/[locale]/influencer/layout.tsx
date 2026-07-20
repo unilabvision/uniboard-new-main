@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import GlobalDashboardSidebar from '../../components/GlobalDashboardSidebar';
-import { useUserModules } from '../../hooks/useUserModules';
+import { clearModulesCache, useUserModules } from '../../hooks/useUserModules';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -31,7 +31,8 @@ export default function InfluencerLayout({ children, params }: DashboardLayoutPr
   const [mounted, setMounted] = useState(false);
   const [hasInfluencerAccess, setHasInfluencerAccess] = useState<boolean | null>(null);
   
-  const { modules, loading, error, isSuperAdmin } = useUserModules();
+  const { modules, loading, error, isSuperAdmin, refetch } = useUserModules();
+  const [claimingGrant, setClaimingGrant] = useState(false);
 
   // Resolve params
   useEffect(() => {
@@ -67,6 +68,46 @@ export default function InfluencerLayout({ children, params }: DashboardLayoutPr
     checkInfluencerAccess();
   }, [modules, loading, error, isSuperAdmin]);
 
+  // Davet mailindeki ?grant= token'ı claim et (yeni kullanıcı / kaçırılan grant)
+  useEffect(() => {
+    if (!mounted || typeof window === 'undefined') return;
+
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('grant');
+    if (!token) return;
+
+    let cancelled = false;
+    setClaimingGrant(true);
+    (async () => {
+      try {
+        const res = await fetch('/api/modules/claim-grant', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token }),
+        });
+        if (!cancelled && res.ok) {
+          clearModulesCache();
+          refetch();
+        }
+      } catch (err) {
+        console.warn('grant claim failed:', err);
+      } finally {
+        if (!cancelled) {
+          params.delete('grant');
+          const next = `${window.location.pathname}${
+            params.toString() ? `?${params}` : ''
+          }${window.location.hash}`;
+          window.history.replaceState({}, '', next);
+          setClaimingGrant(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mounted, refetch]);
+
   // Listen for sidebar minimize state changes
   useEffect(() => {
     const handleSidebarToggle = (event: SidebarToggleEvent) => {
@@ -86,7 +127,7 @@ export default function InfluencerLayout({ children, params }: DashboardLayoutPr
   }, []);
 
   // Loading state
-  if (!mounted || loading || hasInfluencerAccess === null) {
+  if (!mounted || loading || claimingGrant || hasInfluencerAccess === null) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-900 dark:to-neutral-800 flex items-center justify-center">
         <div className="text-center">

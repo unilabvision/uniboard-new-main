@@ -19,6 +19,10 @@ import {
   clerkErrorMessage,
   isClerkIdentifierExistsError,
 } from '@/app/lib/moduleAccess/helpers';
+import {
+  createModuleGrantToken,
+  withGrantToken,
+} from '@/app/lib/moduleAccess/grantToken';
 
 async function grantModuleAccess(
   supabase: SupabaseClient,
@@ -180,6 +184,26 @@ export async function grantModuleAccessMember(
   // Davet mailindeki CTA: kayıtlı kullanıcı → giriş+panel; yeni → kayıt+panel
   // Asla Vercel preview URL kullanma (vercel.com login’e düşer)
 
+  const attachGrant = (url: string, email: string) => {
+    const token = createModuleGrantToken(email, def.primaryModuleKey);
+    try {
+      const u = new URL(url);
+      const redirect = u.searchParams.get('redirect');
+      if (redirect) {
+        // grant, login sonrası panele taşınsın
+        const redirectUrl = new URL(redirect, u.origin);
+        redirectUrl.searchParams.set('grant', token);
+        u.searchParams.set(
+          'redirect',
+          `${redirectUrl.pathname}${redirectUrl.search}`
+        );
+        return u.toString();
+      }
+    } catch {
+      /* fall through */
+    }
+    return withGrantToken(url, token);
+  };
   if (!targetUserId) {
     const query = targetEmail || targetName;
     if (!query || !isValidAccessSearchQuery(query)) {
@@ -204,7 +228,7 @@ export async function grantModuleAccessMember(
     try {
       await clerk.invitations.createInvitation({
         emailAddress: targetEmail,
-        redirectUrl: signUpUrl,
+        redirectUrl: attachGrant(signUpUrl, targetEmail),
         publicMetadata: { pendingModule: def.primaryModuleKey },
         notify: false,
       });
@@ -226,12 +250,13 @@ export async function grantModuleAccessMember(
   }
 
   // Yeni kullanıcı: panel kayıt daveti (Clerk invitation başarısız olsa bile)
+  // Erişim satırı henüz yok → grant token ile kayıt sonrası claim edilir
   if (!targetUserId) {
     await sendModuleAccessEmail({
       to: targetEmail,
       name: targetName || targetEmail,
       locale,
-      dashboardUrl: signUpUrl,
+      dashboardUrl: attachGrant(signUpUrl, targetEmail),
       moduleNameTr: def.nameTr,
       moduleNameEn: def.nameEn,
       invited: true,
@@ -288,11 +313,12 @@ export async function grantModuleAccessMember(
         ? 'Use My Codes in the panel to create discount codes and see which emails used them.'
         : '';
 
+  // Mevcut kullanıcıda da token ekle (yeniden login / cache sorunlarında claim fallback)
   await sendModuleAccessEmail({
     to: targetEmail,
     name: targetName,
     locale,
-    dashboardUrl: loginUrl,
+    dashboardUrl: attachGrant(loginUrl, targetEmail),
     moduleNameTr: def.nameTr,
     moduleNameEn: def.nameEn,
     invited: false,

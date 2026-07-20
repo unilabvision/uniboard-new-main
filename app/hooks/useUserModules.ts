@@ -32,6 +32,10 @@ type ModulesCache = {
 const CACHE_TTL_MS = 5 * 60 * 1000;
 let modulesCache: ModulesCache | null = null;
 
+export function clearModulesCache() {
+  modulesCache = null;
+}
+
 function getCachedModules(userId: string): ModulesCache | null {
   if (!modulesCache || modulesCache.userId !== userId) return null;
   if (Date.now() - modulesCache.fetchedAt > CACHE_TTL_MS) return null;
