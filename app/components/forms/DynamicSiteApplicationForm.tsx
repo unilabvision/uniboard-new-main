@@ -338,6 +338,21 @@ export default function DynamicSiteApplicationForm({
 
       const data = await res.json();
       if (!res.ok) {
+        // Aynı e-posta ile sertifika zaten ödenmiş → success (tekrar Iyzico yok)
+        if (res.status === 409 && data.alreadyPaid && data.applicationId) {
+          const paymentBase =
+            process.env.NEXT_PUBLIC_MYUNI_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || '';
+          if (paymentBase) {
+            const qs = new URLSearchParams({
+              type: 'event_application',
+              applicationId: String(data.applicationId),
+              alreadyPaid: '1',
+            });
+            if (eventSlug) qs.set('eventSlug', eventSlug);
+            window.location.href = `${paymentBase.replace(/\/$/, '')}/${locale}/payment-success?${qs.toString()}`;
+            return;
+          }
+        }
         if (data.fieldErrors && typeof data.fieldErrors === 'object') {
           const mapped: Record<string, string> = {};
           for (const [key, code] of Object.entries(data.fieldErrors as Record<string, string>)) {

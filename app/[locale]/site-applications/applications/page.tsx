@@ -51,6 +51,7 @@ const texts = {
     packageCertificate: 'Sertifika',
     paymentPaid: 'Ödendi',
     paymentPending: 'Bekliyor',
+    paymentSuperseded: 'Mükerrer',
     paymentNone: '—',
     filterPackage: 'Paket filtresi',
     filterPayment: 'Ödeme filtresi',
@@ -66,6 +67,10 @@ const texts = {
     date: 'Tarih',
     actions: 'İşlemler',
     view: 'Detay',
+    remind: 'Hatırlat',
+    reminding: '…',
+    remindOk: 'Hatırlatma gönderildi',
+    remindFail: 'Hatırlatma gönderilemedi',
     loading: 'Yükleniyor...',
     error: 'Veriler yüklenemedi',
     noResults: 'Başvuru bulunamadı',
@@ -98,6 +103,7 @@ const texts = {
     packageCertificate: 'Certificate',
     paymentPaid: 'Paid',
     paymentPending: 'Pending',
+    paymentSuperseded: 'Duplicate',
     paymentNone: '—',
     filterPackage: 'Package filter',
     filterPayment: 'Payment filter',
@@ -113,6 +119,10 @@ const texts = {
     date: 'Date',
     actions: 'Actions',
     view: 'View',
+    remind: 'Remind',
+    reminding: '…',
+    remindOk: 'Reminder sent',
+    remindFail: 'Failed to send reminder',
     loading: 'Loading...',
     error: 'Failed to load data',
     noResults: 'No applications found',
@@ -149,6 +159,8 @@ function paymentColor(status: string) {
       return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
     case 'pending':
       return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400';
+    case 'superseded':
+      return 'bg-neutral-200 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-300';
     default:
       return 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400';
   }
@@ -174,6 +186,8 @@ export default function SiteApplicationsListPage({
   const [formFilter, setFormFilter] = useState<string>('all');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [remindingId, setRemindingId] = useState<string | null>(null);
+  const [remindFlash, setRemindFlash] = useState<string | null>(null);
   const perPage = 20;
   const searchParams = useSearchParams();
   const statusParam = searchParams.get('status');
@@ -188,7 +202,8 @@ export default function SiteApplicationsListPage({
   const paymentStatusParam =
     searchParams.get('paymentStatus') === 'paid' ||
     searchParams.get('paymentStatus') === 'pending' ||
-    searchParams.get('paymentStatus') === 'none'
+    searchParams.get('paymentStatus') === 'none' ||
+    searchParams.get('paymentStatus') === 'superseded'
       ? searchParams.get('paymentStatus')!
       : '';
 
@@ -349,6 +364,34 @@ export default function SiteApplicationsListPage({
     load();
   }, [load]);
 
+  const sendRemind = async (applicationId: string) => {
+    setRemindingId(applicationId);
+    setRemindFlash(null);
+    try {
+      const res = await fetch('/api/site-applications/payments/remind', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ applicationId, locale }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      const row = data.results?.[0];
+      if (row?.status === 'sent') setRemindFlash(t.remindOk);
+      else if (row?.status === 'skipped' && row.reason === 'already_paid') {
+        setRemindFlash(
+          locale === 'tr'
+            ? 'Ödeme zaten alınmış — mail gönderilmedi'
+            : 'Already paid — reminder skipped'
+        );
+        load();
+      } else setRemindFlash(t.remindFail);
+    } catch {
+      setRemindFlash(t.remindFail);
+    } finally {
+      setRemindingId(null);
+    }
+  };
+
   const filteredForms = useMemo(() => {
     if (categoryFilter === 'all') return forms;
     return forms.filter((form) => {
@@ -387,6 +430,9 @@ export default function SiteApplicationsListPage({
               ? t.subtitleFiltered
               : t.subtitle}
         </p>
+        {remindFlash && (
+          <p className="mt-2 text-sm text-[#990000]">{remindFlash}</p>
+        )}
         {(statusFilter || hasEventScope || registrationTierParam || paymentStatusParam) && (
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <span className="text-xs text-neutral-500">{t.filterActive}:</span>
@@ -413,7 +459,9 @@ export default function SiteApplicationsListPage({
                   ? t.paymentPaid
                   : paymentStatusParam === 'pending'
                     ? t.paymentPending
-                    : t.paymentNone}
+                    : paymentStatusParam === 'superseded'
+                      ? t.paymentSuperseded
+                      : t.paymentNone}
               </span>
             )}
             <Link
@@ -528,6 +576,7 @@ export default function SiteApplicationsListPage({
               ['', t.all],
               ['paid', t.paymentPaid],
               ['pending', t.paymentPending],
+              ['superseded', t.paymentSuperseded],
             ] as const
           ).map(([key, label]) => (
             <Link
@@ -679,7 +728,9 @@ export default function SiteApplicationsListPage({
                                   ? t.paymentPaid
                                   : pay === 'pending'
                                     ? t.paymentPending
-                                    : t.paymentNone}
+                                    : pay === 'superseded'
+                                      ? t.paymentSuperseded
+                                      : t.paymentNone}
                               </span>
                             ) : (
                               <span className="text-xs text-neutral-400">{t.paymentNone}</span>
@@ -703,13 +754,27 @@ export default function SiteApplicationsListPage({
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <Link
-                          href={`/${locale}/site-applications/applications/${app.id}`}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-[#990000] dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
-                        >
-                          <Eye className="w-4 h-4" />
-                          {t.view}
-                        </Link>
+                        <div className="inline-flex items-center gap-1 justify-end">
+                          {(pay === 'pending' || pay === 'superseded') && (
+                            <button
+                              type="button"
+                              onClick={() => sendRemind(app.id)}
+                              disabled={remindingId === app.id}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg disabled:opacity-50"
+                              title={t.remind}
+                            >
+                              <Mail className="w-4 h-4" />
+                              {remindingId === app.id ? t.reminding : t.remind}
+                            </button>
+                          )}
+                          <Link
+                            href={`/${locale}/site-applications/applications/${app.id}`}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-[#990000] dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                          >
+                            <Eye className="w-4 h-4" />
+                            {t.view}
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   );

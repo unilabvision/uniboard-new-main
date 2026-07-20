@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Calendar, ExternalLink, Loader2, Plus, Pencil } from 'lucide-react';
+import { Calendar, ExternalLink, Loader2, Plus, Pencil, FileSpreadsheet } from 'lucide-react';
 import { getPublicEventUrl, parseBooleanField } from '@/app/lib/events/config';
 import type { MyuniEvent } from '@/app/types/events';
 
@@ -18,6 +18,7 @@ const texts = {
     featured: 'Öne çıkan',
     edit: 'Düzenle',
     viewSite: 'Sitede gör',
+    excel: 'Excel',
     attendees: 'katılımcı',
     registrationOpen: 'Kayıt açık',
     registrationClosed: 'Kayıt kapalı',
@@ -34,6 +35,7 @@ const texts = {
     featured: 'Featured',
     edit: 'Edit',
     viewSite: 'View on site',
+    excel: 'Excel',
     attendees: 'attendees',
     registrationOpen: 'Registration open',
     registrationClosed: 'Registration closed',
@@ -50,6 +52,7 @@ export default function EventsListPage({
   const [events, setEvents] = useState<MyuniEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [exportingId, setExportingId] = useState<string | null>(null);
   const t = texts[locale as keyof typeof texts] || texts.tr;
 
   useEffect(() => {
@@ -83,6 +86,27 @@ export default function EventsListPage({
       // keep list unchanged on failure
     } finally {
       setTogglingId(null);
+    }
+  };
+
+  const downloadExcel = async (event: MyuniEvent) => {
+    setExportingId(event.id);
+    try {
+      const res = await fetch(`/api/events/${event.id}/registrants/export`);
+      if (!res.ok) throw new Error('export failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${event.slug || 'etkinlik'}-kayitlar.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      /* ignore */
+    } finally {
+      setExportingId(null);
     }
   };
 
@@ -185,6 +209,19 @@ export default function EventsListPage({
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : null}
                   {registrationOpen ? t.registrationClosed : t.registrationOpen}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => downloadExcel(event)}
+                  disabled={exportingId === event.id}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border rounded-lg hover:bg-neutral-50 disabled:opacity-50"
+                >
+                  {exportingId === event.id ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <FileSpreadsheet className="w-4 h-4" />
+                  )}
+                  {t.excel}
                 </button>
                 {event.is_active && (
                   <a

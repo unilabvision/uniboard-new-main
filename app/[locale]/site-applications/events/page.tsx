@@ -11,6 +11,9 @@ import {
   RefreshCw,
   ChevronRight,
   Search,
+  Copy,
+  FileSpreadsheet,
+  Mail,
 } from 'lucide-react';
 import { formatPackagePrice } from '@/app/lib/siteApplications/packages';
 
@@ -27,6 +30,7 @@ type EventStatsRow = {
   certificate: number;
   certificate_paid: number;
   certificate_pending: number;
+  certificate_superseded: number;
   certificate_revenue: number;
   currency: string;
 };
@@ -38,6 +42,7 @@ type Totals = {
   certificate: number;
   certificate_paid: number;
   certificate_pending: number;
+  certificate_superseded: number;
   certificate_revenue: number;
 };
 
@@ -56,12 +61,24 @@ const texts = {
     certificate: 'Sertifika',
     paid: 'Ödendi',
     paymentPending: 'Ödeme bekliyor',
+    paymentSuperseded: 'Mükerrer',
     revenue: 'Sertifika geliri',
     accepted: 'Kabul',
     pending: 'Bekleyen',
     viewRegistrations: 'Kayıtları gör',
     viewPaid: 'Ödenen sertifikalar',
     viewPendingPay: 'Bekleyen ödemeler',
+    viewSuperseded: 'Mükerrer kayıtlar',
+    sendReminders: 'Etkinlik hatırlatma maili',
+    sendingReminders: 'Gönderiliyor…',
+    remindersSent: 'Etkinlik hatırlatması gönderildi',
+    remindersFailed: 'Hatırlatma gönderilemedi',
+    sendPaymentReminders: 'Ödeme hatırlatması',
+    sendingPaymentReminders: 'Ödeme maili…',
+    paymentRemindersSent: 'Ödeme hatırlatması gönderildi',
+    downloadExcel: 'Excel indir',
+    downloadingExcel: 'İndiriliyor…',
+    excelFailed: 'Excel indirilemedi',
     noApps: 'Bu etkinlikte henüz kayıt yok',
   },
   en: {
@@ -78,12 +95,24 @@ const texts = {
     certificate: 'Certificate',
     paid: 'Paid',
     paymentPending: 'Payment pending',
+    paymentSuperseded: 'Duplicates',
     revenue: 'Certificate revenue',
     accepted: 'Accepted',
     pending: 'Pending',
     viewRegistrations: 'View registrations',
     viewPaid: 'Paid certificates',
     viewPendingPay: 'Pending payments',
+    viewSuperseded: 'Duplicate registrations',
+    sendReminders: 'Send event reminder',
+    sendingReminders: 'Sending…',
+    remindersSent: 'Event reminders sent',
+    remindersFailed: 'Failed to send reminders',
+    sendPaymentReminders: 'Payment reminder',
+    sendingPaymentReminders: 'Payment mail…',
+    paymentRemindersSent: 'Payment reminders sent',
+    downloadExcel: 'Download Excel',
+    downloadingExcel: 'Downloading…',
+    excelFailed: 'Excel download failed',
     noApps: 'No registrations for this event yet',
   },
 };
@@ -112,6 +141,12 @@ export default function SiteApplicationsEventsPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [remindingEventId, setRemindingEventId] = useState<string | null>(null);
+  const [paymentRemindingEventId, setPaymentRemindingEventId] = useState<string | null>(
+    null
+  );
+  const [exportingEventId, setExportingEventId] = useState<string | null>(null);
+  const [remindMessage, setRemindMessage] = useState<string | null>(null);
 
   const t = texts[locale as keyof typeof texts] || texts.tr;
 
@@ -119,19 +154,21 @@ export default function SiteApplicationsEventsPage({
     params.then((p) => setLocale(p.locale));
   }, [params]);
 
-  const load = async () => {
+  const load = async (opts?: { silent?: boolean }) => {
     try {
-      setLoading(true);
-      setError(null);
+      if (!opts?.silent) {
+        setLoading(true);
+        setError(null);
+      }
       const res = await fetch('/api/site-applications/stats/by-event');
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
       setEvents((data.events as EventStatsRow[]) || []);
       setTotals(data.totals || null);
     } catch {
-      setError(t.error);
+      if (!opts?.silent) setError(t.error);
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   };
 
@@ -139,6 +176,97 @@ export default function SiteApplicationsEventsPage({
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const sendEventReminders = async (event: EventStatsRow) => {
+    if (!event.event_id || event.total === 0) return;
+
+    const ok = confirm(
+      locale === 'tr'
+        ? `${event.event_name} etkinliğine kayıtlı katılımcılara (e-posta başına 1) hatırlatma maili gönderilsin mi?`
+        : `Send an event reminder to all registrants of ${event.event_name} (1 email per address)?`
+    );
+    if (!ok) return;
+
+    setRemindingEventId(event.event_id);
+    setRemindMessage(null);
+    try {
+      const res = await fetch(`/api/events/${event.event_id}/remind`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ locale }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      setRemindMessage(
+        `${t.remindersSent}: ${data.sent || 0} / ${data.uniqueEmails || 0} (kayıt ${data.totalRegistrants || event.total})`
+      );
+    } catch {
+      setRemindMessage(t.remindersFailed);
+    } finally {
+      setRemindingEventId(null);
+    }
+  };
+
+  const sendPaymentReminders = async (event: EventStatsRow) => {
+    if (!event.event_id) return;
+    const pendingOrDup =
+      (event.certificate_pending || 0) + (event.certificate_superseded || 0);
+    if (pendingOrDup === 0) return;
+
+    const ok = confirm(
+      locale === 'tr'
+        ? `${event.event_name} için ${event.certificate_pending} bekleyen ödeme (+ ${event.certificate_superseded || 0} mükerrer) maili gönderilsin mi?`
+        : `Send payment reminders for ${event.certificate_pending} pending (+ ${event.certificate_superseded || 0} duplicates) on ${event.event_name}?`
+    );
+    if (!ok) return;
+
+    setPaymentRemindingEventId(event.event_id);
+    setRemindMessage(null);
+    try {
+      const res = await fetch('/api/site-applications/payments/remind', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId: event.event_id,
+          includeSuperseded: true,
+          locale,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+      setRemindMessage(
+        `${t.paymentRemindersSent}: ${data.sent || 0} · skip ${data.skipped || 0} · fail ${data.failed || 0}`
+      );
+      await load({ silent: true });
+    } catch {
+      setRemindMessage(t.remindersFailed);
+    } finally {
+      setPaymentRemindingEventId(null);
+    }
+  };
+
+  const downloadExcel = async (event: EventStatsRow) => {
+    if (!event.event_id) return;
+    setExportingEventId(event.event_id);
+    setRemindMessage(null);
+    try {
+      const res = await fetch(`/api/events/${event.event_id}/registrants/export`);
+      if (!res.ok) throw new Error('export failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${event.event_slug || 'etkinlik'}-kayitlar.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setRemindMessage(t.excelFailed);
+    } finally {
+      setExportingEventId(null);
+    }
+  };
 
   const filtered = useMemo(() => {
     const q = search.trim().toLocaleLowerCase('tr');
@@ -161,7 +289,7 @@ export default function SiteApplicationsEventsPage({
         </div>
         <button
           type="button"
-          onClick={load}
+          onClick={() => load()}
           className="inline-flex items-center gap-2 px-4 py-2.5 border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 text-sm"
         >
           <RefreshCw className="w-4 h-4" />
@@ -172,6 +300,12 @@ export default function SiteApplicationsEventsPage({
       {error && (
         <div className="mb-6 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 p-4 text-sm text-red-600 dark:text-red-400">
           {error}
+        </div>
+      )}
+
+      {remindMessage && (
+        <div className="mb-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/60 px-4 py-3 text-sm text-neutral-700 dark:text-neutral-300">
+          {remindMessage}
         </div>
       )}
 
@@ -190,7 +324,7 @@ export default function SiteApplicationsEventsPage({
               label: t.revenue,
               value: formatPackagePrice(totals.certificate_revenue, 'TRY', locale),
               icon: CreditCard,
-              hint: `${totals.certificate_pending} ${t.paymentPending}`,
+              hint: `${totals.certificate_pending} ${t.paymentPending} · ${totals.certificate_superseded || 0} ${t.paymentSuperseded}`,
             },
           ].map(({ label, value, icon: Icon, hint }) => (
             <div
@@ -274,6 +408,10 @@ export default function SiteApplicationsEventsPage({
                       <Clock className="w-3.5 h-3.5" />
                       {t.paymentPending}: {event.certificate_pending}
                     </span>
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-200 px-3 py-1 text-xs font-medium">
+                      <Copy className="w-3.5 h-3.5" />
+                      {t.paymentSuperseded}: {event.certificate_superseded || 0}
+                    </span>
                     <Link
                       href={applicationsHref(locale, event, {
                         registrationTier: 'certificate',
@@ -292,6 +430,55 @@ export default function SiteApplicationsEventsPage({
                     >
                       {t.viewPendingPay}
                     </Link>
+                    <Link
+                      href={applicationsHref(locale, event, {
+                        registrationTier: 'certificate',
+                        paymentStatus: 'superseded',
+                      })}
+                      className="text-xs text-[#990000] hover:underline px-2 py-1"
+                    >
+                      {t.viewSuperseded}
+                    </Link>
+                    {event.event_id && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => downloadExcel(event)}
+                          disabled={exportingEventId === event.event_id}
+                          className="inline-flex items-center gap-1 text-xs font-medium border border-neutral-300 dark:border-neutral-600 rounded-full px-3 py-1 hover:bg-neutral-50 dark:hover:bg-neutral-700 disabled:opacity-50"
+                        >
+                          <FileSpreadsheet className="w-3.5 h-3.5" />
+                          {exportingEventId === event.event_id
+                            ? t.downloadingExcel
+                            : t.downloadExcel}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => sendEventReminders(event)}
+                          disabled={remindingEventId === event.event_id}
+                          className="inline-flex items-center gap-1 text-xs font-medium text-white bg-[#990000] hover:bg-[#7a0000] disabled:opacity-50 rounded-full px-3 py-1"
+                        >
+                          <Mail className="w-3.5 h-3.5" />
+                          {remindingEventId === event.event_id
+                            ? t.sendingReminders
+                            : t.sendReminders}
+                        </button>
+                        {((event.certificate_pending || 0) > 0 ||
+                          (event.certificate_superseded || 0) > 0) && (
+                          <button
+                            type="button"
+                            onClick={() => sendPaymentReminders(event)}
+                            disabled={paymentRemindingEventId === event.event_id}
+                            className="inline-flex items-center gap-1 text-xs font-medium border border-amber-300 text-amber-800 dark:text-amber-300 rounded-full px-3 py-1 hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50"
+                          >
+                            <CreditCard className="w-3.5 h-3.5" />
+                            {paymentRemindingEventId === event.event_id
+                              ? t.sendingPaymentReminders
+                              : t.sendPaymentReminders}
+                          </button>
+                        )}
+                      </>
+                    )}
                   </div>
                 </>
               )}

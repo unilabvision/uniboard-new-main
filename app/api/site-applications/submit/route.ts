@@ -119,9 +119,74 @@ export async function POST(request: NextRequest) {
       event?.title ||
       (typeof normalized.event_name === 'string' ? normalized.event_name : null);
 
+    const eventIdForRow = event?.id || form.event_id || null;
+
+    // Aynı e-posta + etkinlikte sertifika kaydı varsa yeni satır açma (çift başvuru / çift ödeme riski)
+    if (isEventApplication && selectedPackage.id === 'certificate' && contact.email) {
+      let existingQuery = supabase
+        .from(siteApplicationsDb.applications)
+        .select('id, status, submission_data, created_at')
+        .ilike('email', contact.email.trim())
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (eventIdForRow) {
+        existingQuery = existingQuery.eq('event_id', eventIdForRow);
+      } else if (eventName) {
+        existingQuery = existingQuery.eq('event_name', eventName);
+      }
+
+      const { data: existingRows } = await existingQuery;
+      const certificateRows = (existingRows || []).filter((row) => {
+        const s =
+          row.submission_data && typeof row.submission_data === 'object'
+            ? (row.submission_data as Record<string, unknown>)
+            : {};
+        return s.registration_tier === 'certificate';
+      });
+
+      const alreadyPaid = certificateRows.find((row) => {
+        const s = (row.submission_data || {}) as Record<string, unknown>;
+        return s.payment_status === 'paid';
+      });
+      if (alreadyPaid) {
+        return NextResponse.json(
+          {
+            error:
+              locale === 'tr'
+                ? 'Bu e-posta ile bu etkinlik için sertifika ödemesi zaten tamamlanmış.'
+                : 'Certificate payment for this email and event is already completed.',
+            applicationId: alreadyPaid.id,
+            alreadyPaid: true,
+          },
+          { status: 409 }
+        );
+      }
+
+      const openPending = certificateRows.find((row) => {
+        const s = (row.submission_data || {}) as Record<string, unknown>;
+        return s.payment_status === 'pending';
+      });
+      if (openPending) {
+        return NextResponse.json({
+          success: true,
+          submissionId: openPending.id,
+          applicationId: openPending.id,
+          status: openPending.status,
+          reusedExisting: true,
+          requiresPayment: true,
+          selectedPackage,
+          message:
+            locale === 'tr'
+              ? 'Mevcut sertifika başvurunuz bulundu; ödeme adımına yönlendiriliyorsunuz.'
+              : 'Existing certificate application found; redirecting to payment.',
+        });
+      }
+    }
+
     const row = {
       form_id: form.id,
-      event_id: event?.id || form.event_id || null,
+      event_id: eventIdForRow,
       application_type: applicationType,
       first_name: contact.firstName,
       last_name: contact.lastName,

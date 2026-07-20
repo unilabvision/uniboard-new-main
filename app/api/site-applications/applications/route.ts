@@ -63,7 +63,12 @@ export async function GET(request: NextRequest) {
   if (registrationTier === 'free' || registrationTier === 'certificate') {
     query = query.eq('submission_data->>registration_tier', registrationTier);
   }
-  if (paymentStatus === 'paid' || paymentStatus === 'pending' || paymentStatus === 'none') {
+  if (
+    paymentStatus === 'paid' ||
+    paymentStatus === 'pending' ||
+    paymentStatus === 'none' ||
+    paymentStatus === 'superseded'
+  ) {
     query = query.eq('submission_data->>payment_status', paymentStatus);
   }
 

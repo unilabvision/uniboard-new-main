@@ -80,6 +80,7 @@ const texts = {
     paymentPending: 'Ödeme bekleniyor',
     paymentNone: 'Ödeme gerekmez',
     paymentPaid: 'Ödendi',
+    paymentSuperseded: 'Mükerrer (başka kayıt ödenmiş)',
     attachment: 'Ek Dosya',
     download: 'Dosyayı İndir',
     expires: 'Silinme tarihi',
@@ -133,6 +134,7 @@ const texts = {
     paymentPending: 'Payment pending',
     paymentNone: 'No payment required',
     paymentPaid: 'Paid',
+    paymentSuperseded: 'Duplicate (paid on another registration)',
     attachment: 'Attachment',
     download: 'Download File',
     expires: 'Expires on',
@@ -380,7 +382,9 @@ export default function SiteApplicationDetailPage({
                       ? t.paymentPaid
                       : paymentStatus === 'pending'
                         ? t.paymentPending
-                        : t.paymentNone}
+                        : paymentStatus === 'superseded'
+                          ? t.paymentSuperseded
+                          : t.paymentNone}
                   </dd>
                 </div>
               )}

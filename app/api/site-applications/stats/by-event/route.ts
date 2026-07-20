@@ -20,6 +20,7 @@ export type EventApplicationStats = {
   certificate: number;
   certificate_paid: number;
   certificate_pending: number;
+  certificate_superseded: number;
   certificate_revenue: number;
   currency: string;
 };
@@ -103,6 +104,7 @@ export async function GET() {
         certificate: 0,
         certificate_paid: 0,
         certificate_pending: 0,
+        certificate_superseded: 0,
         certificate_revenue: 0,
         currency,
       };
@@ -121,6 +123,8 @@ export async function GET() {
         row.certificate_revenue += packagePrice;
       } else if (paymentStatus === 'pending') {
         row.certificate_pending += 1;
+      } else if (paymentStatus === 'superseded') {
+        row.certificate_superseded += 1;
       }
     } else {
       row.free += 1;
@@ -143,6 +147,7 @@ export async function GET() {
         certificate: 0,
         certificate_paid: 0,
         certificate_pending: 0,
+        certificate_superseded: 0,
         certificate_revenue: 0,
         currency: 'TRY',
       });
@@ -161,6 +166,7 @@ export async function GET() {
       acc.certificate += e.certificate;
       acc.certificate_paid += e.certificate_paid;
       acc.certificate_pending += e.certificate_pending;
+      acc.certificate_superseded += e.certificate_superseded;
       acc.certificate_revenue += e.certificate_revenue;
       acc.free += e.free;
       return acc;
@@ -172,6 +178,7 @@ export async function GET() {
       certificate: 0,
       certificate_paid: 0,
       certificate_pending: 0,
+      certificate_superseded: 0,
       certificate_revenue: 0,
     }
   );
