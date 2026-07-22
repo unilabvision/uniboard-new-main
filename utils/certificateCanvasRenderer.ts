@@ -59,6 +59,7 @@ export interface CertificateRenderData {
   certificate_title?: string;
   completion_text?: string;
   description?: string;
+  certificate_number_label?: string;
 }
 
 const REFERENCE_WIDTH = 1700;
@@ -215,11 +216,15 @@ export const renderCertificateFields = (
 
   const certNoPos = calculatePosition(layout.certificate_no_position, canvasWidth, canvasHeight);
   if (certNoPos && data.certificatenumber) {
+    const label =
+      (data.certificate_number_label || '').trim() ||
+      (data.language === 'en' || data.language === 'global' ? 'Certificate No' : 'Sertifika No');
+    const certNoText = `${label}: ${data.certificatenumber}`;
     ctx.fillStyle = colors.certificate_no || colors.secondary;
     ctx.font = `500 ${Math.round((fontSizes.certificate_no || 14) * fontScale)}px ${bodyFont}`;
     ctx.textAlign = certNoPos.align as CanvasTextAlign;
     ctx.textBaseline = 'middle';
-    ctx.fillText(data.certificatenumber, certNoPos.x, certNoPos.y);
+    ctx.fillText(certNoText, certNoPos.x, certNoPos.y);
   }
 
   const descriptionPos = calculatePosition(layout.description_position, canvasWidth, canvasHeight);

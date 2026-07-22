@@ -142,9 +142,33 @@ type OrderRow = {
     clerkUserId?: string;
     tierId?: string | null;
     cartMode?: boolean;
-    cartItems?: Array<{ courseId?: string; tierId?: string; price?: number; title?: string }>;
+    cartItems?: Array<{
+      courseId?: string;
+      tierId?: string;
+      price?: number;
+      title?: string;
+      listPrice?: number;
+      paidPrice?: number;
+      type?: string;
+      id?: string;
+    }>;
     discountCodes?: string;
     totalDiscount?: number;
+    orderSnapshot?: {
+      items?: Array<{
+        id?: string;
+        title?: string;
+        type?: string;
+        courseId?: string;
+        tierId?: string;
+        listPrice?: number;
+        paidPrice?: number;
+      }>;
+      listTotal?: number;
+      discountAmount?: number;
+      paidTotal?: number;
+      discountCodes?: string;
+    } | null;
   } | null;
 };
 
@@ -171,6 +195,18 @@ function orderBelongsToUser(
 
 function orderTouchesCourse(order: OrderRow, courseId: string) {
   if (order.courseid === courseId) return true;
+  const snapshotItems = order.custom_data?.orderSnapshot?.items;
+  if (Array.isArray(snapshotItems)) {
+    if (
+      snapshotItems.some(
+        (item) =>
+          item.courseId === courseId ||
+          ((item.type === 'course' || item.type === 'tier') && item.id === courseId)
+      )
+    ) {
+      return true;
+    }
+  }
   if (order.custom_data?.cartMode && Array.isArray(order.custom_data.cartItems)) {
     return order.custom_data.cartItems.some((item) => item.courseId === courseId);
   }
@@ -198,6 +234,41 @@ function extractPaymentsForUserCourse(
     if (!looksPaid && status === 'pending') return;
     if (status === 'failed' || status === 'cancelled') return;
 
+    const codes = parseDiscountCodes(
+      order.discountcode ||
+        order.custom_data?.orderSnapshot?.discountCodes ||
+        order.custom_data?.discountCodes ||
+        null
+    );
+
+    const snapshotItems = order.custom_data?.orderSnapshot?.items;
+    if (Array.isArray(snapshotItems) && snapshotItems.length > 0) {
+      const courseItems = snapshotItems.filter(
+        (item) =>
+          item.courseId === courseId ||
+          ((item.type === 'course' || item.type === 'tier') && item.id === courseId)
+      );
+      if (courseItems.length === 0) return;
+
+      courseItems.forEach((item) => {
+        const listPrice = Number(item.listPrice) || 0;
+        const paidPrice =
+          item.paidPrice != null ? Number(item.paidPrice) : listPrice;
+        payments.push({
+          order_id: order.orderid,
+          amount: Math.round((paidPrice || 0) * 100) / 100,
+          discount_code: codes.join(', ') || null,
+          discount_amount: Math.round(Math.max(0, listPrice - paidPrice) * 100) / 100,
+          tier_id: item.tierId || null,
+          course_name: item.title || order.coursename,
+          paid_at: order.created_at,
+          payment_method: order.paymentmethod,
+          buyer_email: order.useremail || null,
+        });
+      });
+      return;
+    }
+
     // Cart orders may include multiple courses — allocate this course's share when possible
     if (order.custom_data?.cartMode && Array.isArray(order.custom_data.cartItems)) {
       const courseItems = order.custom_data.cartItems.filter((item) => item.courseId === courseId);
@@ -213,7 +284,6 @@ function extractPaymentsForUserCourse(
       const ratio = cartTotal > 0 ? courseShare / cartTotal : 1 / Math.max(order.custom_data.cartItems.length, 1);
       const allocatedAmount = Math.round(orderAmount * ratio * 100) / 100;
       const allocatedDiscount = Math.round(orderDiscount * ratio * 100) / 100;
-      const codes = parseDiscountCodes(order.discountcode || order.custom_data.discountCodes);
 
       courseItems.forEach((item) => {
         payments.push({
@@ -230,10 +300,6 @@ function extractPaymentsForUserCourse(
       });
       return;
     }
-
-    const codes = parseDiscountCodes(
-      order.discountcode || order.custom_data?.discountCodes || null
-    );
 
     payments.push({
       order_id: order.orderid,

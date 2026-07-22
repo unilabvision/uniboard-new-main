@@ -1,4 +1,4 @@
-import { BarChart3, TrendingUp, Users, ShoppingCart, Shield } from 'lucide-react';
+import { BarChart3, TrendingUp, Users, ShoppingCart, Shield, Wallet } from 'lucide-react';
 
 export const analyticsSidebarContent = {
   tr: {
@@ -8,6 +8,11 @@ export const analyticsSidebarContent = {
         name: 'Genel Bakış',
         href: '/',
         icon: BarChart3,
+      },
+      {
+        name: 'Sipariş Defteri',
+        href: '/#ledger',
+        icon: Wallet,
       },
       {
         name: 'Satış Özeti',
@@ -38,6 +43,11 @@ export const analyticsSidebarContent = {
         name: 'Overview',
         href: '/',
         icon: BarChart3,
+      },
+      {
+        name: 'Order Ledger',
+        href: '/#ledger',
+        icon: Wallet,
       },
       {
         name: 'Sales Summary',

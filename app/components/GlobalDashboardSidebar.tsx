@@ -397,10 +397,20 @@ function GlobalDashboardSidebarInner({ locale, modules }: SidebarProps) {
         }
       `}</style>
       
+      {/* Desktop spacer — keeps page content beside the fixed sidebar */}
+      <div
+        className={`hidden lg:block flex-shrink-0 transition-[width] duration-300 ease-in-out ${
+          isCollapsed ? 'w-16' : 'w-64'
+        }`}
+        aria-hidden
+      />
+
       {/* Mobile Menu Button */}
       <button
+        type="button"
         onClick={() => setIsOpen(true)}
-        className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-md bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 shadow-sm hover:bg-neutral-50 dark:hover:bg-neutral-750 transition-colors"
+        className="lg:hidden fixed top-4 left-4 z-50 p-2.5 rounded-lg bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 shadow-md hover:bg-neutral-50 dark:hover:bg-neutral-750 transition-colors"
+        aria-label="Open menu"
       >
         <Menu className="w-5 h-5 text-neutral-600 dark:text-neutral-400" />
       </button>
@@ -413,44 +423,47 @@ function GlobalDashboardSidebarInner({ locale, modules }: SidebarProps) {
         />
       )}
 
-      {/* Sidebar */}
-      <div
-        className={`fixed top-0 left-0 h-screen bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-800 z-50 transition-all duration-300 ease-in-out ${
+      {/* Sidebar panel */}
+      <aside
+        className={`fixed top-0 left-0 z-50 flex h-dvh w-64 flex-col border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-sm transition-all duration-300 ease-in-out ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
-        } lg:translate-x-0 ${
-          isCollapsed ? 'w-16' : 'w-64'
-        }`}
+        } lg:translate-x-0 ${isCollapsed ? 'lg:w-16' : 'lg:w-64'}`}
       >
         {/* Header */}
-        <div className="h-14 flex items-center justify-between px-4 border-b border-neutral-200 dark:border-neutral-800">
+        <div
+          className={`h-14 flex items-center border-b border-neutral-200 dark:border-neutral-800 flex-shrink-0 ${
+            isCollapsed ? 'justify-center px-2' : 'justify-between px-3'
+          }`}
+        >
           {!isCollapsed && (
-  <Link 
-    href={`/${locale}/`}
-    className="flex items-center animate-fade-in hover:scale-105 transition-transform duration-200"
-    onClick={() => setIsOpen(false)}
-  >
-    <Image
-      src="/myuni-logo.png"
-      alt="MyUNI"
-      width={120}
-      height={32}
-      className="block dark:hidden cursor-pointer"
-    />
-    <Image
-      src="/myuni-logo-dark.png"
-      alt="MyUNI"
-      width={120}
-      height={32}
-      className="hidden dark:block cursor-pointer"
-    />
-  </Link>
-)}
+            <Link
+              href={`/${locale}/`}
+              className="flex items-center min-w-0 hover:opacity-90 transition-opacity"
+              onClick={() => setIsOpen(false)}
+            >
+              <Image
+                src="/myuni-logo.png"
+                alt="MyUNI"
+                width={110}
+                height={28}
+                className="block dark:hidden h-7 w-auto"
+              />
+              <Image
+                src="/myuni-logo-dark.png"
+                alt="MyUNI"
+                width={110}
+                height={28}
+                className="hidden dark:block h-7 w-auto"
+              />
+            </Link>
+          )}
 
-          <div className="flex items-center space-x-1">
-            {/* Collapse button - desktop only */}
+          <div className="flex items-center gap-0.5">
             <button
+              type="button"
               onClick={toggleSidebar}
               className="hidden lg:flex p-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+              aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
               {isCollapsed ? (
                 <PanelLeft className="w-4 h-4 text-neutral-500 dark:text-neutral-400" />
@@ -459,10 +472,11 @@ function GlobalDashboardSidebarInner({ locale, modules }: SidebarProps) {
               )}
             </button>
 
-            {/* Close button - mobile only */}
             <button
+              type="button"
               onClick={() => setIsOpen(false)}
               className="lg:hidden p-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+              aria-label="Close menu"
             >
               <X className="w-4 h-4 text-neutral-500 dark:text-neutral-400" />
             </button>
@@ -470,9 +484,9 @@ function GlobalDashboardSidebarInner({ locale, modules }: SidebarProps) {
         </div>
 
         {/* Navigation */}
-        <div className="flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden">
+        <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
           {/* Main Navigation */}
-          <nav className="px-3 py-4 space-y-1 flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          <nav className="px-2.5 py-3 space-y-0.5 flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             {/* Eğer bir modül içindeysek, o modülün navigation'ını göster */}
             {isInModule && moduleContent ? (
               <>
@@ -483,10 +497,12 @@ function GlobalDashboardSidebarInner({ locale, modules }: SidebarProps) {
                       key={`${item.name}-${item.href}`}
                       href={item.href}
                       onClick={() => setIsOpen(false)}
-                      className={`group relative flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
+                      className={`group relative flex items-center rounded-lg text-sm font-medium transition-colors ${
+                        isCollapsed ? 'justify-center px-2 py-2.5' : 'px-2.5 py-2'
+                      } ${
                         item.active
-                          ? 'bg-[#990000] text-white'
-                          : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100'
+                          ? 'bg-[#990000] text-white shadow-sm'
+                          : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800/80 hover:text-neutral-900 dark:hover:text-neutral-100'
                       }`}
                     >
                       <Icon className="w-5 h-5 flex-shrink-0" />
@@ -574,7 +590,9 @@ function GlobalDashboardSidebarInner({ locale, modules }: SidebarProps) {
               <Link
                 href={`/${locale}/settings`}
                 onClick={() => setIsOpen(false)}
-                className={`group relative flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
+                className={`group relative flex items-center rounded-lg text-sm font-medium transition-colors ${
+                  isCollapsed ? 'justify-center px-2 py-2.5' : 'px-2.5 py-2'
+                } ${
                   pathname.includes('/settings')
                     ? 'bg-[#990000] text-white'
                     : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100'
@@ -584,8 +602,6 @@ function GlobalDashboardSidebarInner({ locale, modules }: SidebarProps) {
                 {!isCollapsed && (
                   <span className="ml-3 truncate">{t.common.settings}</span>
                 )}
-                
-                {/* Tooltip for collapsed state */}
                 {isCollapsed && (
                   <div className="absolute left-full ml-2 px-2 py-1 bg-neutral-900 dark:bg-neutral-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
                     {t.common.settings}
@@ -597,7 +613,9 @@ function GlobalDashboardSidebarInner({ locale, modules }: SidebarProps) {
             <Link
               href={`/${locale}/help`}
               onClick={() => setIsOpen(false)}
-              className={`group relative flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
+              className={`group relative flex items-center rounded-lg text-sm font-medium transition-colors ${
+                isCollapsed ? 'justify-center px-2 py-2.5' : 'px-2.5 py-2'
+              } ${
                 pathname.includes('/help')
                   ? 'bg-[#990000] text-white'
                   : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100'
@@ -607,19 +625,18 @@ function GlobalDashboardSidebarInner({ locale, modules }: SidebarProps) {
               {!isCollapsed && (
                 <span className="ml-3 truncate">{t.common.help}</span>
               )}
-              
-              {/* Tooltip for collapsed state */}
               {isCollapsed && (
                 <div className="absolute left-full ml-2 px-2 py-1 bg-neutral-900 dark:bg-neutral-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
-                {t.common.help}
-              </div>
+                  {t.common.help}
+                </div>
               )}
             </Link>
 
-            {/* Theme Switcher */}
-            <div 
+            <div
               onClick={toggleTheme}
-              className="group relative flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100 cursor-pointer"
+              className={`group relative flex items-center rounded-lg text-sm font-medium transition-colors text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100 cursor-pointer ${
+                isCollapsed ? 'justify-center px-2 py-2.5' : 'px-2.5 py-2'
+              }`}
             >
               {isDarkMode ? (
                 <Sun className="w-5 h-5 flex-shrink-0" />
@@ -631,8 +648,6 @@ function GlobalDashboardSidebarInner({ locale, modules }: SidebarProps) {
                   {locale === 'tr' ? 'Tema' : 'Theme'}
                 </span>
               )}
-              
-              {/* Tooltip for collapsed state */}
               {isCollapsed && (
                 <div className="absolute left-full ml-2 px-2 py-1 bg-neutral-900 dark:bg-neutral-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
                   {locale === 'tr' ? 'Tema' : 'Theme'}
@@ -642,24 +657,24 @@ function GlobalDashboardSidebarInner({ locale, modules }: SidebarProps) {
           </nav>
 
           {/* Bottom Section */}
-          <div className="px-3 pt-3 pb-4 space-y-2 border-t border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 flex-shrink-0">
+          <div className="px-2.5 pt-2 pb-3 space-y-1 border-t border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 flex-shrink-0">
             {/* User Profile Info - only when not collapsed */}
             {user && !isCollapsed && (
-              <div className="flex items-center px-3 py-3 rounded-lg bg-neutral-50 dark:bg-neutral-800/50 opacity-0 animate-fade-in">
-                <div className="w-10 h-10 rounded-full overflow-hidden bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center flex-shrink-0">
+              <div className="flex items-center px-2.5 py-2.5 rounded-lg bg-neutral-50 dark:bg-neutral-900">
+                <div className="w-9 h-9 rounded-full overflow-hidden bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center flex-shrink-0">
                   {user.imageUrl ? (
                     <Image 
                       src={user.imageUrl} 
                       alt={user.fullName || 'User'} 
-                      width={40}
-                      height={40}
+                      width={36}
+                      height={36}
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <User className="w-5 h-5 text-neutral-500 dark:text-neutral-400" />
+                    <User className="w-4 h-4 text-neutral-500 dark:text-neutral-400" />
                   )}
                 </div>
-                <div className="ml-3 flex-1 min-w-0">
+                <div className="ml-2.5 flex-1 min-w-0">
                   <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100 truncate">
                     {user.fullName || user.firstName || 'User'}
                   </p>
@@ -677,7 +692,9 @@ function GlobalDashboardSidebarInner({ locale, modules }: SidebarProps) {
             <Link
               href={`/${locale}/settings/profile`}
               onClick={() => setIsOpen(false)}
-              className={`group relative flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
+              className={`group relative flex items-center rounded-lg text-sm font-medium transition-colors ${
+                isCollapsed ? 'justify-center px-2 py-2.5' : 'px-2.5 py-2'
+              } ${
                 pathname.includes('/profile')
                   ? 'bg-[#990000] text-white'
                   : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-neutral-100'
@@ -688,7 +705,6 @@ function GlobalDashboardSidebarInner({ locale, modules }: SidebarProps) {
                 <span className="ml-3 truncate">{t.common.profile}</span>
               )}
               
-              {/* Tooltip for collapsed state */}
               {isCollapsed && (
                 <div className="absolute left-full ml-2 px-2 py-1 bg-neutral-900 dark:bg-neutral-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
                   {t.common.profile}
@@ -698,15 +714,17 @@ function GlobalDashboardSidebarInner({ locale, modules }: SidebarProps) {
 
             {/* Logout Button */}
             <button
+              type="button"
               onClick={handleLogout}
-              className="group relative w-full flex items-center px-2 py-2 text-sm font-medium rounded-md text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              className={`group relative w-full flex items-center rounded-lg text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors ${
+                isCollapsed ? 'justify-center px-2 py-2.5' : 'px-2.5 py-2'
+              }`}
             >
               <LogOut className="w-5 h-5 flex-shrink-0" />
               {!isCollapsed && (
                 <span className="ml-3">{t.common.logout}</span>
               )}
               
-              {/* Tooltip for collapsed state */}
               {isCollapsed && (
                 <div className="absolute left-full ml-2 px-2 py-1 bg-red-600 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
                   {t.common.logout}
@@ -715,17 +733,20 @@ function GlobalDashboardSidebarInner({ locale, modules }: SidebarProps) {
             </button>
           </div>
         </div>
-      </div>
+      </aside>
     </>
   );
 }
 
 function GlobalDashboardSidebarFallback() {
   return (
-    <div
-      className="hidden lg:block fixed inset-y-0 left-0 z-40 w-64 bg-white dark:bg-neutral-900 border-r border-neutral-200 dark:border-neutral-800"
-      aria-hidden
-    />
+    <>
+      <div className="hidden lg:block flex-shrink-0 w-64" aria-hidden />
+      <div
+        className="hidden lg:block fixed inset-y-0 left-0 z-40 w-64 bg-white dark:bg-neutral-950 border-r border-neutral-200 dark:border-neutral-800"
+        aria-hidden
+      />
+    </>
   );
 }
 

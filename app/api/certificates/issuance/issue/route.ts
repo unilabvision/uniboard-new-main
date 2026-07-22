@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
         : undefined,
       instructor: body.instructor ? String(body.instructor) : undefined,
       description: body.description ? String(body.description) : undefined,
+      customMessage: body.customMessage ? String(body.customMessage) : undefined,
       locale: body.locale === 'en' ? 'en' : 'tr',
     });
 

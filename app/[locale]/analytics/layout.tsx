@@ -11,22 +11,9 @@ interface AnalyticsLayoutProps {
   }>;
 }
 
-interface SidebarToggleEvent extends CustomEvent {
-  detail: {
-    isMinimized: boolean;
-  };
-}
-
-declare global {
-  interface WindowEventMap {
-    sidebarToggle: SidebarToggleEvent;
-  }
-}
-
 const ANALYTICS_MODULE_KEYS = ['analytics', 'reports'];
 
 export default function AnalyticsLayout({ children, params }: AnalyticsLayoutProps) {
-  const [isMinimized, setIsMinimized] = useState(false);
   const [locale, setLocale] = useState('');
   const [mounted, setMounted] = useState(false);
 
@@ -49,23 +36,9 @@ export default function AnalyticsLayout({ children, params }: AnalyticsLayoutPro
     });
   }, [params]);
 
-  useEffect(() => {
-    const handleSidebarToggle = (event: SidebarToggleEvent) => {
-      setIsMinimized(event.detail.isMinimized);
-    };
-
-    if (typeof window !== 'undefined') {
-      const savedState = localStorage.getItem('sidebar-collapsed') === 'true';
-      setIsMinimized(savedState);
-    }
-
-    window.addEventListener('sidebarToggle', handleSidebarToggle);
-    return () => window.removeEventListener('sidebarToggle', handleSidebarToggle);
-  }, []);
-
   if (!mounted || isInitialModuleLoad || hasAnalyticsAccess === null) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-900 dark:to-neutral-800 flex items-center justify-center">
+      <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#990000] mx-auto mb-4" />
           <p className="text-neutral-600 dark:text-neutral-400">
@@ -78,7 +51,7 @@ export default function AnalyticsLayout({ children, params }: AnalyticsLayoutPro
 
   if (!hasAnalyticsAccess) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-900 dark:to-neutral-800 flex items-center justify-center py-12">
+      <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex items-center justify-center py-12">
         <div className="max-w-md mx-auto text-center px-6">
           <h1 className="text-2xl font-semibold text-neutral-900 dark:text-neutral-100 mb-4">
             {locale === 'tr' ? 'Erişim Engellendi' : 'Access Denied'}
@@ -113,15 +86,11 @@ export default function AnalyticsLayout({ children, params }: AnalyticsLayoutPro
   }));
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-900 dark:to-neutral-800 flex">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex">
       <GlobalDashboardSidebar locale={locale} modules={modulesWithCategory} />
-      <div
-        className={`flex-1 transition-all duration-300 ${
-          isMinimized ? 'lg:ml-16' : 'lg:ml-64'
-        }`}
-      >
-        <main className="min-h-screen">{children}</main>
-      </div>
+      <main className="flex-1 min-w-0 min-h-screen overflow-x-hidden pt-14 lg:pt-0">
+        {children}
+      </main>
     </div>
   );
 }

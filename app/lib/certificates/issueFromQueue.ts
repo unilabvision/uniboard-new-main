@@ -16,6 +16,7 @@ export type IssueRequestItem = {
   organizationAbbreviation?: string;
   instructor?: string;
   description?: string;
+  customMessage?: string;
   locale?: string;
 };
 
@@ -26,12 +27,48 @@ export type IssueResult = {
   errors: Array<{ id: string; error: string }>;
 };
 
-function formatIssueDate(locale: string): string {
-  return new Date().toLocaleDateString(locale === 'en' ? 'en-US' : 'tr-TR', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
+function formatIssueDateForDb(): string {
+  // certificates.issuedate — create sayfası ile aynı (YYYY-MM-DD); görüntüleme renderer'da locale ile yapılır
+  return new Date().toISOString().split('T')[0];
+}
+
+function getIssuanceFieldTexts(locale: string, kind: CertificateIssuanceRow['kind']) {
+  const isEn = locale === 'en';
+  if (kind === 'event_participation') {
+    return {
+      certificate_title: isEn ? 'Certificate of Participation' : 'Katılım Sertifikası',
+      provider_text: isEn ? 'provided by' : 'tarafından sağlanmıştır',
+      instructor_label: isEn ? 'Instructor' : 'Eğitmen',
+      date_label: isEn ? 'Issue Date' : 'Veriliş Tarihi',
+      certificate_number_label: isEn ? 'Certificate No' : 'Sertifika No',
+      total_hours_label: isEn ? 'Total Hours' : 'Toplam Süre',
+      completion_text: isEn
+        ? 'has successfully participated in this event.'
+        : 'etkinliğine katılım',
+      skills_label: isEn ? 'Skills' : 'Kazanılan Yetkinlikler',
+      descriptionFor: (eventName: string) =>
+        isEn
+          ? `Participation in ${eventName}`
+          : `${eventName} etkinliğine katılım`,
+    };
+  }
+
+  return {
+    certificate_title: isEn ? 'Certificate of Achievement' : 'Başarı Sertifikası',
+    provider_text: isEn ? 'provided by' : 'tarafından sağlanmıştır',
+    instructor_label: isEn ? 'Instructor' : 'Eğitmen',
+    date_label: isEn ? 'Issue Date' : 'Veriliş Tarihi',
+    certificate_number_label: isEn ? 'Certificate No' : 'Sertifika No',
+    total_hours_label: isEn ? 'Total Hours' : 'Toplam Süre',
+    completion_text: isEn
+      ? 'has successfully completed the course.'
+      : 'kursunu başarıyla tamamladı',
+    skills_label: isEn ? 'Skills' : 'Kazanılan Yetkinlikler',
+    descriptionFor: (courseName: string) =>
+      isEn
+        ? `Successfully completed ${courseName}`
+        : `${courseName} kursunu başarıyla tamamladı`,
+  };
 }
 
 export async function issueCertificatesFromQueue(
@@ -70,63 +107,124 @@ export async function issueCertificatesFromQueue(
         row.kind === 'event_participation'
           ? row.event_name || 'Etkinlik'
           : row.course_name || 'Kurs';
-      const title =
-        row.certificate_title ||
-        (row.kind === 'event_participation' ? 'Katılım Sertifikası' : 'Başarı Sertifikası');
       const locale = params.locale || row.locale || 'tr';
-      const certificatenumber = generateCertificateNumber(org);
-      // kısa gecikme — aynı ms içinde collision azaltır
-      await new Promise((r) => setTimeout(r, 5));
-      const certificateurl = buildCertificatePublicUrl(
-        params.organizationSlug,
-        certificatenumber
-      );
+      const fieldTexts = getIssuanceFieldTexts(locale, row.kind);
+      const title = row.certificate_title || fieldTexts.certificate_title;
+      const description =
+        params.description?.trim() || fieldTexts.descriptionFor(courseName);
 
-      const certificatePayload = {
-        fullname: row.recipient_name,
-        coursename: courseName,
-        issuedate: formatIssueDate(locale),
-        instructor: params.instructor || '',
-        duration: '',
-        language: locale === 'en' ? 'en' : 'tr',
-        certificate_title: title,
-        provider_text: '',
-        instructor_label: '',
-        date_label: '',
-        certificate_number_label: '',
-        total_hours_label: '',
-        completion_text: '',
-        skills_label: '',
-        description:
-          params.description ||
-          (row.kind === 'event_participation'
-            ? `${courseName} etkinliğine katılım`
-            : `${courseName} kursunu başarıyla tamamladı`),
-        organization_slug: params.organizationSlug,
-        certificatenumber,
-        certificateurl,
-        template_id: params.templateId,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
+      let certificateId = row.issued_certificate_id;
+      let certificatenumber = row.issued_certificatenumber;
+      let certificateurl: string | null = null;
 
-      const { data: created, error: insertError } = await supabase
-        .from('certificates')
-        .insert(certificatePayload)
-        .select('id, certificatenumber, certificateurl')
-        .single();
+      // Listeye geri alınan kayıt: mevcut sertifikayı yeniden kullan, çift kayıt açma
+      if (certificateId) {
+        const { data: existingCert, error: existingError } = await supabase
+          .from('certificates')
+          .select('id, certificatenumber, certificateurl, description')
+          .eq('id', certificateId)
+          .maybeSingle();
 
-      if (insertError || !created) {
-        throw new Error(insertError?.message || 'Certificate insert failed');
+        if (existingError) {
+          throw new Error(existingError.message);
+        }
+
+        if (existingCert) {
+          certificatenumber = existingCert.certificatenumber;
+          certificateurl =
+            existingCert.certificateurl ||
+            (certificatenumber
+              ? buildCertificatePublicUrl(params.organizationSlug, certificatenumber)
+              : null);
+
+          await supabase
+            .from('certificates')
+            .update({
+              fullname: row.recipient_name,
+              coursename: courseName,
+              certificate_title: title,
+              description,
+              language: locale === 'en' ? 'en' : 'tr',
+              provider_text: fieldTexts.provider_text,
+              instructor_label: fieldTexts.instructor_label,
+              date_label: fieldTexts.date_label,
+              certificate_number_label: fieldTexts.certificate_number_label,
+              total_hours_label: fieldTexts.total_hours_label,
+              completion_text: fieldTexts.completion_text,
+              skills_label: fieldTexts.skills_label,
+              template_id: params.templateId,
+              organization_slug: params.organizationSlug,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existingCert.id);
+        } else {
+          certificateId = null;
+          certificatenumber = null;
+        }
       }
+
+      if (!certificateId || !certificatenumber) {
+        certificatenumber = generateCertificateNumber(org);
+        await new Promise((r) => setTimeout(r, 5));
+        certificateurl = buildCertificatePublicUrl(
+          params.organizationSlug,
+          certificatenumber
+        );
+
+        const certificatePayload = {
+          fullname: row.recipient_name,
+          coursename: courseName,
+          issuedate: formatIssueDateForDb(),
+          instructor: params.instructor || '',
+          duration: '',
+          language: locale === 'en' ? 'en' : 'tr',
+          certificate_title: title,
+          provider_text: fieldTexts.provider_text,
+          instructor_label: fieldTexts.instructor_label,
+          date_label: fieldTexts.date_label,
+          certificate_number_label: fieldTexts.certificate_number_label,
+          total_hours_label: fieldTexts.total_hours_label,
+          completion_text: fieldTexts.completion_text,
+          skills_label: fieldTexts.skills_label,
+          description,
+          organization_slug: params.organizationSlug,
+          certificatenumber,
+          certificateurl,
+          template_id: params.templateId,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+
+        const { data: created, error: insertError } = await supabase
+          .from('certificates')
+          .insert(certificatePayload)
+          .select('id, certificatenumber, certificateurl')
+          .single();
+
+        if (insertError || !created) {
+          throw new Error(insertError?.message || 'Certificate insert failed');
+        }
+
+        certificateId = created.id;
+        certificatenumber = created.certificatenumber;
+        certificateurl = created.certificateurl || certificateurl;
+      }
+
+      if (!certificateId || !certificatenumber) {
+        throw new Error('Certificate id/number missing after create');
+      }
+
+      const publicUrl =
+        certificateurl ||
+        buildCertificatePublicUrl(params.organizationSlug, certificatenumber);
 
       const emailResult = await sendCertificateCompletionEmail(
         { name: row.recipient_name, email: row.recipient_email },
-        { title: courseName, description: certificatePayload.description },
-        created.certificatenumber,
-        created.certificateurl || certificateurl,
+        { title: courseName, description },
+        certificatenumber,
+        publicUrl,
         locale,
-        '',
+        params.customMessage?.trim() || '',
         org.name || params.organizationSlug
       );
 
@@ -135,8 +233,8 @@ export async function issueCertificatesFromQueue(
         .from(CERTIFICATE_ISSUANCE_TABLE)
         .update({
           status: 'issued',
-          issued_certificate_id: created.id,
-          issued_certificatenumber: created.certificatenumber,
+          issued_certificate_id: certificateId,
+          issued_certificatenumber: certificatenumber,
           issued_at: nowIso,
           email_sent_at: emailResult.success ? nowIso : null,
           error: emailResult.success ? null : emailResult.error || 'Email failed',

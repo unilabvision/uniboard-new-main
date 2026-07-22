@@ -10,21 +10,11 @@ interface SiteApplicationsLayoutProps {
   params: Promise<{ locale: string }>;
 }
 
-interface SidebarToggleEvent extends CustomEvent {
-  detail: { isMinimized: boolean };
-}
-
-declare global {
-  interface WindowEventMap {
-    sidebarToggle: SidebarToggleEvent;
-  }
-}
 
 export default function SiteApplicationsLayout({
   children,
   params,
 }: SiteApplicationsLayoutProps) {
-  const [isMinimized, setIsMinimized] = useState(false);
   const [locale, setLocale] = useState('');
   const [mounted, setMounted] = useState(false);
 
@@ -47,19 +37,6 @@ export default function SiteApplicationsLayout({
     });
   }, [params]);
 
-  useEffect(() => {
-    const handleSidebarToggle = (event: SidebarToggleEvent) => {
-      setIsMinimized(event.detail.isMinimized);
-    };
-
-    if (typeof window !== 'undefined') {
-      const savedState = localStorage.getItem('sidebar-collapsed') === 'true';
-      setIsMinimized(savedState);
-    }
-
-    window.addEventListener('sidebarToggle', handleSidebarToggle);
-    return () => window.removeEventListener('sidebarToggle', handleSidebarToggle);
-  }, []);
 
   if (!mounted || isInitialModuleLoad || hasAccess === null) {
     return (
@@ -103,15 +80,11 @@ export default function SiteApplicationsLayout({
   }));
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-900 dark:to-neutral-800 flex">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex">
       <GlobalDashboardSidebar locale={locale} modules={modulesWithCategory} />
-      <div
-        className={`flex-1 min-w-0 transition-all duration-300 ${
-          isMinimized ? 'lg:ml-16' : 'lg:ml-64'
-        }`}
-      >
-        <main className="min-h-screen w-full min-w-0 overflow-x-hidden">{children}</main>
-      </div>
+      <main className="flex-1 min-w-0 min-h-screen overflow-x-hidden pt-14 lg:pt-0">
+        {children}
+      </main>
     </div>
   );
 }

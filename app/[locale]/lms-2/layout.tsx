@@ -11,22 +11,8 @@ interface LMSLayoutProps {
   }>;
 }
 
-// Custom event interface for sidebar toggle
-interface SidebarToggleEvent extends CustomEvent {
-  detail: {
-    isMinimized: boolean;
-  };
-}
-
-// Extend the global Window interface to include our custom event
-declare global {
-  interface WindowEventMap {
-    sidebarToggle: SidebarToggleEvent;
-  }
-}
 
 export default function LMSLayout({ children, params }: LMSLayoutProps) {
-  const [isMinimized, setIsMinimized] = useState(false);
   const [locale, setLocale] = useState<string>('');
   const [mounted, setMounted] = useState(false);
   const [hasLMSAccess, setHasLMSAccess] = useState<boolean | null>(null);
@@ -67,23 +53,6 @@ export default function LMSLayout({ children, params }: LMSLayoutProps) {
     checkLMSAccess();
   }, [modules, loading, error, isSuperAdmin]);
 
-  // Listen for sidebar minimize state changes
-  useEffect(() => {
-    const handleSidebarToggle = (event: SidebarToggleEvent) => {
-      setIsMinimized(event.detail.isMinimized);
-    };
-
-    // Load sidebar state from localStorage on mount
-    if (typeof window !== 'undefined') {
-      const savedState = localStorage.getItem("sidebar-collapsed") === "true";
-      setIsMinimized(savedState);
-    }
-
-    window.addEventListener('sidebarToggle', handleSidebarToggle);
-    return () => {
-      window.removeEventListener('sidebarToggle', handleSidebarToggle);
-    };
-  }, []);
 
   // Loading state
   if (!mounted || loading || hasLMSAccess === null) {
@@ -197,19 +166,11 @@ export default function LMSLayout({ children, params }: LMSLayoutProps) {
   }));
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-900 dark:to-neutral-800 flex">
-      {/* Global Sidebar */}
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex">
       <GlobalDashboardSidebar locale={locale} modules={modulesWithCategory} />
-      
-      {/* Main Content with proper margin to account for fixed sidebar */}
-      <div className={`flex-1 transition-all duration-300 ${
-        isMinimized ? 'lg:ml-16' : 'lg:ml-64'
-      }`}>
-        {/* Content */}
-        <main className="min-h-screen">
-          {children}
-        </main>
-      </div>
+      <main className="flex-1 min-w-0 min-h-screen overflow-x-hidden pt-14 lg:pt-0">
+        {children}
+      </main>
     </div>
   );
 }

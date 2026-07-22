@@ -3,10 +3,16 @@ import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
 import { syncCertificatePaymentsFromOrders } from '@/app/lib/siteApplications/syncPayments';
 import {
   CERTIFICATE_ISSUANCE_TABLE,
-  addDaysIso,
   getCertificatesServiceSupabase,
   type CertificateIssuanceKind,
 } from '@/app/lib/certificates/issuance';
+
+export type LatestEventInfo = {
+  id: string;
+  title: string;
+  start_date: string;
+  end_date: string | null;
+};
 
 type UpsertRow = {
   kind: CertificateIssuanceKind;
@@ -26,11 +32,63 @@ type UpsertRow = {
   updated_at: string;
 };
 
-const EVENT_DELAY_DAYS = 2;
-
 function readSubmission(raw: unknown): Record<string, unknown> {
   if (raw && typeof raw === 'object') return raw as Record<string, unknown>;
   return {};
+}
+
+/** Sertifika paketi: ödeme yapılmış veya ücretsiz (0₺) paket */
+function isCertificateEligible(sub: Record<string, unknown>): boolean {
+  if (sub.registration_tier !== 'certificate') return false;
+  if (sub.payment_status === 'paid') return true;
+  const price = Number(sub.package_price);
+  return Number.isFinite(price) && price <= 0;
+}
+
+/**
+ * Operasyon için “en son etkinlik”:
+ * 1) Başlamış etkinlikler içinde en yeni start_date
+ * 2) Yoksa yaklaşan en yakın etkinlik
+ */
+export async function resolveLatestEventForIssuance(
+  supabase = getCertificatesServiceSupabase()
+): Promise<LatestEventInfo | null> {
+  const { data, error } = await supabase
+    .from('myuni_events')
+    .select('id, title, start_date, end_date')
+    .order('start_date', { ascending: false })
+    .limit(50);
+
+  if (error) {
+    console.error('resolveLatestEventForIssuance:', error.message);
+    return null;
+  }
+
+  const list = data || [];
+  if (list.length === 0) return null;
+
+  const now = Date.now();
+  const started = list.find((ev) => {
+    const start = ev.start_date ? new Date(ev.start_date).getTime() : NaN;
+    return Number.isFinite(start) && start <= now;
+  });
+  if (started) {
+    return {
+      id: started.id,
+      title: started.title,
+      start_date: started.start_date,
+      end_date: started.end_date || null,
+    };
+  }
+
+  const upcoming = [...list].reverse().find((ev) => Boolean(ev.start_date));
+  const pick = upcoming || list[0];
+  return {
+    id: pick.id,
+    title: pick.title,
+    start_date: pick.start_date,
+    end_date: pick.end_date || null,
+  };
 }
 
 async function fetchClerkEmails(
@@ -51,7 +109,8 @@ async function fetchClerkEmails(
           user.emailAddresses[0]?.emailAddress ||
           '';
         if (!email) continue;
-        const name = [user.firstName, user.lastName].filter(Boolean).join(' ').trim() ||
+        const name =
+          [user.firstName, user.lastName].filter(Boolean).join(' ').trim() ||
           user.username ||
           email;
         map.set(user.id, { email, name });
@@ -63,82 +122,55 @@ async function fetchClerkEmails(
   return map;
 }
 
-async function syncEventParticipationCandidates(): Promise<{ scanned: number; upserted: number }> {
+async function syncEventParticipationCandidates(): Promise<{
+  scanned: number;
+  upserted: number;
+  latestEvent: LatestEventInfo | null;
+}> {
   const supabase = getCertificatesServiceSupabase();
   await syncCertificatePaymentsFromOrders(supabase);
 
-  const now = Date.now();
+  const latestEvent = await resolveLatestEventForIssuance(supabase);
+  if (!latestEvent) {
+    return { scanned: 0, upserted: 0, latestEvent: null };
+  }
 
   const { data: apps, error } = await supabase
     .from(siteApplicationsDb.applications)
     .select(
       'id, first_name, last_name, email, event_id, event_name, locale, submission_data, source'
     )
-    .or('source.eq.event_website,event_id.not.is.null,event_name.not.is.null')
-    .limit(2000);
+    .eq('event_id', latestEvent.id)
+    .limit(3000);
 
   if (error) {
     console.error('Event issuance sync apps error:', error.message);
-    return { scanned: 0, upserted: 0 };
+    return { scanned: 0, upserted: 0, latestEvent };
   }
 
   const paidCertApps = (apps || []).filter((app) => {
     const sub = readSubmission(app.submission_data);
     return (
-      sub.registration_tier === 'certificate' &&
-      sub.payment_status === 'paid' &&
+      isCertificateEligible(sub) &&
       typeof app.email === 'string' &&
       app.email.trim().length > 0
     );
   });
 
-  const eventIds = [
-    ...new Set(
-      paidCertApps
-        .map((a) => a.event_id as string | null)
-        .filter((id): id is string => Boolean(id))
-    ),
-  ];
-
-  const eventsById = new Map<
-    string,
-    { id: string; title: string; start_date: string; end_date: string | null }
-  >();
-
-  if (eventIds.length > 0) {
-    const { data: events } = await supabase
-      .from('myuni_events')
-      .select('id, title, start_date, end_date')
-      .in('id', eventIds);
-    for (const ev of events || []) {
-      eventsById.set(ev.id, ev);
-    }
-  }
-
   const rows: UpsertRow[] = [];
   const nowIso = new Date().toISOString();
 
   for (const app of paidCertApps) {
-    const event = app.event_id ? eventsById.get(app.event_id) : undefined;
-    const endOrStart =
-      event?.end_date ||
-      event?.start_date ||
-      null;
-
-    // Etkinlik tarihi yoksa şimdilik kuyruğa alma (manuel değil, cron kuralı end+2)
-    if (!endOrStart) continue;
-
-    const eligibleAt = addDaysIso(endOrStart, EVENT_DELAY_DAYS);
-    if (new Date(eligibleAt).getTime() > now) continue;
-
     const sub = readSubmission(app.submission_data);
-    const eventName =
-      event?.title ||
-      app.event_name ||
-      (typeof sub.event_title === 'string' ? sub.event_title : null) ||
-      'Etkinlik';
+    const paidAt =
+      typeof sub.paid_at === 'string' && sub.paid_at ? sub.paid_at : null;
+    // Ödeme tamamlanınca / ücretsiz pakette hemen gönderime hazır
+    const eligibleAt =
+      paidAt || latestEvent.end_date || latestEvent.start_date || nowIso;
+
     const recipientName =
-      [app.first_name, app.last_name].filter(Boolean).join(' ').trim() || app.email;
+      [app.first_name, app.last_name].filter(Boolean).join(' ').trim() ||
+      app.email;
 
     rows.push({
       kind: 'event_participation',
@@ -148,8 +180,8 @@ async function syncEventParticipationCandidates(): Promise<{ scanned: number; up
       recipient_email: String(app.email).trim().toLowerCase(),
       source_type: 'site_application',
       source_id: app.id,
-      event_id: app.event_id || event?.id || null,
-      event_name: eventName,
+      event_id: latestEvent.id,
+      event_name: latestEvent.title || app.event_name || 'Etkinlik',
       course_id: null,
       course_name: null,
       order_id: typeof sub.order_id === 'string' ? sub.order_id : null,
@@ -160,10 +192,9 @@ async function syncEventParticipationCandidates(): Promise<{ scanned: number; up
   }
 
   if (rows.length === 0) {
-    return { scanned: paidCertApps.length, upserted: 0 };
+    return { scanned: paidCertApps.length, upserted: 0, latestEvent };
   }
 
-  // Sadece henüz issued olmayanları güncelle (ignoreDuplicates değil — onConflict update ama status issued koru)
   const { data: existing } = await supabase
     .from(CERTIFICATE_ISSUANCE_TABLE)
     .select('source_id, status')
@@ -179,23 +210,28 @@ async function syncEventParticipationCandidates(): Promise<{ scanned: number; up
   const toUpsert = rows.filter((r) => !issuedIds.has(r.source_id));
 
   if (toUpsert.length === 0) {
-    return { scanned: paidCertApps.length, upserted: 0 };
+    return { scanned: paidCertApps.length, upserted: 0, latestEvent };
   }
 
-  const { error: upsertError } = await supabase.from(CERTIFICATE_ISSUANCE_TABLE).upsert(toUpsert, {
-    onConflict: 'source_type,source_id,kind',
-    ignoreDuplicates: false,
-  });
+  const { error: upsertError } = await supabase
+    .from(CERTIFICATE_ISSUANCE_TABLE)
+    .upsert(toUpsert, {
+      onConflict: 'source_type,source_id,kind',
+      ignoreDuplicates: false,
+    });
 
   if (upsertError) {
     console.error('Event issuance upsert error:', upsertError.message);
-    return { scanned: paidCertApps.length, upserted: 0 };
+    return { scanned: paidCertApps.length, upserted: 0, latestEvent };
   }
 
-  return { scanned: paidCertApps.length, upserted: toUpsert.length };
+  return { scanned: paidCertApps.length, upserted: toUpsert.length, latestEvent };
 }
 
-async function syncCourseAchievementCandidates(): Promise<{ scanned: number; upserted: number }> {
+async function syncCourseAchievementCandidates(): Promise<{
+  scanned: number;
+  upserted: number;
+}> {
   const supabase = getCertificatesServiceSupabase();
   const nowIso = new Date().toISOString();
 
@@ -229,7 +265,8 @@ async function syncCourseAchievementCandidates(): Promise<{ scanned: number; ups
     const person = clerkMap.get(enr.user_id);
     if (!person?.email) continue;
 
-    const courseName = courseTitle.get(enr.course_id) || `Kurs ${String(enr.course_id).slice(0, 8)}`;
+    const courseName =
+      courseTitle.get(enr.course_id) || `Kurs ${String(enr.course_id).slice(0, 8)}`;
     const eligibleAt = enr.updated_at || enr.enrolled_at || nowIso;
 
     rows.push({
@@ -273,10 +310,12 @@ async function syncCourseAchievementCandidates(): Promise<{ scanned: number; ups
     return { scanned: list.length, upserted: 0 };
   }
 
-  const { error: upsertError } = await supabase.from(CERTIFICATE_ISSUANCE_TABLE).upsert(toUpsert, {
-    onConflict: 'source_type,source_id,kind',
-    ignoreDuplicates: false,
-  });
+  const { error: upsertError } = await supabase
+    .from(CERTIFICATE_ISSUANCE_TABLE)
+    .upsert(toUpsert, {
+      onConflict: 'source_type,source_id,kind',
+      ignoreDuplicates: false,
+    });
 
   if (upsertError) {
     console.error('LMS issuance upsert error:', upsertError.message);
@@ -287,7 +326,11 @@ async function syncCourseAchievementCandidates(): Promise<{ scanned: number; ups
 }
 
 export async function syncCertificateIssuanceQueue(): Promise<{
-  events: { scanned: number; upserted: number };
+  events: {
+    scanned: number;
+    upserted: number;
+    latestEvent: LatestEventInfo | null;
+  };
   courses: { scanned: number; upserted: number };
 }> {
   const events = await syncEventParticipationCandidates();

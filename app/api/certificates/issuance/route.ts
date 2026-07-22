@@ -5,7 +5,10 @@ import {
   type CertificateIssuanceKind,
   type CertificateIssuanceStatus,
 } from '@/app/lib/certificates/issuance';
-import { syncCertificateIssuanceQueue } from '@/app/lib/certificates/syncIssuanceQueue';
+import {
+  resolveLatestEventForIssuance,
+  syncCertificateIssuanceQueue,
+} from '@/app/lib/certificates/syncIssuanceQueue';
 
 export async function GET(request: NextRequest) {
   const authResult = await requireCertificatesModuleUser();
@@ -18,11 +21,25 @@ export async function GET(request: NextRequest) {
   const status = searchParams.get('status') as CertificateIssuanceStatus | null;
   const sync = searchParams.get('sync') === '1';
 
+  let latestEvent: Awaited<ReturnType<typeof resolveLatestEventForIssuance>> = null;
+  let syncMeta: unknown = null;
+
   if (sync) {
     try {
-      await syncCertificateIssuanceQueue();
+      syncMeta = await syncCertificateIssuanceQueue();
+      latestEvent =
+        (syncMeta as { events?: { latestEvent?: typeof latestEvent } })?.events
+          ?.latestEvent || null;
     } catch (err) {
       console.error('Issuance list sync warning:', err);
+    }
+  }
+
+  if (!latestEvent && kind === 'event_participation') {
+    try {
+      latestEvent = await resolveLatestEventForIssuance();
+    } catch (err) {
+      console.error('Issuance latest event resolve warning:', err);
     }
   }
 
@@ -30,10 +47,13 @@ export async function GET(request: NextRequest) {
     .from(CERTIFICATE_ISSUANCE_TABLE)
     .select('*', { count: 'exact' })
     .order('eligible_at', { ascending: false })
-    .limit(200);
+    .limit(500);
 
   if (kind === 'event_participation' || kind === 'course_achievement') {
     query = query.eq('kind', kind);
+  }
+  if (kind === 'event_participation' && latestEvent?.id) {
+    query = query.eq('event_id', latestEvent.id);
   }
   if (status) {
     query = query.eq('status', status);
@@ -49,5 +69,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     items: data ?? [],
     total: count ?? 0,
+    latestEvent,
+    sync: syncMeta,
   });
 }

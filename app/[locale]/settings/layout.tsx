@@ -12,7 +12,6 @@ interface DashboardLayoutProps {
 }
 
 export default function SettingsLayout({ children, params }: DashboardLayoutProps) {
-  const [isMinimized, setIsMinimized] = useState(false);
   const [locale, setLocale] = useState<string>('');
   const [mounted, setMounted] = useState(false);
   const [hasSettingsAccess, setHasSettingsAccess] = useState<boolean | null>(null);
@@ -60,23 +59,6 @@ export default function SettingsLayout({ children, params }: DashboardLayoutProp
     checkSettingsAccess();
   }, [modules, loading, error, isSuperAdmin]);
 
-  // Listen for sidebar minimize state changes
-  useEffect(() => {
-    const handleSidebarToggle = (event: CustomEvent) => {
-      setIsMinimized(event.detail.isMinimized);
-    };
-
-    // Load sidebar state from localStorage on mount
-    if (typeof window !== 'undefined') {
-      const savedState = localStorage.getItem("sidebar-collapsed") === "true";
-      setIsMinimized(savedState);
-    }
-
-    window.addEventListener('sidebarToggle', handleSidebarToggle as EventListener);
-    return () => {
-      window.removeEventListener('sidebarToggle', handleSidebarToggle as EventListener);
-    };
-  }, []);
 
   // Loading state
   if (!mounted || loading || hasSettingsAccess === null) {
@@ -190,19 +172,11 @@ export default function SettingsLayout({ children, params }: DashboardLayoutProp
   }));
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-900 dark:to-neutral-800 flex">
-      {/* Global Sidebar */}
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex">
       <GlobalDashboardSidebar locale={locale} modules={modulesWithCategory} />
-      
-      {/* Main Content with proper margin to account for fixed sidebar */}
-      <div className={`flex-1 transition-all duration-300 ${
-        isMinimized ? 'lg:ml-16' : 'lg:ml-64'
-      }`}>
-        {/* Content */}
-        <main className="min-h-screen">
-          {children}
-        </main>
-      </div>
+      <main className="flex-1 min-w-0 min-h-screen overflow-x-hidden pt-14 lg:pt-0">
+        {children}
+      </main>
     </div>
   );
 }

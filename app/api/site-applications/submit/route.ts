@@ -216,9 +216,17 @@ export async function POST(request: NextRequest) {
               package_price: selectedPackage.price,
               package_currency: selectedPackage.currency,
               payment_status:
-                selectedPackage.id === 'certificate' && selectedPackage.price > 0
-                  ? 'pending'
+                selectedPackage.id === 'certificate'
+                  ? selectedPackage.price > 0
+                    ? 'pending'
+                    : 'paid'
                   : 'none',
+              ...(selectedPackage.id === 'certificate' && selectedPackage.price <= 0
+                ? {
+                    paid_at: new Date().toISOString(),
+                    payment_method: 'free',
+                  }
+                : {}),
             }
           : {}),
       },

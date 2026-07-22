@@ -12,22 +12,8 @@ interface InternshipLayoutProps {
   }>;
 }
 
-// Custom event interface for sidebar toggle
-interface SidebarToggleEvent extends CustomEvent {
-  detail: {
-    isMinimized: boolean;
-  };
-}
-
-// Extend the global Window interface to include our custom event
-declare global {
-  interface WindowEventMap {
-    sidebarToggle: SidebarToggleEvent;
-  }
-}
 
 export default function InternshipLayout({ children, params }: InternshipLayoutProps) {
-  const [isMinimized, setIsMinimized] = useState(false);
   const [locale, setLocale] = useState<string>('');
   const [mounted, setMounted] = useState(false);
   const [hasInternshipAccess, setHasInternshipAccess] = useState<boolean | null>(null);
@@ -56,23 +42,6 @@ export default function InternshipLayout({ children, params }: InternshipLayoutP
     setHasInternshipAccess(resolvedInternshipAccess);
   }, [resolvedInternshipAccess]);
 
-  // Listen for sidebar minimize state changes
-  useEffect(() => {
-    const handleSidebarToggle = (event: SidebarToggleEvent) => {
-      setIsMinimized(event.detail.isMinimized);
-    };
-
-    // Load sidebar state from localStorage on mount
-    if (typeof window !== 'undefined') {
-      const savedState = localStorage.getItem("sidebar-collapsed") === "true";
-      setIsMinimized(savedState);
-    }
-
-    window.addEventListener('sidebarToggle', handleSidebarToggle);
-    return () => {
-      window.removeEventListener('sidebarToggle', handleSidebarToggle);
-    };
-  }, []);
 
   // Loading state
   if (!mounted || isInitialModuleLoad || resolvedInternshipAccess === null) {
@@ -186,18 +155,11 @@ export default function InternshipLayout({ children, params }: InternshipLayoutP
   }));
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-900 dark:to-neutral-800 flex">
-      {/* Global Sidebar */}
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex">
       <GlobalDashboardSidebar locale={locale} modules={modulesWithCategory} />
-      
-      {/* Main Content with proper margin to account for fixed sidebar */}
-      <div className={`flex-1 min-w-0 transition-all duration-300 ${
-        isMinimized ? 'lg:ml-16' : 'lg:ml-64'
-      }`}>
-        <main className="min-h-screen w-full min-w-0 overflow-x-hidden">
-          {children}
-        </main>
-      </div>
+      <main className="flex-1 min-w-0 min-h-screen overflow-x-hidden pt-14 lg:pt-0">
+        {children}
+      </main>
     </div>
   );
 }
