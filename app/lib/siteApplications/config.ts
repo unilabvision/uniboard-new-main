@@ -1,3 +1,5 @@
+import { getMyuniPublicOrigin } from '@/app/lib/siteApplications/publicUrls';
+
 export const siteApplicationsDb = {
   applications: 'myuni_site_applications',
   statusHistory: 'myuni_site_application_status_history',
@@ -91,6 +93,23 @@ export function getSiteApplicationPublicPath(locale: string, slug: string): stri
 export function getEventApplicationPath(locale: string, eventSlug: string): string {
   const segment = locale === 'en' ? 'event' : 'etkinlik';
   return `/${locale}/${segment}/${eventSlug}/basvuru`;
+}
+
+/** Absolute myunilab.net URL for admin “open form” / external consumers */
+export function toAbsoluteMyuniUrl(path: string): string {
+  const origin = getMyuniPublicOrigin();
+  if (!path) return origin;
+  if (/^https?:\/\//i.test(path)) return path;
+  const normalized = path.startsWith('/') ? path : `/${path}`;
+  return `${origin}${normalized}`;
+}
+
+export function getAbsoluteSiteApplicationPublicPath(locale: string, slug: string): string {
+  return toAbsoluteMyuniUrl(getSiteApplicationPublicPath(locale, slug));
+}
+
+export function getAbsoluteEventApplicationPath(locale: string, eventSlug: string): string {
+  return toAbsoluteMyuniUrl(getEventApplicationPath(locale, eventSlug));
 }
 
 export function slugifyFormValue(value: string): string {

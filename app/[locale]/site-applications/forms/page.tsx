@@ -5,11 +5,11 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useUserModules } from '../../../hooks/useUserModules';
 import {
-  getSiteApplicationPublicPath,
-  getEventApplicationPath,
+  getAbsoluteSiteApplicationPublicPath,
+  getAbsoluteEventApplicationPath,
 } from '@/app/lib/siteApplications/config';
 import {
-  getTeamFormPublicPath,
+  getAbsoluteTeamFormPublicPath,
   inferFormType,
   type SiteApplicationFormType,
 } from '@/app/lib/siteApplications/formTypes';
@@ -190,10 +190,13 @@ function FormsListContent({ locale }: { locale: string }) {
             const isTeam = type === 'team';
             const linkedEvent = form.myuni_events;
             const previewHref = isTeam
-              ? getTeamFormPublicPath(locale, locale === 'en' ? form.slug_en : form.slug_tr)
+              ? getAbsoluteTeamFormPublicPath(locale, locale === 'en' ? form.slug_en : form.slug_tr)
               : linkedEvent
-                ? getEventApplicationPath(locale, linkedEvent.slug)
-                : getSiteApplicationPublicPath(locale, locale === 'en' ? form.slug_en : form.slug_tr);
+                ? getAbsoluteEventApplicationPath(locale, linkedEvent.slug)
+                : getAbsoluteSiteApplicationPublicPath(
+                    locale,
+                    locale === 'en' ? form.slug_en : form.slug_tr
+                  );
 
             return (
               <div

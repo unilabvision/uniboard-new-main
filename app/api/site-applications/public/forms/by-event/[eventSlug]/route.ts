@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { siteApplicationsDb, getEventApplicationPath } from '@/app/lib/siteApplications/config';
+import { siteApplicationsDb, getAbsoluteEventApplicationPath } from '@/app/lib/siteApplications/config';
 import { fetchEventBySlug } from '@/app/lib/siteApplications/events';
 import { toPublicForm } from '@/app/lib/siteApplications/forms';
 import type { SiteApplicationForm, SiteApplicationFormField } from '@/app/types/siteApplicationForms';
@@ -69,7 +69,7 @@ export async function GET(
         ...publicForm,
         event_slug: event.slug,
         event_title: event.title,
-        application_url: getEventApplicationPath(locale, event.slug),
+        application_url: getAbsoluteEventApplicationPath(locale, event.slug),
       },
       locale,
       event,

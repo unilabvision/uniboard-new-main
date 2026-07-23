@@ -116,7 +116,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       return NextResponse.json({
         form: data,
         warning:
-          'package_settings column missing — run scripts/migrations/add-site-application-package-settings.sql in Supabase',
+          'package_settings column missing — run scripts/migrations/add-site-application-form-field-types.sql in Supabase',
       });
     }
   }

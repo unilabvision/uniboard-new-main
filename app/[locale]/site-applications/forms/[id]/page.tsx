@@ -6,13 +6,13 @@ import { use } from 'react';
 import { usePathname } from 'next/navigation';
 import { useUserModules } from '../../../../hooks/useUserModules';
 import {
-  getSiteApplicationPublicPath,
-  getEventApplicationPath,
+  getAbsoluteSiteApplicationPublicPath,
+  getAbsoluteEventApplicationPath,
 } from '@/app/lib/siteApplications/config';
 import {
   buildEventFormSlugs,
   getDefaultFieldsForFormType,
-  getTeamFormPublicPath,
+  getAbsoluteTeamFormPublicPath,
   inferFormType,
   type SiteApplicationFormType,
 } from '@/app/lib/siteApplications/formTypes';
@@ -314,10 +314,10 @@ export default function EditSiteApplicationFormPage({
   const eventFromList = events.find((e) => e.id === form.event_id);
   const resolvedLinkedEvent = eventFromList || linkedEvent;
   const previewHref = isTeam
-    ? getTeamFormPublicPath(locale, previewSlug)
+    ? getAbsoluteTeamFormPublicPath(locale, previewSlug)
     : resolvedLinkedEvent
-      ? getEventApplicationPath(locale, resolvedLinkedEvent.slug)
-      : getSiteApplicationPublicPath(locale, previewSlug);
+      ? getAbsoluteEventApplicationPath(locale, resolvedLinkedEvent.slug)
+      : getAbsoluteSiteApplicationPublicPath(locale, previewSlug);
   const linkedEventInactive =
     Boolean(form.event_id) &&
     resolvedLinkedEvent != null &&

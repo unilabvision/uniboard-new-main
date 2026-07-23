@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import {
   siteApplicationsDb,
-  getEventApplicationPath,
+  getAbsoluteEventApplicationPath,
 } from '@/app/lib/siteApplications/config';
 import { attachLinkedEventsToForms } from '@/app/lib/siteApplications/events';
-import { getTeamFormPublicPath } from '@/app/lib/siteApplications/formTypes';
+import { getAbsoluteTeamFormPublicPath } from '@/app/lib/siteApplications/formTypes';
 import {
   parsePackageSettingsFromForm,
   toPublicPackages,
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
           slug,
           title: locale === 'en' ? form.title_en : form.title_tr,
           subtitle: locale === 'en' ? form.subtitle_en : form.subtitle_tr,
-          url: getTeamFormPublicPath(locale, slug),
+          url: getAbsoluteTeamFormPublicPath(locale, slug),
         };
       });
 
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
           event_slug: event.slug,
           event_title: event.title,
           form_title: locale === 'en' ? form.title_en : form.title_tr,
-          application_url: getEventApplicationPath(locale, event.slug),
+          application_url: getAbsoluteEventApplicationPath(locale, event.slug),
           packages,
           has_certificate_package: packageSettings.certificate_enabled,
         };

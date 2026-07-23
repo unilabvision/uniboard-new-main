@@ -1,5 +1,5 @@
 import type { SiteApplicationFormFieldInput } from '@/app/types/siteApplicationForms';
-import { getSiteApplicationPublicPath } from './config';
+import { getSiteApplicationPublicPath, toAbsoluteMyuniUrl } from './config';
 
 export type SiteApplicationFormType = 'team' | 'event';
 
@@ -69,6 +69,10 @@ export function getTeamFormPublicPath(locale: string, slug: string): string {
     return `/${locale}/${slug}`;
   }
   return getSiteApplicationPublicPath(locale, slug);
+}
+
+export function getAbsoluteTeamFormPublicPath(locale: string, slug: string): string {
+  return toAbsoluteMyuniUrl(getTeamFormPublicPath(locale, slug));
 }
 
 export const TEAM_DEFAULT_FIELDS: SiteApplicationFormFieldInput[] = [
