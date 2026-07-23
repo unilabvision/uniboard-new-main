@@ -23,15 +23,16 @@ export async function resolveActiveForm(
     const { event, error: eventError } = await fetchEventBySlug(supabase, eventSlug.trim());
     if (eventError || !event) return null;
 
-    const { data: form, error } = await supabase
+    const { data: forms, error } = await supabase
       .from(siteApplicationsDb.forms)
       .select('*')
       .eq('event_id', event.id)
       .eq('is_active', true)
-      .maybeSingle();
+      .order('updated_at', { ascending: false })
+      .limit(1);
 
-    if (error || !form) return null;
-    return { form: form as SiteApplicationForm, locale, event };
+    if (error || !forms?.length) return null;
+    return { form: forms[0] as SiteApplicationForm, locale, event };
   }
 
   const slug = formSlug?.trim();

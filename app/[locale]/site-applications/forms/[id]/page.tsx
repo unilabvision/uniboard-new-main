@@ -40,8 +40,9 @@ const texts = {
     settings: 'Form başlığı ve ayarlar',
     fields: 'Sorular',
     saveSettings: 'Ayarları Kaydet',
-    saveFields: 'Soruları Kaydet',
+    saveFields: 'Kaydet ve yayınla',
     saved: 'Kaydedildi',
+    savedAll: 'Ayarlar ve sorular kaydedildi',
     preview: 'Canlı önizleme',
     openForm: 'Formu aç',
     active: 'Yayında (başvuru alınsın)',
@@ -56,6 +57,9 @@ const texts = {
     eventsLoadError: 'Etkinlik listesi yüklenemedi',
     linkedEvent: 'Bağlı etkinlik',
     noEvent: 'Etkinlik seçilmedi',
+    eventRequired: 'Sitede görünmesi için önce bir etkinlik seçip kaydedin.',
+    eventInactive:
+      'Bağlı etkinlik yayında değil. Sitede form açılmaz — önce etkinliği aktif edin.',
     titleTr: 'Form başlığı (TR)',
     titleEn: 'Form başlığı (EN)',
     subtitleTr: 'Açıklama (TR)',
@@ -63,7 +67,8 @@ const texts = {
     successTr: 'Başarı mesajı (TR)',
     successEn: 'Başarı mesajı (EN)',
     defaultFields: 'Varsayılan soruları yükle',
-    inactiveHint: 'Formu yayına almak için "Yayında" seçeneğini işaretleyin.',
+    inactiveHint:
+      'Formu yayına almak için "Yayında" işaretleyin, etkinlik seçin ve "Kaydet ve yayınla"ya basın. Yalnızca soruları kaydetmek sitede yayınlamaz.',
   },
   en: {
     back: 'Back to Forms',
@@ -72,8 +77,9 @@ const texts = {
     settings: 'Form title & settings',
     fields: 'Questions',
     saveSettings: 'Save Settings',
-    saveFields: 'Save Questions',
+    saveFields: 'Save & publish',
     saved: 'Saved',
+    savedAll: 'Settings and questions saved',
     preview: 'Live preview',
     openForm: 'Open form',
     active: 'Published (accept submissions)',
@@ -88,6 +94,9 @@ const texts = {
     eventsLoadError: 'Could not load events list',
     linkedEvent: 'Linked event',
     noEvent: 'No event selected',
+    eventRequired: 'Select and save a linked event before it appears on the site.',
+    eventInactive:
+      'The linked event is inactive. The public form will not open until the event is activated.',
     titleTr: 'Form title (TR)',
     titleEn: 'Form title (EN)',
     subtitleTr: 'Description (TR)',
@@ -95,7 +104,8 @@ const texts = {
     successTr: 'Success message (TR)',
     successEn: 'Success message (EN)',
     defaultFields: 'Load default questions',
-    inactiveHint: 'Check "Published" to start accepting submissions.',
+    inactiveHint:
+      'To publish: check "Published", link an event, then click "Save & publish". Saving questions alone does not publish to the site.',
   },
 };
 
@@ -115,12 +125,21 @@ export default function EditSiteApplicationFormPage({
 
   const [form, setForm] = useState<SiteApplicationForm | null>(null);
   const [fields, setFields] = useState<SiteApplicationFormFieldInput[]>([]);
-  const [events, setEvents] = useState<Array<{ id: string; slug: string; title: string }>>([]);
+  const [events, setEvents] = useState<
+    Array<{ id: string; slug: string; title: string; is_active?: boolean }>
+  >([]);
+  const [linkedEvent, setLinkedEvent] = useState<{
+    id: string;
+    slug: string;
+    title: string;
+    is_active?: boolean;
+  } | null>(null);
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
   const [savingFields, setSavingFields] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [messageIsError, setMessageIsError] = useState(false);
   const [packageSettings, setPackageSettings] = useState<EventCertificatePackageSettings>(
     normalizePackageSettings(null)
   );
@@ -133,6 +152,7 @@ export default function EditSiteApplicationFormPage({
           const data = await formRes.json();
           setForm(data.form);
           setPackageSettings(parsePackageSettingsFromForm(data.form));
+          setLinkedEvent(data.form.linked_event ?? null);
           setFields(
             (data.form.fields as SiteApplicationFormField[] | undefined)?.map((f) => ({
               field_key: f.field_key,
@@ -166,42 +186,71 @@ export default function EditSiteApplicationFormPage({
     load();
   }, [id, t.eventsLoadError]);
 
+  const showMessage = (text: string, isError = false) => {
+    setMessageIsError(isError);
+    setMessage(text || null);
+  };
+
+  const persistSettings = async (): Promise<{ ok: boolean; warning?: string; error?: string }> => {
+    if (!form) return { ok: false, error: 'Form not found' };
+
+    const formType: SiteApplicationFormType = form.form_type ?? inferFormType(form);
+    if (formType === 'event' && form.is_active && !form.event_id) {
+      return { ok: false, error: t.eventRequired };
+    }
+    if (
+      formType === 'event' &&
+      form.is_active &&
+      form.event_id &&
+      linkedEvent?.id === form.event_id &&
+      linkedEvent.is_active === false
+    ) {
+      return { ok: false, error: t.eventInactive };
+    }
+
+    const res = await fetch(`/api/site-applications/forms/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        slug_tr: form.slug_tr,
+        slug_en: form.slug_en,
+        title_tr: form.title_tr,
+        title_en: form.title_en,
+        subtitle_tr: form.subtitle_tr,
+        subtitle_en: form.subtitle_en,
+        success_message_tr: form.success_message_tr,
+        success_message_en: form.success_message_en,
+        is_active: form.is_active,
+        show_on_website: form.show_on_website,
+        allows_attachment: form.allows_attachment,
+        event_id: form.event_id,
+        form_type: formType,
+        package_settings: packageSettings,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { ok: false, error: data.error || 'Error' };
+    }
+    if (data.form) {
+      setForm((prev) => (prev ? { ...prev, ...data.form } : data.form));
+    }
+    return { ok: true, warning: data.warning };
+  };
+
   const saveSettings = async () => {
     if (!form) return;
     setSavingSettings(true);
-    setMessage(null);
+    showMessage('');
     try {
-      const res = await fetch(`/api/site-applications/forms/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          slug_tr: form.slug_tr,
-          slug_en: form.slug_en,
-          title_tr: form.title_tr,
-          title_en: form.title_en,
-          subtitle_tr: form.subtitle_tr,
-          subtitle_en: form.subtitle_en,
-          success_message_tr: form.success_message_tr,
-          success_message_en: form.success_message_en,
-          is_active: form.is_active,
-          show_on_website: form.show_on_website,
-          allows_attachment: form.allows_attachment,
-          event_id: form.event_id,
-          package_settings: packageSettings,
-        }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error);
+      const result = await persistSettings();
+      if (!result.ok) {
+        showMessage(result.error || 'Error', true);
+        return;
       }
-      const data = await res.json();
-      if (data.warning) {
-        setMessage(data.warning);
-      } else {
-        setMessage(t.saved);
-      }
+      showMessage(result.warning || t.saved, Boolean(result.warning));
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Error');
+      showMessage(err instanceof Error ? err.message : 'Error', true);
     } finally {
       setSavingSettings(false);
     }
@@ -209,8 +258,16 @@ export default function EditSiteApplicationFormPage({
 
   const saveFields = async () => {
     setSavingFields(true);
-    setMessage(null);
+    showMessage('');
     try {
+      // Publish + event link live in settings — persist them with questions
+      // so "Kaydet ve yayınla" actually reaches the public site.
+      const settingsResult = await persistSettings();
+      if (!settingsResult.ok) {
+        showMessage(settingsResult.error || 'Error', true);
+        return;
+      }
+
       const normalized = fields.map((field, index) => ({
         ...field,
         order_index: index,
@@ -225,9 +282,9 @@ export default function EditSiteApplicationFormPage({
         throw new Error(data.error);
       }
       setFields(normalized);
-      setMessage(t.saved);
+      showMessage(settingsResult.warning || t.savedAll, Boolean(settingsResult.warning));
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Error');
+      showMessage(err instanceof Error ? err.message : 'Error', true);
     } finally {
       setSavingFields(false);
     }
@@ -254,12 +311,17 @@ export default function EditSiteApplicationFormPage({
   }
 
   const previewSlug = locale === 'en' ? form.slug_en : form.slug_tr;
-  const linkedEvent = events.find((e) => e.id === form.event_id);
+  const eventFromList = events.find((e) => e.id === form.event_id);
+  const resolvedLinkedEvent = eventFromList || linkedEvent;
   const previewHref = isTeam
     ? getTeamFormPublicPath(locale, previewSlug)
-    : linkedEvent
-      ? getEventApplicationPath(locale, linkedEvent.slug)
+    : resolvedLinkedEvent
+      ? getEventApplicationPath(locale, resolvedLinkedEvent.slug)
       : getSiteApplicationPublicPath(locale, previewSlug);
+  const linkedEventInactive =
+    Boolean(form.event_id) &&
+    resolvedLinkedEvent != null &&
+    resolvedLinkedEvent.is_active === false;
   const defaultFieldsTemplate = getDefaultFieldsForFormType(formType);
   const displayTitle = locale === 'en' ? form.title_en : form.title_tr;
   const displaySubtitle = locale === 'en' ? form.subtitle_en : form.subtitle_tr;
@@ -273,6 +335,9 @@ export default function EditSiteApplicationFormPage({
       patch.slug_en = slugs.slug_en;
       if (!form.title_tr) patch.title_tr = `${selected.title} Başvurusu`;
       if (!form.title_en) patch.title_en = `${selected.title} Application`;
+      setLinkedEvent(selected);
+    } else {
+      setLinkedEvent(null);
     }
     setForm({ ...form, ...patch });
   };
@@ -287,7 +352,8 @@ export default function EditSiteApplicationFormPage({
           <ArrowLeft className="w-4 h-4" />
           {t.back}
         </Link>
-        {form.is_active && (
+        {form.is_active &&
+          (isTeam || (resolvedLinkedEvent && !linkedEventInactive)) && (
           <a
             href={previewHref}
             target="_blank"
@@ -311,14 +377,24 @@ export default function EditSiteApplicationFormPage({
       </div>
 
       {message && (
-        <div className="rounded-lg bg-green-50 border border-green-200 text-green-800 px-4 py-2 text-sm">
+        <div
+          className={`rounded-lg px-4 py-2 text-sm border ${
+            messageIsError
+              ? 'bg-red-50 border-red-200 text-red-800'
+              : 'bg-green-50 border-green-200 text-green-800'
+          }`}
+        >
           {message}
         </div>
       )}
 
-      {!form.is_active && (
+      {(!form.is_active || (!isTeam && !form.event_id) || linkedEventInactive) && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
-          {t.inactiveHint}
+          {linkedEventInactive
+            ? t.eventInactive
+            : !isTeam && !form.event_id
+              ? t.eventRequired
+              : t.inactiveHint}
         </div>
       )}
 
@@ -407,7 +483,7 @@ export default function EditSiteApplicationFormPage({
           />
           <button
             onClick={saveFields}
-            disabled={savingFields || fields.length === 0}
+            disabled={savingFields || savingSettings || fields.length === 0}
             className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#990000] text-white rounded-xl disabled:opacity-50"
           >
             <Save className="w-4 h-4" />

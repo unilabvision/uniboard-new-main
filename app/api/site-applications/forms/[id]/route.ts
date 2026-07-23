@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
 import { inferFormType } from '@/app/lib/siteApplications/formTypes';
+import { fetchEventById } from '@/app/lib/siteApplications/events';
 import {
   requireSiteApplicationsOrEventsUser,
   requireEventFormsWriteUser,
@@ -36,8 +37,19 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     .eq('form_id', id)
     .order('order_index', { ascending: true });
 
+  let linkedEvent = null;
+  if (form.event_id) {
+    const { event } = await fetchEventById(authResult.supabase!, form.event_id);
+    linkedEvent = event;
+  }
+
   return NextResponse.json({
-    form: { ...form, fields: fields ?? [], form_type: inferFormType(form) },
+    form: {
+      ...form,
+      fields: fields ?? [],
+      form_type: inferFormType(form),
+      linked_event: linkedEvent,
+    },
   });
 }
 

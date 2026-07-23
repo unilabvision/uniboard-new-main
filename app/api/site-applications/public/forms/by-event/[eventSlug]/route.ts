@@ -32,16 +32,18 @@ export async function GET(
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
 
-    const { data: form, error } = await supabase
+    const { data: forms, error } = await supabase
       .from(siteApplicationsDb.forms)
       .select('*')
       .eq('event_id', event.id)
       .eq('is_active', true)
-      .maybeSingle();
+      .order('updated_at', { ascending: false })
+      .limit(1);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+    const form = forms?.[0];
     if (!form) {
       return NextResponse.json({ error: 'Application form not found for this event' }, { status: 404 });
     }

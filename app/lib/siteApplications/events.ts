@@ -5,12 +5,14 @@ export type LinkedEventSummary = {
   id: string;
   slug: string;
   title: string;
+  is_active?: boolean;
 };
 
 type EventRow = {
   id: string;
   slug: string;
   title?: string | null;
+  is_active?: boolean | null;
 };
 
 export function normalizeEventRow(row: EventRow): LinkedEventSummary {
@@ -18,6 +20,7 @@ export function normalizeEventRow(row: EventRow): LinkedEventSummary {
     id: row.id,
     slug: row.slug,
     title: row.title?.trim() || row.slug,
+    is_active: row.is_active ?? undefined,
   };
 }
 
@@ -77,7 +80,7 @@ export async function fetchEventBySlug(
 ): Promise<{ event: LinkedEventSummary | null; error: string | null }> {
   const { data, error } = await supabase
     .from(eventsDb.events)
-    .select('id, slug, title')
+    .select('id, slug, title, is_active')
     .eq('slug', eventSlug)
     .eq('is_active', true)
     .maybeSingle();
@@ -90,5 +93,25 @@ export async function fetchEventBySlug(
     return { event: null, error: null };
   }
 
+  return { event: normalizeEventRow(data as EventRow), error: null };
+}
+
+/** Linked event for admin (includes inactive so preview/warnings stay accurate). */
+export async function fetchEventById(
+  supabase: SupabaseClient,
+  eventId: string
+): Promise<{ event: LinkedEventSummary | null; error: string | null }> {
+  const { data, error } = await supabase
+    .from(eventsDb.events)
+    .select('id, slug, title, is_active')
+    .eq('id', eventId)
+    .maybeSingle();
+
+  if (error) {
+    return { event: null, error: error.message };
+  }
+  if (!data) {
+    return { event: null, error: null };
+  }
   return { event: normalizeEventRow(data as EventRow), error: null };
 }
