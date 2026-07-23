@@ -193,7 +193,6 @@ export default function SiteApplicationsListPage({
   const pathname = usePathname() || '';
   const isEventsHub = pathname.includes('/events/registrations');
   const statusParam = searchParams.get('status');
-  const categoryParam = searchParams.get('category');
   const eventIdParam = searchParams.get('eventId')?.trim() || '';
   const eventNameParam = searchParams.get('eventName')?.trim() || '';
   const registrationTierParam =

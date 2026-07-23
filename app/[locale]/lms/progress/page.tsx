@@ -1196,7 +1196,23 @@ export default function ProgressAnalyticsPage() {
 
       if (abortController.signal.aborted) return;
 
-      const userProgressMap = new Map();
+      type ProgressAccumulator = {
+        user_id: string;
+        user_name: string;
+        user_email: string;
+        user_image: string | null;
+        enrolled_at: string | null;
+        total_lessons: number;
+        completed_lessons: number;
+        total_watch_time: number;
+        quiz_scores: number[];
+        last_activity: string | null;
+        current_lesson: string | null;
+        current_section: string | null;
+        progress_percentage_from_enrollment: number;
+      };
+
+      const userProgressMap = new Map<string, ProgressAccumulator>();
 
       enrollmentsData.forEach((enrollment) => {
         const userDetails = userDetailsMap.get(enrollment.user_id) || {
@@ -1226,7 +1242,7 @@ export default function ProgressAnalyticsPage() {
         const userId = progress.user_id;
 
         if (userProgressMap.has(userId)) {
-          const userProgress = userProgressMap.get(userId);
+          const userProgress = userProgressMap.get(userId)!;
 
           if (progress.is_completed) {
             userProgress.completed_lessons += 1;
@@ -1258,55 +1274,52 @@ export default function ProgressAnalyticsPage() {
         }
       });
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const studentsArray = Array.from(userProgressMap.values()).map(
-        (student: any) => {
-          const completionPercentage =
-            student.total_lessons > 0
-              ? (student.completed_lessons / student.total_lessons) * 100
-              : student.progress_percentage_from_enrollment;
+      const studentsArray: StudentProgress[] = Array.from(
+        userProgressMap.values()
+      ).map((student) => {
+        const completionPercentage =
+          student.total_lessons > 0
+            ? (student.completed_lessons / student.total_lessons) * 100
+            : student.progress_percentage_from_enrollment;
 
-          let enrollmentStatus:
-            | 'enrolled'
-            | 'in_progress'
-            | 'completed'
-            | 'not_started' = 'enrolled';
+        let enrollmentStatus:
+          | 'enrolled'
+          | 'in_progress'
+          | 'completed'
+          | 'not_started' = 'enrolled';
 
-          if (completionPercentage === 100) {
-            enrollmentStatus = 'completed';
-          } else if (completionPercentage > 0) {
-            enrollmentStatus = 'in_progress';
-          } else if (
-            student.completed_lessons === 0 &&
-            student.total_watch_time === 0
-          ) {
-            enrollmentStatus = 'not_started';
-          }
-
-          return {
-            user_id: student.user_id,
-            user_name: student.user_name,
-            user_email: student.user_email,
-            user_image: student.user_image,
-            enrolled_at: student.enrolled_at,
-            total_lessons: student.total_lessons,
-            completed_lessons: student.completed_lessons,
-            completion_percentage: completionPercentage,
-            total_watch_time: student.total_watch_time,
-            avg_quiz_score:
-              student.quiz_scores.length > 0
-                ? student.quiz_scores.reduce(
-                    (sum: number, score: number) => sum + score,
-                    0
-                  ) / student.quiz_scores.length
-                : null,
-            last_activity: student.last_activity,
-            current_lesson: student.current_lesson,
-            current_section: student.current_section,
-            enrollment_status: enrollmentStatus,
-          };
+        if (completionPercentage === 100) {
+          enrollmentStatus = 'completed';
+        } else if (completionPercentage > 0) {
+          enrollmentStatus = 'in_progress';
+        } else if (
+          student.completed_lessons === 0 &&
+          student.total_watch_time === 0
+        ) {
+          enrollmentStatus = 'not_started';
         }
-      );
+
+        return {
+          user_id: student.user_id,
+          user_name: student.user_name,
+          user_email: student.user_email,
+          user_image: student.user_image,
+          enrolled_at: student.enrolled_at,
+          total_lessons: student.total_lessons,
+          completed_lessons: student.completed_lessons,
+          completion_percentage: completionPercentage,
+          total_watch_time: student.total_watch_time,
+          avg_quiz_score:
+            student.quiz_scores.length > 0
+              ? student.quiz_scores.reduce((sum, score) => sum + score, 0) /
+                student.quiz_scores.length
+              : null,
+          last_activity: student.last_activity,
+          current_lesson: student.current_lesson,
+          current_section: student.current_section,
+          enrollment_status: enrollmentStatus,
+        };
+      });
 
       studentsCacheRef.current.set(courseId, studentsArray);
       if (!silent || selectedCourseRef.current === courseId) {
@@ -1349,7 +1362,7 @@ export default function ProgressAnalyticsPage() {
   };
 
   // Hover prefetch disabled: parallel Clerk batch calls hit 429 and leave emails empty
-  const handleCourseHover = (_courseId: string) => {};
+  const handleCourseHover = () => {};
 
   // Handle student details view
   const handleViewStudentDetails = (userId: string) => {
@@ -1469,7 +1482,7 @@ export default function ProgressAnalyticsPage() {
                   course={course}
                   isSelected={selectedCourse === course.course_id}
                   onClick={() => handleCourseSelect(course.course_id)}
-                  onMouseEnter={() => handleCourseHover(course.course_id)}
+                  onMouseEnter={() => handleCourseHover()}
                 />
               ))}
             </div>

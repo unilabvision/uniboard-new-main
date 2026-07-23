@@ -366,8 +366,7 @@ function orderUserName(custom: unknown): string | null {
  */
 async function enrichFromOrders(
   userIds: string[],
-  usersMap: Record<string, UserDetails>,
-  _courseIds: string[]
+  usersMap: Record<string, UserDetails>
 ): Promise<number> {
   const supabase = getLmsSupabase();
   if (!supabase || userIds.length === 0) return 0;
@@ -411,17 +410,6 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { userIds } = body;
-    const courseIds: string[] = Array.isArray(body.courseIds)
-      ? [
-          ...new Set(
-            (body.courseIds as unknown[])
-              .map((id) => String(id ?? '').trim())
-              .filter((id): id is string => Boolean(id))
-          ),
-        ]
-      : typeof body.courseId === 'string' && body.courseId.trim()
-        ? [body.courseId.trim()]
-        : [];
 
     if (!userIds || !Array.isArray(userIds)) {
       return NextResponse.json(
@@ -438,11 +426,7 @@ export async function POST(request: NextRequest) {
     const usersMap: Record<string, UserDetails> = {};
 
     const fromProfiles = await enrichFromProfiles(limitedUserIds, usersMap);
-    const fromOrders = await enrichFromOrders(
-      limitedUserIds,
-      usersMap,
-      courseIds
-    );
+    const fromOrders = await enrichFromOrders(limitedUserIds, usersMap);
 
     const needingClerk = limitedUserIds.filter((id) => !usersMap[id]?.email);
     const clerkResult = await fetchClerkUsersBatch(needingClerk, usersMap);
