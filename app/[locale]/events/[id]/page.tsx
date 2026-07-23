@@ -221,18 +221,18 @@ export default function EditEventPage({
             {tr ? 'Etkinlik hatırlatma maili' : 'Send event reminder'}
           </button>
           <Link
-            href={`/${locale}/site-applications/applications?category=event&eventId=${id}`}
+            href={`/${locale}/events/registrations?category=event&eventId=${id}`}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-700"
           >
             <Users className="w-4 h-4" />
             {tr ? 'Kayıtları gör' : 'View registrations'}
           </Link>
           <Link
-            href={`/${locale}/site-applications/events`}
+            href={`/${locale}/events/overview`}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-700"
           >
             <CreditCard className="w-4 h-4" />
-            {tr ? 'Ödeme hatırlatmaları' : 'Payment reminders'}
+            {tr ? 'Etkinlik özeti / ödemeler' : 'Overview / payments'}
           </Link>
         </div>
         {actionMessage && (

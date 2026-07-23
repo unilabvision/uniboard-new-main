@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, use } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import {
   ArrowLeft,
@@ -151,6 +152,11 @@ export default function SiteApplicationDetailPage({
   const { locale, id } = use(params);
   const t = texts[locale as keyof typeof texts] || texts.tr;
   const { user } = useUser();
+  const pathname = usePathname() || '';
+  const isEventsHub = pathname.includes('/events/registrations');
+  const listHref = isEventsHub
+    ? `/${locale}/events/registrations`
+    : `/${locale}/site-applications/applications`;
 
   const [app, setApp] = useState<SiteApplication | null>(null);
   const [history, setHistory] = useState<SiteApplicationStatusHistory[]>([]);
@@ -273,7 +279,7 @@ export default function SiteApplicationDetailPage({
     return (
       <div className="p-8 text-center">
         <p className="text-neutral-600 dark:text-neutral-400 mb-4">{loadError || t.notFound}</p>
-        <Link href={`/${locale}/site-applications/applications`} className="text-[#990000]">
+        <Link href={listHref} className="text-[#990000]">
           {t.back}
         </Link>
       </div>
@@ -312,7 +318,7 @@ export default function SiteApplicationDetailPage({
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto">
       <Link
-        href={`/${locale}/site-applications/applications`}
+        href={listHref}
         className="inline-flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400 hover:text-[#990000] mb-6"
       >
         <ArrowLeft className="w-4 h-4" />

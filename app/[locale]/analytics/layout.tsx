@@ -17,7 +17,7 @@ export default function AnalyticsLayout({ children, params }: AnalyticsLayoutPro
   const [locale, setLocale] = useState('');
   const [mounted, setMounted] = useState(false);
 
-  const { modules, loading, error, isSuperAdmin } = useUserModules();
+  const { modules, loading, error, isSuperAdmin, memberships } = useUserModules();
   const isInitialModuleLoad = loading && modules.length === 0;
 
   const hasAnalyticsAccess = useMemo(() => {
@@ -87,7 +87,7 @@ export default function AnalyticsLayout({ children, params }: AnalyticsLayoutPro
 
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex">
-      <GlobalDashboardSidebar locale={locale} modules={modulesWithCategory} />
+      <GlobalDashboardSidebar locale={locale} modules={modulesWithCategory} memberships={memberships} isSuperAdmin={isSuperAdmin} />
       <main className="flex-1 min-w-0 min-h-screen overflow-x-hidden pt-14 lg:pt-0">
         {children}
       </main>

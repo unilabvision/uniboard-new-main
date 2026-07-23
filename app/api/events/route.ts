@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { eventsDb } from '@/app/lib/events/config';
-import { requireEventsModuleUser } from '@/app/api/events/_helpers';
+import { requireEventsModuleUser, requireEventsCapability } from '@/app/api/events/_helpers';
 import type { MyuniEventInput } from '@/app/types/events';
 
 function pickEventPayload(body: MyuniEventInput) {
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const authResult = await requireEventsModuleUser();
+  const authResult = await requireEventsCapability('edit');
   if (authResult.error || !authResult.supabase) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }

@@ -2,6 +2,13 @@ import { auth, clerkClient } from '@clerk/nextjs/server';
 import { createClient } from '@supabase/supabase-js';
 import type { ModuleAccessDefinition } from '@/app/lib/moduleAccess/registry';
 import { isEmailQuery } from '@/app/lib/internship/accessQuery';
+import {
+  canManageAccess,
+  loadUserAccessRows,
+  managedOrganizationIds,
+  resolveMembershipFromRows,
+  type ResolvedMembership,
+} from '@/app/lib/moduleAccess/rbac';
 
 export function getServiceSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL2;
@@ -12,38 +19,117 @@ export function getServiceSupabase() {
   });
 }
 
-export async function requireModuleAccessManager(def: ModuleAccessDefinition) {
+export type ModuleAccessManagerContext = {
+  error: string | null;
+  status: 200 | 401 | 403 | 500;
+  userId: string | null;
+  supabase: ReturnType<typeof getServiceSupabase> | null;
+  isSuperAdmin: boolean;
+  resolved: ResolvedMembership | null;
+  managedOrgIds: string[] | 'all';
+};
+
+export async function requireModuleAccessManager(
+  def: ModuleAccessDefinition
+): Promise<ModuleAccessManagerContext> {
   const { userId } = await auth();
   if (!userId) {
-    return { error: 'Unauthorized', status: 401 as const, userId: null, supabase: null };
+    return {
+      error: 'Unauthorized',
+      status: 401,
+      userId: null,
+      supabase: null,
+      isSuperAdmin: false,
+      resolved: null,
+      managedOrgIds: [],
+    };
   }
 
   const supabase = getServiceSupabase();
-  const { data: rows, error } = await supabase
-    .from('user_module_access')
-    .select('module_key, is_enabled, is_super_admin')
-    .eq('clerk_user_id', userId)
-    .eq('is_enabled', true);
-
-  if (error) {
-    return { error: error.message, status: 500 as const, userId: null, supabase: null };
+  let rows: Awaited<ReturnType<typeof loadUserAccessRows>>;
+  try {
+    rows = await loadUserAccessRows(supabase, userId);
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : 'Database error',
+      status: 500,
+      userId: null,
+      supabase: null,
+      isSuperAdmin: false,
+      resolved: null,
+      managedOrgIds: [],
+    };
   }
 
-  const isSuperAdmin = (rows ?? []).some((r) => r.is_super_admin === true);
-  const hasModule = (rows ?? []).some(
-    (r) => r.is_enabled && def.moduleKeys.includes(r.module_key)
-  );
+  const resolved = resolveMembershipFromRows(rows, def.primaryModuleKey);
+  const isSuperAdmin = resolved.isSuperAdmin;
 
+  if (def.managePolicy === 'superAdminOnly') {
+    if (!isSuperAdmin) {
+      return {
+        error: 'Forbidden',
+        status: 403,
+        userId: null,
+        supabase: null,
+        isSuperAdmin: false,
+        resolved: null,
+        managedOrgIds: [],
+      };
+    }
+    return {
+      error: null,
+      status: 200,
+      userId,
+      supabase,
+      isSuperAdmin: true,
+      resolved,
+      managedOrgIds: 'all',
+    };
+  }
+
+  const orgIds = managedOrganizationIds(resolved);
+  const legacyManager = resolved.memberships.some(
+    (m) => m.accessLevel == null && m.capabilities == null
+  );
   const canManage =
-    def.managePolicy === 'superAdminOnly'
-      ? isSuperAdmin
-      : isSuperAdmin || hasModule;
+    isSuperAdmin ||
+    orgIds === 'all' ||
+    (Array.isArray(orgIds) && orgIds.length > 0) ||
+    legacyManager;
 
   if (!canManage) {
-    return { error: 'Forbidden', status: 403 as const, userId: null, supabase: null };
+    return {
+      error: 'Forbidden',
+      status: 403,
+      userId: null,
+      supabase: null,
+      isSuperAdmin: false,
+      resolved: null,
+      managedOrgIds: [],
+    };
   }
 
-  return { error: null, status: 200 as const, userId, supabase };
+  return {
+    error: null,
+    status: 200,
+    userId,
+    supabase,
+    isSuperAdmin,
+    resolved,
+    managedOrgIds: orgIds === 'all' || legacyManager ? 'all' : orgIds,
+  };
+}
+
+export function assertCanGrantToOrg(
+  ctx: ModuleAccessManagerContext,
+  panelOrganizationId: string | null
+): string | null {
+  if (ctx.isSuperAdmin || ctx.managedOrgIds === 'all') return null;
+  if (!panelOrganizationId) return 'Kurum seçimi zorunlu.';
+  if (!ctx.resolved || !canManageAccess(ctx.resolved, panelOrganizationId)) {
+    return 'Bu kurum için yetkilendirme yapamazsınız.';
+  }
+  return null;
 }
 
 export async function clerkUserToResult(user: {
@@ -72,7 +158,6 @@ export async function findClerkUserByEmail(email: string) {
   const normalized = email.trim().toLowerCase();
   if (!normalized) return null;
 
-  // 1) Tam e-posta filtresi
   const exact = await clerk.users.getUserList({
     emailAddress: [normalized],
     limit: 10,
@@ -83,7 +168,6 @@ export async function findClerkUserByEmail(email: string) {
     ) ?? exact.data[0];
   if (exactHit) return exactHit;
 
-  // 2) Genel query (Clerk spotlight) — filtre bazen kaçırabiliyor
   const fuzzy = await clerk.users.getUserList({
     query: normalized,
     limit: 25,
@@ -93,7 +177,6 @@ export async function findClerkUserByEmail(email: string) {
   );
   if (fuzzyHit) return fuzzyHit;
 
-  // 3) Orijinal casing ile bir kez daha dene
   if (email.trim() !== normalized) {
     const cased = await clerk.users.getUserList({
       emailAddress: [email.trim()],
@@ -132,10 +215,6 @@ function isClerkIdentifierExistsError(err: unknown): boolean {
   );
 }
 
-/**
- * Clerk kullanıcı araması: e-posta tam eşleşme + genel query.
- * Sonuçlar id'ye göre birleştirilir.
- */
 export async function searchClerkUsers(query: string, limit = 15) {
   const clerk = await clerkClient();
   const q = query.trim();
@@ -156,7 +235,6 @@ export async function searchClerkUsers(query: string, limit = 15) {
     const found = await findClerkUserByEmail(q);
     if (found) merge([found]);
 
-    // Ek sonuçlar için query
     if (byId.size === 0) {
       const fuzzy = await clerk.users.getUserList({
         query: q.toLowerCase(),
@@ -182,7 +260,6 @@ export async function searchClerkUsers(query: string, limit = 15) {
 
 export { clerkErrorMessage, isClerkIdentifierExistsError };
 
-/** Kullanıcıya giden maillerde asla Vercel preview URL kullanma (Deployment Protection → vercel.com login). */
 export const DEFAULT_DASHBOARD_ORIGIN = 'https://dashboard.myunilab.net';
 
 export function getAppBaseUrl() {
@@ -205,7 +282,6 @@ export function getAppBaseUrl() {
   return DEFAULT_DASHBOARD_ORIGIN;
 }
 
-/** Yetkilendirme maili / Clerk daveti için panel + login/kayıt linkleri */
 export function buildModuleAccessLinks(locale: string, dashboardPath: string) {
   const base = getAppBaseUrl();
   const safeLocale = locale === 'en' ? 'en' : 'tr';

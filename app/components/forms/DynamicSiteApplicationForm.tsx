@@ -21,6 +21,11 @@ import {
   Clock,
   Award,
   Check,
+  CheckSquare,
+  Circle,
+  CloudUpload,
+  Star,
+  TextCursorInput,
 } from 'lucide-react';
 import type { PublicSiteApplicationForm } from '@/app/types/siteApplicationForms';
 import type { SiteApplicationFieldType } from '@/app/types/siteApplicationForms';
@@ -28,6 +33,7 @@ import type { RegistrationPackageId } from '@/app/lib/siteApplications/packages'
 import {
   SITE_APPLICATION_MAX_FILE_BYTES,
   formatFileSize,
+  getMaxFileBytesForFormType,
   validateAttachmentFile,
 } from '@/app/lib/siteApplications';
 import { formatPackagePrice } from '@/app/lib/siteApplications/packages';
@@ -56,7 +62,7 @@ const ui = {
     invalidNumber: 'Geçerli bir sayı giriniz',
     select: 'Seçiniz',
     attachment: 'Ek Dosya (isteğe bağlı)',
-    attachmentHint: `PDF, Word, görsel vb. — en fazla ${formatFileSize(SITE_APPLICATION_MAX_FILE_BYTES)}. Dosyalar 20 gün sonra otomatik silinir.`,
+    attachmentHint: 'PDF, Word, görsel vb. Dosyalar 20 gün sonra otomatik silinir.',
     attachmentDrop: 'Dosyayı buraya bırakın veya tıklayın',
     uploadFailed: 'Dosya yüklenemedi.',
     validationError: 'Lütfen zorunlu alanları doldurun.',
@@ -88,7 +94,7 @@ const ui = {
     invalidNumber: 'Please enter a valid number',
     select: 'Select',
     attachment: 'Attachment (optional)',
-    attachmentHint: `PDF, Word, images, etc. — max ${formatFileSize(SITE_APPLICATION_MAX_FILE_BYTES)}. Files are automatically deleted after 20 days.`,
+    attachmentHint: 'PDF, Word, images, etc. Files are automatically deleted after 20 days.',
     attachmentDrop: 'Drop a file here or click to browse',
     uploadFailed: 'File upload failed.',
     validationError: 'Please fill in the required fields.',
@@ -108,14 +114,20 @@ const ui = {
 };
 
 const fieldIcon: Record<SiteApplicationFieldType, React.ElementType> = {
-  text: FileText,
+  text: TextCursorInput,
   email: Mail,
   tel: Phone,
   textarea: AlignLeft,
   number: Hash,
   date: Calendar,
+  time: Clock,
   url: Link2,
-  select: List,
+  select: Circle,
+  checkbox: CheckSquare,
+  dropdown: List,
+  linear_scale: Hash,
+  rating: Star,
+  file: CloudUpload,
 };
 
 const inputClass =
@@ -155,8 +167,25 @@ export default function DynamicSiteApplicationForm({
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [attachment, setAttachment] = useState<File | null>(null);
+  const [fieldFiles, setFieldFiles] = useState<Record<string, File>>({});
   const [honeypot, setHoneypot] = useState('');
   const [dragOver, setDragOver] = useState(false);
+
+  const maxFileBytes =
+    formConfig?.max_file_bytes ??
+    getMaxFileBytesForFormType(formConfig?.form_type) ??
+    SITE_APPLICATION_MAX_FILE_BYTES;
+
+  const attachmentHint =
+    locale === 'en'
+      ? `PDF, Word, images, etc. — max ${formatFileSize(maxFileBytes)}. Files are automatically deleted after 20 days.`
+      : `PDF, Word, görsel vb. — en fazla ${formatFileSize(maxFileBytes)}. Dosyalar 20 gün sonra otomatik silinir.`;
+
+  const validateFile = (file: File) =>
+    validateAttachmentFile(file, {
+      maxBytes: maxFileBytes,
+      locale: locale === 'en' ? 'en' : 'tr',
+    });
 
   const isEventForm = Boolean(eventSlug || (formConfig?.packages?.length ?? 0) > 0);
   const [selectedPackage, setSelectedPackage] = useState<RegistrationPackageId>('free');
@@ -198,7 +227,19 @@ export default function DynamicSiteApplicationForm({
     if (!formConfig) return 0;
     const required = formConfig.fields.filter((f) => f.required);
     if (required.length === 0) return 100;
-    const filled = required.filter((f) => values[f.field_key]?.trim()).length;
+    const filled = required.filter((f) => {
+      const raw = values[f.field_key]?.trim() || '';
+      if (!raw) return false;
+      if (f.field_type === 'checkbox') {
+        try {
+          const parsed = JSON.parse(raw);
+          return Array.isArray(parsed) && parsed.length > 0;
+        } catch {
+          return false;
+        }
+      }
+      return true;
+    }).length;
     return Math.round((filled / required.length) * 100);
   }, [formConfig, values]);
 
@@ -221,28 +262,55 @@ export default function DynamicSiteApplicationForm({
     const nextErrors: Record<string, string> = {};
 
     for (const field of formConfig.fields) {
-      const value = values[field.field_key]?.trim() || '';
-      if (field.required && !value) {
+      const raw = values[field.field_key]?.trim() || '';
+
+      if (field.field_type === 'checkbox') {
+        let list: string[] = [];
+        try {
+          const parsed = JSON.parse(raw || '[]');
+          list = Array.isArray(parsed) ? parsed : [];
+        } catch {
+          list = [];
+        }
+        if (field.required && list.length === 0) {
+          nextErrors[field.field_key] = t.required;
+        }
+        continue;
+      }
+
+      if (field.field_type === 'file') {
+        if (field.required && !fieldFiles[field.field_key] && !raw) {
+          nextErrors[field.field_key] = t.required;
+        }
+        continue;
+      }
+
+      if (field.required && !raw) {
         nextErrors[field.field_key] = t.required;
         continue;
       }
-      if (!value) continue;
+      if (!raw) continue;
 
-      if (field.field_type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      if (field.field_type === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) {
         nextErrors[field.field_key] = t.invalidEmail;
       }
       if (field.field_type === 'url') {
         try {
-          const parsed = new URL(value.startsWith('http') ? value : `https://${value}`);
+          const parsed = new URL(raw.startsWith('http') ? raw : `https://${raw}`);
           if (!parsed.hostname) nextErrors[field.field_key] = t.invalidUrl;
         } catch {
           nextErrors[field.field_key] = t.invalidUrl;
         }
       }
-      if (field.field_type === 'tel' && value.replace(/\D/g, '').length < 7) {
+      if (field.field_type === 'tel' && raw.replace(/\D/g, '').length < 7) {
         nextErrors[field.field_key] = t.invalidTel;
       }
-      if (field.field_type === 'number' && !Number.isFinite(Number(value))) {
+      if (
+        (field.field_type === 'number' ||
+          field.field_type === 'linear_scale' ||
+          field.field_type === 'rating') &&
+        !Number.isFinite(Number(raw))
+      ) {
         nextErrors[field.field_key] = t.invalidNumber;
       }
     }
@@ -263,7 +331,7 @@ export default function DynamicSiteApplicationForm({
       setAttachment(null);
       return;
     }
-    const err = validateAttachmentFile(file);
+    const err = validateFile(file);
     if (err) {
       setGeneralError(err);
       setAttachment(null);
@@ -290,6 +358,7 @@ export default function DynamicSiteApplicationForm({
 
     try {
       let attachmentMeta: Record<string, unknown> = {};
+      const submissionFields: Record<string, string> = { ...values };
 
       if (attachment && formConfig.allows_attachment) {
         const uploadRes = await fetch('/api/site-applications/files/upload-url', {
@@ -322,6 +391,35 @@ export default function DynamicSiteApplicationForm({
         };
       }
 
+      for (const [fieldKey, file] of Object.entries(fieldFiles)) {
+        const uploadRes = await fetch('/api/site-applications/files/upload-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            formSlug: resolvedFormSlug || formSlug,
+            eventSlug: eventSlug || undefined,
+            locale,
+            fileName: file.name,
+            fileSize: file.size,
+            mimeType: file.type,
+          }),
+        });
+        const uploadData = await uploadRes.json();
+        if (!uploadRes.ok) throw new Error(uploadData.error || t.uploadFailed);
+        const putRes = await fetch(uploadData.signedUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': uploadData.mimeType || file.type },
+          body: file,
+        });
+        if (!putRes.ok) throw new Error(t.uploadFailed);
+        submissionFields[fieldKey] = JSON.stringify({
+          storagePath: uploadData.storageRef,
+          fileName: file.name,
+          mimeType: file.type,
+          fileSize: file.size,
+        });
+      }
+
       const res = await fetch('/api/site-applications/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -329,7 +427,7 @@ export default function DynamicSiteApplicationForm({
           formSlug: resolvedFormSlug || formSlug,
           eventSlug: eventSlug || undefined,
           locale,
-          fields: values,
+          fields: submissionFields,
           registrationTier: selectedPackage,
           honeypot,
           ...attachmentMeta,
@@ -630,6 +728,85 @@ export default function DynamicSiteApplicationForm({
                         className={inputClass}
                       />
                     ) : field.field_type === 'select' ? (
+                      <div className="space-y-2" role="radiogroup" aria-labelledby={inputId}>
+                        {(field.options || []).map((opt) => {
+                          const checked = values[field.field_key] === opt.value;
+                          return (
+                            <label
+                              key={opt.value}
+                              className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 cursor-pointer transition-colors ${
+                                checked
+                                  ? 'border-[#990000] bg-[#990000]/5'
+                                  : 'border-neutral-200 dark:border-neutral-600 hover:border-neutral-300'
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name={field.field_key}
+                                className="sr-only"
+                                checked={checked}
+                                onChange={() => updateValue(field.field_key, opt.value)}
+                              />
+                              <span
+                                className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                  checked ? 'border-[#990000]' : 'border-neutral-300'
+                                }`}
+                              >
+                                {checked && <span className="w-2 h-2 rounded-full bg-[#990000]" />}
+                              </span>
+                              <span className="text-sm text-neutral-800 dark:text-neutral-200">
+                                {opt.label}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    ) : field.field_type === 'checkbox' ? (
+                      <div className="space-y-2">
+                        {(field.options || []).map((opt) => {
+                          let selected: string[] = [];
+                          try {
+                            const parsed = JSON.parse(values[field.field_key] || '[]');
+                            selected = Array.isArray(parsed) ? parsed : [];
+                          } catch {
+                            selected = [];
+                          }
+                          const checked = selected.includes(opt.value);
+                          return (
+                            <label
+                              key={opt.value}
+                              className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 cursor-pointer transition-colors ${
+                                checked
+                                  ? 'border-[#990000] bg-[#990000]/5'
+                                  : 'border-neutral-200 dark:border-neutral-600 hover:border-neutral-300'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                className="sr-only"
+                                checked={checked}
+                                onChange={() => {
+                                  const next = checked
+                                    ? selected.filter((v) => v !== opt.value)
+                                    : [...selected, opt.value];
+                                  updateValue(field.field_key, JSON.stringify(next));
+                                }}
+                              />
+                              <span
+                                className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                                  checked ? 'border-[#990000] bg-[#990000]' : 'border-neutral-300'
+                                }`}
+                              >
+                                {checked && <Check className="w-3 h-3 text-white" />}
+                              </span>
+                              <span className="text-sm text-neutral-800 dark:text-neutral-200">
+                                {opt.label}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    ) : field.field_type === 'dropdown' ? (
                       <select
                         id={inputId}
                         value={values[field.field_key] || ''}
@@ -643,6 +820,97 @@ export default function DynamicSiteApplicationForm({
                           </option>
                         ))}
                       </select>
+                    ) : field.field_type === 'linear_scale' ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-[11px] text-neutral-400 px-1">
+                          <span>{locale === 'en' ? 'Low' : 'Düşük'}</span>
+                          <span>{locale === 'en' ? 'High' : 'Yüksek'}</span>
+                        </div>
+                        <div className="relative flex items-center justify-between gap-1 px-1 py-1">
+                          <div
+                            aria-hidden
+                            className="absolute left-4 right-4 top-1/2 h-0.5 -translate-y-1/2 bg-neutral-200 dark:bg-neutral-600 rounded-full"
+                          />
+                          {(field.options || []).map((opt) => {
+                            const active = values[field.field_key] === opt.value;
+                            return (
+                              <button
+                                key={opt.value}
+                                type="button"
+                                onClick={() => updateValue(field.field_key, opt.value)}
+                                className={`relative z-[1] flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-semibold transition-all ${
+                                  active
+                                    ? 'border-[#990000] bg-[#990000] text-white scale-105 shadow-md'
+                                    : 'border-neutral-300 dark:border-neutral-500 bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-200 hover:border-[#990000]/60'
+                                }`}
+                                aria-pressed={active}
+                              >
+                                {opt.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : field.field_type === 'rating' ? (
+                      <div className="flex items-center gap-1" role="radiogroup">
+                        {(field.options || []).map((opt) => {
+                          const selected = Number(values[field.field_key] || 0);
+                          const valueNum = Number(opt.value);
+                          const filled = selected > 0 && valueNum <= selected;
+                          return (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => updateValue(field.field_key, opt.value)}
+                              className="p-1 rounded-lg transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#990000]/40"
+                              aria-label={`${opt.label} / ${(field.options || []).length}`}
+                              aria-pressed={values[field.field_key] === opt.value}
+                            >
+                              <Star
+                                className={`w-8 h-8 transition-colors ${
+                                  filled
+                                    ? 'text-amber-400 fill-amber-400'
+                                    : 'text-neutral-300 dark:text-neutral-600'
+                                }`}
+                              />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : field.field_type === 'file' ? (
+                      <label className="flex flex-col items-center justify-center gap-2 cursor-pointer rounded-2xl border-2 border-dashed border-neutral-200 dark:border-neutral-600 px-4 py-6 hover:border-[#990000]/40 transition-colors">
+                        <CloudUpload className="w-6 h-6 text-[#990000]" />
+                        <span className="text-sm text-neutral-500">
+                          {fieldFiles[field.field_key]?.name ||
+                            values[field.field_key] ||
+                            field.placeholder ||
+                            t.attachmentDrop}
+                        </span>
+                        <input
+                          id={inputId}
+                          type="file"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) {
+                              setFieldFiles((prev) => {
+                                const next = { ...prev };
+                                delete next[field.field_key];
+                                return next;
+                              });
+                              updateValue(field.field_key, '');
+                              return;
+                            }
+                            const err = validateFile(file);
+                            if (err) {
+                              setGeneralError(err);
+                              return;
+                            }
+                            setFieldFiles((prev) => ({ ...prev, [field.field_key]: file }));
+                            updateValue(field.field_key, file.name);
+                          }}
+                        />
+                      </label>
                     ) : (
                       <input
                         id={inputId}
@@ -655,9 +923,11 @@ export default function DynamicSiteApplicationForm({
                                 ? 'number'
                                 : field.field_type === 'date'
                                   ? 'date'
-                                  : field.field_type === 'url'
-                                    ? 'url'
-                                    : 'text'
+                                  : field.field_type === 'time'
+                                    ? 'time'
+                                    : field.field_type === 'url'
+                                      ? 'url'
+                                      : 'text'
                         }
                         value={values[field.field_key] || ''}
                         onChange={(e) => updateValue(field.field_key, e.target.value)}
@@ -718,7 +988,7 @@ export default function DynamicSiteApplicationForm({
                       </p>
                     )}
                   </div>
-                  <p className="text-xs text-neutral-500 mt-2">{t.attachmentHint}</p>
+                  <p className="text-xs text-neutral-500 mt-2">{attachmentHint}</p>
                 </div>
               )}
 

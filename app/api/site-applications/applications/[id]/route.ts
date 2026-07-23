@@ -4,7 +4,7 @@ import {
   isEventSiteApplication,
   type SiteApplicationStatus,
 } from '@/app/lib/siteApplications/config';
-import { requireSiteApplicationsModuleUser } from '@/app/api/site-applications/access/_helpers';
+import { requireSiteApplicationsOrEventsUser } from '@/app/api/site-applications/access/_helpers';
 import { getSiteApplicationAttachmentUrl } from '@/app/lib/siteApplications/attachmentDownload';
 import { sendSiteApplicationApprovalEmail } from '@/app/_services/siteApplicationApprovalEmail';
 import { ensureEventApplicationAccepted } from '@/app/lib/siteApplications/eventAutoAccept';
@@ -14,7 +14,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(_request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
-  const authResult = await requireSiteApplicationsModuleUser();
+  const authResult = await requireSiteApplicationsOrEventsUser('registrations');
   if (authResult.error || !authResult.supabase) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
@@ -60,7 +60,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
-  const authResult = await requireSiteApplicationsModuleUser();
+  const authResult = await requireSiteApplicationsOrEventsUser('registrations');
   if (authResult.error || !authResult.supabase || !authResult.userId) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }

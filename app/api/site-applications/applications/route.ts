@@ -4,12 +4,12 @@ import {
   applyTeamApplicationsFilter,
   applyEventApplicationsFilter,
 } from '@/app/lib/siteApplications/config';
-import { requireSiteApplicationsModuleUser } from '@/app/api/site-applications/access/_helpers';
+import { requireSiteApplicationsOrEventsUser } from '@/app/api/site-applications/access/_helpers';
 import { backfillPendingEventApplications } from '@/app/lib/siteApplications/eventAutoAccept';
 import { syncCertificatePaymentsFromOrders } from '@/app/lib/siteApplications/syncPayments';
 
 export async function GET(request: NextRequest) {
-  const authResult = await requireSiteApplicationsModuleUser();
+  const authResult = await requireSiteApplicationsOrEventsUser('registrations');
   if (authResult.error || !authResult.supabase) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }

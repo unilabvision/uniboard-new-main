@@ -1,5 +1,11 @@
 import { auth } from '@clerk/nextjs/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import {
+  hasFeature,
+  loadUserAccessRows,
+  resolveMembershipFromRows,
+  type PanelMembership,
+} from '@/app/lib/moduleAccess/rbac';
 
 export function getInfluencerSupabase(): SupabaseClient {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL2;
@@ -11,7 +17,7 @@ export function getInfluencerSupabase(): SupabaseClient {
 }
 
 /** Influencer modülü (veya süper admin) zorunlu. */
-export async function requireInfluencerUser() {
+export async function requireInfluencerUser(requiredCapability?: string) {
   const { userId } = await auth();
   if (!userId) {
     return {
@@ -20,30 +26,27 @@ export async function requireInfluencerUser() {
       userId: null,
       supabase: null,
       isSuperAdmin: false,
+      membership: null as PanelMembership | null,
     };
   }
 
   const supabase = getInfluencerSupabase();
-  const { data: rows, error } = await supabase
-    .from('user_module_access')
-    .select('module_key, is_enabled, is_super_admin')
-    .eq('clerk_user_id', userId)
-    .eq('is_enabled', true);
-
-  if (error) {
+  let rows: Awaited<ReturnType<typeof loadUserAccessRows>>;
+  try {
+    rows = await loadUserAccessRows(supabase, userId);
+  } catch (e) {
     return {
-      error: error.message,
+      error: e instanceof Error ? e.message : 'Error',
       status: 500 as const,
       userId: null,
       supabase: null,
       isSuperAdmin: false,
+      membership: null,
     };
   }
 
-  const isSuperAdmin = (rows ?? []).some((r) => r.is_super_admin === true);
-  const hasModule =
-    isSuperAdmin ||
-    (rows ?? []).some((r) => r.module_key === 'influencer' && r.is_enabled);
+  const resolved = resolveMembershipFromRows(rows, 'influencer');
+  const hasModule = resolved.isSuperAdmin || Boolean(resolved.membership);
 
   if (!hasModule) {
     return {
@@ -52,6 +55,21 @@ export async function requireInfluencerUser() {
       userId: null,
       supabase: null,
       isSuperAdmin: false,
+      membership: null,
+    };
+  }
+
+  if (
+    requiredCapability &&
+    !hasFeature(resolved.membership, requiredCapability, resolved.isSuperAdmin)
+  ) {
+    return {
+      error: 'Forbidden',
+      status: 403 as const,
+      userId: null,
+      supabase: null,
+      isSuperAdmin: false,
+      membership: null,
     };
   }
 
@@ -60,6 +78,7 @@ export async function requireInfluencerUser() {
     status: 200 as const,
     userId,
     supabase,
-    isSuperAdmin,
+    isSuperAdmin: resolved.isSuperAdmin,
+    membership: resolved.membership,
   };
 }

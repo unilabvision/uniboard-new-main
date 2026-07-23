@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   BookOpen, Award, Clock, 
   CheckCircle, Users,
   Search, X
 } from 'lucide-react';
-import { useUser } from '@clerk/nextjs';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { useUser, useAuth } from '@clerk/nextjs';
+import { createBrowserClerkLmsClient } from '@/app/lib/supabase/clerkLmsClient';
 import Image from 'next/image';
 import {
   getEnrollmentOverview,
@@ -15,35 +15,53 @@ import {
   type ModuleProgressItem,
 } from '@/app/lib/lms/enrollmentOverviewService';
 
-// Batch fetch multiple users
-const fetchMultipleClerkUsers = async (userIds: string[]) => {
-  const userDetailsMap = new Map();
-  
+// Batch fetch multiple users (optionally scoped to a course for order email fallback)
+const fetchMultipleClerkUsers = async (
+  userIds: string[],
+  courseId?: string
+) => {
+  const userDetailsMap = new Map<
+    string,
+    { fullName: string; email: string; imageUrl: string | null }
+  >();
+
   if (userIds.length === 0) {
     return userDetailsMap;
   }
-  
+
   try {
     const response = await fetch('/api/auth/user-details-batch', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ userIds })
+      body: JSON.stringify({ userIds, courseId }),
     });
-    
+
     if (response.ok) {
       const data = await response.json();
-      
-      // Process the returned users
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      Object.entries(data.users).forEach(([userId, userData]: [string, any]) => {
+      Object.entries(data.users || {}).forEach(([userId, userData]: [string, any]) => {
+        const email =
+          userData.email ||
+          userData.emailAddresses?.[0]?.emailAddress ||
+          '';
+        const fullName =
+          userData.fullName ||
+          (userData.firstName && userData.lastName
+            ? `${userData.firstName} ${userData.lastName}`
+            : null) ||
+          userData.firstName ||
+          userData.lastName ||
+          userData.username ||
+          email ||
+          `Kullanıcı ${userId.substring(0, 8)}`;
+
         userDetailsMap.set(userId, {
-          fullName: userData.firstName && userData.lastName 
-            ? `${userData.firstName} ${userData.lastName}` 
-            : userData.firstName || userData.lastName || userData.username || `Kullanıcı ${userId.substring(0, 8)}`,
-          email: userData.emailAddresses?.[0]?.emailAddress || '',
-          imageUrl: userData.imageUrl || null
+          fullName,
+          email,
+          imageUrl: userData.imageUrl || null,
         });
       });
     } else {
@@ -52,18 +70,17 @@ const fetchMultipleClerkUsers = async (userIds: string[]) => {
   } catch (error) {
     console.error('Error fetching user details batch:', error);
   }
-  
-  // Fill in missing users with default data
-  userIds.forEach(userId => {
+
+  userIds.forEach((userId) => {
     if (!userDetailsMap.has(userId)) {
       userDetailsMap.set(userId, {
         fullName: `Kullanıcı ${userId.substring(0, 8)}`,
         email: '',
-        imageUrl: null
+        imageUrl: null,
       });
     }
   });
-  
+
   return userDetailsMap;
 };
 
@@ -101,12 +118,6 @@ interface StudentProgress {
   current_section: string | null;
   enrollment_status: 'enrolled' | 'in_progress' | 'completed' | 'not_started';
 }
-
-// Supabase client
-const supabase = createClientComponentClient({
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL2 || 'https://emfvwpztyuykqtepnsfp.supabase.co',
-  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY2 || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtZnZ3cHp0eXV5a3F0ZXBuc2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzg0OTM5MDksImV4cCI6MjA1NDA2OTkwOX0.EbGPYHtXMO2RYGavv-FQa3mgI3RECiFnwAVqpUgghxg'
-});
 
 // Localized texts
 const texts = {
@@ -455,7 +466,7 @@ const StudentProgressRow = ({
               {student.user_name || 'Anonim Kullanıcı'}
             </div>
             <div className="text-sm text-neutral-600 dark:text-neutral-400 truncate">
-              {student.user_email ? student.user_email : 'E-posta yok'}
+              {student.user_email ? student.user_email : 'E-posta bulunamadı'}
             </div>
             <div className="mt-1">
               {getStatusBadge(student.enrollment_status)}
@@ -827,11 +838,18 @@ export default function ProgressAnalyticsPage() {
   const [courseSearchQuery, setCourseSearchQuery] = useState('');
   const [detailStudent, setDetailStudent] = useState<StudentProgress | null>(null);
   const studentsCacheRef = useRef<Map<string, StudentProgress[]>>(new Map());
+  const emailRetryRef = useRef<Set<string>>(new Set());
   const fetchAbortRef = useRef<AbortController | null>(null);
   const selectedCourseRef = useRef<string | null>(null);
-  
-  // Clerk user hook
+
+  // Clerk + LMS Supabase via JWT template (NEXT_PUBLIC_CLERK_JWT_TEMPLATE)
   const { user: clerkUser, isLoaded } = useUser();
+  const { getToken } = useAuth();
+  const supabase = useMemo(
+    () => createBrowserClerkLmsClient(getToken),
+    [getToken]
+  );
+
   const locale = 'tr'; // You can get this from params or context
   const t = texts[locale as keyof typeof texts] || texts.tr;
 
@@ -871,7 +889,7 @@ export default function ProgressAnalyticsPage() {
 
         const courseIds = coursesData.map((course) => course.id);
 
-        const [lessonsResult, enrollmentsResult] = await Promise.all([
+        const [lessonsResult, enrollmentsResponse] = await Promise.all([
           supabase
             .from('myuni_course_lessons')
             .select(`
@@ -881,15 +899,26 @@ export default function ProgressAnalyticsPage() {
               )
             `)
             .in('myuni_course_sections.course_id', courseIds),
-          supabase
-            .from('myuni_enrollments')
-            .select('course_id, user_id, enrolled_at, progress_percentage, is_active')
-            .in('course_id', courseIds)
-            .eq('is_active', true),
+          fetch('/api/lms/admin-enrollments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ courseIds }),
+          }),
         ]);
 
         if (lessonsResult.error) throw lessonsResult.error;
-        if (enrollmentsResult.error) throw enrollmentsResult.error;
+
+        const enrollmentsJson = await enrollmentsResponse.json();
+        if (!enrollmentsResponse.ok) {
+          throw new Error(enrollmentsJson.error || 'Enrollment fetch failed');
+        }
+
+        const enrollmentsData = (enrollmentsJson.enrollments || []) as Array<{
+          course_id: string;
+          user_id: string;
+          enrolled_at: string | null;
+          progress_percentage: number | null;
+        }>;
 
         const lessonsByCourse = new Map<string, string[]>();
         (lessonsResult.data || []).forEach((lesson) => {
@@ -908,26 +937,28 @@ export default function ProgressAnalyticsPage() {
           enrolled_at: string | null;
           progress_percentage: number | null;
         }>>();
-        (enrollmentsResult.data || []).forEach((enrollment) => {
+        (enrollmentsData || []).forEach((enrollment) => {
           const list = enrollmentsByCourse.get(enrollment.course_id) || [];
           list.push(enrollment);
           enrollmentsByCourse.set(enrollment.course_id, list);
         });
 
         const allLessonIds = [...new Set((lessonsResult.data || []).map((lesson) => lesson.id))];
-        const allUserIds = [...new Set((enrollmentsResult.data || []).map((enrollment) => enrollment.user_id))];
+        const allUserIds = [...new Set((enrollmentsData || []).map((enrollment) => enrollment.user_id))];
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let allProgressData: any[] = [];
         if (allLessonIds.length > 0 && allUserIds.length > 0) {
-          const { data: progressData, error: progressError } = await supabase
-            .from('myuni_user_progress')
-            .select('user_id, lesson_id, is_completed, watch_time_seconds, quiz_score, updated_at')
-            .in('lesson_id', allLessonIds)
-            .in('user_id', allUserIds);
-
-          if (!progressError) {
-            allProgressData = progressData || [];
+          const progressResponse = await fetch('/api/lms/admin-course-progress', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ courseIds, userIds: allUserIds }),
+          });
+          const progressJson = await progressResponse.json();
+          if (progressResponse.ok) {
+            allProgressData = progressJson.progress || [];
+          } else {
+            console.error('Progress overview fetch failed:', progressJson.error);
           }
         }
 
@@ -1070,91 +1101,98 @@ export default function ProgressAnalyticsPage() {
 
   // Fetch students progress for selected course
   const loadStudentsProgress = useCallback(async (courseId: string, options?: { silent?: boolean }) => {
+    const silent = Boolean(options?.silent);
     const cached = studentsCacheRef.current.get(courseId);
-    if (cached) {
-      if (!options?.silent || selectedCourseRef.current === courseId) {
+    const incomplete = Boolean(
+      cached && cached.length > 0 && cached.some((s) => !s.user_email)
+    );
+    // Retry incomplete caches once (often from a prior Clerk 429)
+    const cacheUsable =
+      cached &&
+      (!incomplete || emailRetryRef.current.has(courseId));
+    if (cacheUsable) {
+      if (!silent || selectedCourseRef.current === courseId) {
         setStudentsProgress(cached);
         setStudentsLoading(false);
       }
       return;
-    } else if (!options?.silent) {
+    }
+    if (cached && incomplete) {
+      emailRetryRef.current.add(courseId);
+      studentsCacheRef.current.delete(courseId);
+    }
+
+    if (!silent) {
       setStudentsLoading(true);
     }
 
-    fetchAbortRef.current?.abort();
+    // Prefetch must not abort the in-flight request for the selected course
+    if (!silent) {
+      fetchAbortRef.current?.abort();
+    }
     const abortController = new AbortController();
-    fetchAbortRef.current = abortController;
+    if (!silent) {
+      fetchAbortRef.current = abortController;
+    }
 
     try {
-      const [enrollmentsResult, lessonsResult] = await Promise.all([
-        supabase
-          .from('myuni_enrollments')
-          .select(`
-            user_id,
-            enrolled_at,
-            progress_percentage,
-            is_active
-          `)
-          .eq('course_id', courseId)
-          .eq('is_active', true),
-        supabase
-          .from('myuni_course_lessons')
-          .select(`
-            id,
-            title,
-            myuni_course_sections!inner (
-              id,
-              title,
-              course_id
-            )
-          `)
-          .eq('myuni_course_sections.course_id', courseId),
-      ]);
+      const enrollmentsResponse = await fetch('/api/lms/admin-enrollments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courseId }),
+        signal: abortController.signal,
+      });
 
       if (abortController.signal.aborted) return;
 
-      if (enrollmentsResult.error) throw enrollmentsResult.error;
-      if (lessonsResult.error) throw lessonsResult.error;
+      const enrollmentsJson = await enrollmentsResponse.json();
+      if (!enrollmentsResponse.ok) {
+        throw new Error(enrollmentsJson.error || 'Enrollment fetch failed');
+      }
 
-      const enrollmentsData = enrollmentsResult.data;
-      const lessonsData = lessonsResult.data;
+      const enrollmentsData = (enrollmentsJson.enrollments || []) as Array<{
+        user_id: string;
+        enrolled_at: string | null;
+        progress_percentage: number | null;
+      }>;
 
       if (!enrollmentsData || enrollmentsData.length === 0) {
         studentsCacheRef.current.set(courseId, []);
-        if (!options?.silent || selectedCourseRef.current === courseId) {
+        if (!silent || selectedCourseRef.current === courseId) {
           setStudentsProgress([]);
         }
         return;
       }
 
-      const lessonIds = lessonsData?.map(lesson => lesson.id) || [];
-      const totalLessons = lessonIds.length;
+      const userIds = enrollmentsData.map((e) => e.user_id);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let progressData: any[] = [];
-      if (lessonIds.length > 0) {
-        const { data: pData, error: progressError } = await supabase
-          .from('myuni_user_progress')
-          .select(`
-            user_id,
-            lesson_id,
-            is_completed,
-            watch_time_seconds,
-            quiz_score,
-            updated_at
-          `)
-          .in('lesson_id', lessonIds)
-          .in('user_id', enrollmentsData.map(e => e.user_id));
+      const [progressResponse, userDetailsMap] = await Promise.all([
+        fetch('/api/lms/admin-course-progress', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ courseId, userIds }),
+          signal: abortController.signal,
+        }),
+        fetchMultipleClerkUsers(userIds, courseId),
+      ]);
 
-        if (abortController.signal.aborted) return;
+      if (abortController.signal.aborted) return;
 
-        if (!progressError) {
-          progressData = pData || [];
-        }
+      const progressJson = await progressResponse.json();
+      if (!progressResponse.ok) {
+        throw new Error(progressJson.error || 'Progress fetch failed');
       }
 
-      const userIds = enrollmentsData.map(e => e.user_id);
-      const userDetailsMap = await fetchMultipleClerkUsers(userIds);
+      const lessonsData = (progressJson.lessons || []) as Array<{
+        id: string;
+        title: string;
+        myuni_course_sections?:
+          | { id: string; title: string; course_id: string }
+          | Array<{ id: string; title: string; course_id: string }>;
+      }>;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const progressData: any[] = progressJson.progress || [];
+      const totalLessons = lessonsData.length;
 
       if (abortController.signal.aborted) return;
 
@@ -1164,7 +1202,7 @@ export default function ProgressAnalyticsPage() {
         const userDetails = userDetailsMap.get(enrollment.user_id) || {
           fullName: `Kullanıcı ${enrollment.user_id.substring(0, 8)}`,
           email: '',
-          imageUrl: null
+          imageUrl: null,
         };
 
         userProgressMap.set(enrollment.user_id, {
@@ -1180,7 +1218,7 @@ export default function ProgressAnalyticsPage() {
           last_activity: enrollment.enrolled_at,
           current_lesson: null,
           current_section: null,
-          progress_percentage_from_enrollment: enrollment.progress_percentage || 0
+          progress_percentage_from_enrollment: enrollment.progress_percentage || 0,
         });
       });
 
@@ -1193,12 +1231,15 @@ export default function ProgressAnalyticsPage() {
           if (progress.is_completed) {
             userProgress.completed_lessons += 1;
           } else {
-            const currentLesson = lessonsData?.find(lesson => lesson.id === progress.lesson_id);
+            const currentLesson = lessonsData.find(
+              (lesson) => lesson.id === progress.lesson_id
+            );
             if (currentLesson && currentLesson.myuni_course_sections) {
+              const section = Array.isArray(currentLesson.myuni_course_sections)
+                ? currentLesson.myuni_course_sections[0]
+                : currentLesson.myuni_course_sections;
               userProgress.current_lesson = currentLesson.title;
-              userProgress.current_section = Array.isArray(currentLesson.myuni_course_sections) && currentLesson.myuni_course_sections.length > 0
-                ? currentLesson.myuni_course_sections[0].title
-                : undefined;
+              userProgress.current_section = section?.title || null;
             }
           }
 
@@ -1208,60 +1249,78 @@ export default function ProgressAnalyticsPage() {
             userProgress.quiz_scores.push(progress.quiz_score);
           }
 
-          if (!userProgress.last_activity || progress.updated_at > userProgress.last_activity) {
+          if (
+            !userProgress.last_activity ||
+            progress.updated_at > userProgress.last_activity
+          ) {
             userProgress.last_activity = progress.updated_at;
           }
         }
       });
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const studentsArray = Array.from(userProgressMap.values()).map((student: any) => {
-        const completionPercentage = student.total_lessons > 0
-          ? (student.completed_lessons / student.total_lessons) * 100
-          : student.progress_percentage_from_enrollment;
+      const studentsArray = Array.from(userProgressMap.values()).map(
+        (student: any) => {
+          const completionPercentage =
+            student.total_lessons > 0
+              ? (student.completed_lessons / student.total_lessons) * 100
+              : student.progress_percentage_from_enrollment;
 
-        let enrollmentStatus: 'enrolled' | 'in_progress' | 'completed' | 'not_started' = 'enrolled';
+          let enrollmentStatus:
+            | 'enrolled'
+            | 'in_progress'
+            | 'completed'
+            | 'not_started' = 'enrolled';
 
-        if (completionPercentage === 100) {
-          enrollmentStatus = 'completed';
-        } else if (completionPercentage > 0) {
-          enrollmentStatus = 'in_progress';
-        } else if (student.completed_lessons === 0 && student.total_watch_time === 0) {
-          enrollmentStatus = 'not_started';
+          if (completionPercentage === 100) {
+            enrollmentStatus = 'completed';
+          } else if (completionPercentage > 0) {
+            enrollmentStatus = 'in_progress';
+          } else if (
+            student.completed_lessons === 0 &&
+            student.total_watch_time === 0
+          ) {
+            enrollmentStatus = 'not_started';
+          }
+
+          return {
+            user_id: student.user_id,
+            user_name: student.user_name,
+            user_email: student.user_email,
+            user_image: student.user_image,
+            enrolled_at: student.enrolled_at,
+            total_lessons: student.total_lessons,
+            completed_lessons: student.completed_lessons,
+            completion_percentage: completionPercentage,
+            total_watch_time: student.total_watch_time,
+            avg_quiz_score:
+              student.quiz_scores.length > 0
+                ? student.quiz_scores.reduce(
+                    (sum: number, score: number) => sum + score,
+                    0
+                  ) / student.quiz_scores.length
+                : null,
+            last_activity: student.last_activity,
+            current_lesson: student.current_lesson,
+            current_section: student.current_section,
+            enrollment_status: enrollmentStatus,
+          };
         }
-
-        return {
-          user_id: student.user_id,
-          user_name: student.user_name,
-          user_email: student.user_email,
-          user_image: student.user_image,
-          enrolled_at: student.enrolled_at,
-          total_lessons: student.total_lessons,
-          completed_lessons: student.completed_lessons,
-          completion_percentage: completionPercentage,
-          total_watch_time: student.total_watch_time,
-          avg_quiz_score: student.quiz_scores.length > 0
-            ? student.quiz_scores.reduce((sum: number, score: number) => sum + score, 0) / student.quiz_scores.length
-            : null,
-          last_activity: student.last_activity,
-          current_lesson: student.current_lesson,
-          current_section: student.current_section,
-          enrollment_status: enrollmentStatus
-        };
-      });
+      );
 
       studentsCacheRef.current.set(courseId, studentsArray);
-      if (!options?.silent || selectedCourseRef.current === courseId) {
+      if (!silent || selectedCourseRef.current === courseId) {
         setStudentsProgress(studentsArray);
       }
     } catch (error: unknown) {
       if (abortController.signal.aborted) return;
       console.error('Error fetching students progress:', error);
-      if (!options?.silent) {
+      if (!silent) {
         setError(error instanceof Error ? error.message : 'An error occurred');
       }
     } finally {
-      if (!abortController.signal.aborted && !options?.silent) {
+      // Always clear loading for the selected course (abort used to leave skeleton forever)
+      if (!silent && selectedCourseRef.current === courseId) {
         setStudentsLoading(false);
       }
     }
@@ -1283,17 +1342,14 @@ export default function ProgressAnalyticsPage() {
     setSelectedCourse(courseId);
 
     const cached = studentsCacheRef.current.get(courseId);
-    if (cached) {
+    if (cached && (cached.length === 0 || cached.every((s) => Boolean(s.user_email)))) {
       setStudentsProgress(cached);
       setStudentsLoading(false);
     }
   };
 
-  const handleCourseHover = (courseId: string) => {
-    if (!studentsCacheRef.current.has(courseId)) {
-      loadStudentsProgress(courseId, { silent: true });
-    }
-  };
+  // Hover prefetch disabled: parallel Clerk batch calls hit 429 and leave emails empty
+  const handleCourseHover = (_courseId: string) => {};
 
   // Handle student details view
   const handleViewStudentDetails = (userId: string) => {

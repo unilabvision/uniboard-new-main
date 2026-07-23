@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireCertificatesModuleUser } from '@/app/lib/certificates/access';
+import { requireCertificatesCapability } from '@/app/lib/certificates/access';
 import { issueCertificatesFromQueue } from '@/app/lib/certificates/issueFromQueue';
 
 export async function POST(request: NextRequest) {
-  const authResult = await requireCertificatesModuleUser();
+  const authResult = await requireCertificatesCapability('issuance');
   if (authResult.error || !authResult.supabase) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }

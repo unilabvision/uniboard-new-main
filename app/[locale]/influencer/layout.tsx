@@ -17,7 +17,7 @@ export default function InfluencerLayout({ children, params }: DashboardLayoutPr
   const [mounted, setMounted] = useState(false);
   const [hasInfluencerAccess, setHasInfluencerAccess] = useState<boolean | null>(null);
   
-  const { modules, loading, error, isSuperAdmin, refetch } = useUserModules();
+  const { modules, loading, error, isSuperAdmin, memberships, refetch } = useUserModules();
   const [claimingGrant, setClaimingGrant] = useState(false);
 
   // Resolve params
@@ -208,7 +208,7 @@ export default function InfluencerLayout({ children, params }: DashboardLayoutPr
 
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex">
-      <GlobalDashboardSidebar locale={locale} modules={modulesWithCategory} />
+      <GlobalDashboardSidebar locale={locale} modules={modulesWithCategory} memberships={memberships} isSuperAdmin={isSuperAdmin} />
       <main className="flex-1 min-w-0 min-h-screen overflow-x-hidden pt-14 lg:pt-0">
         {children}
       </main>

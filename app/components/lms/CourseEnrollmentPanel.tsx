@@ -20,8 +20,8 @@ import {
 
 const texts = {
   tr: {
-    title: 'Katılımcılar ve Modüller',
-    subtitle: 'Kişilerin satın aldığı paketleri ve eriştikleri modülleri görün',
+    title: 'Katılımcılar ve Kurs Kayıtları',
+    subtitle: 'Hangi öğrencinin hangi kursa / pakete kayıtlı olduğunu görün',
     searchPlaceholder: 'Kişi, e-posta, kurs veya paket ara...',
     loading: 'Yükleniyor...',
     error: 'Katılımcı verileri yüklenirken bir hata oluştu',
@@ -48,8 +48,8 @@ const texts = {
     peopleCount: 'kişi',
   },
   en: {
-    title: 'Participants & Modules',
-    subtitle: 'See purchased packages and entitled modules per person',
+    title: 'Participants & Course Enrollments',
+    subtitle: 'See which student is enrolled in which course / package',
     searchPlaceholder: 'Search person, email, course or package...',
     loading: 'Loading...',
     error: 'An error occurred while loading participant data',

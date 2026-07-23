@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireCertificatesModuleUser } from '@/app/lib/certificates/access';
+import { requireCertificatesCapability } from '@/app/lib/certificates/access';
 import {
   CERTIFICATE_ISSUANCE_TABLE,
   type CertificateIssuanceKind,
@@ -11,7 +11,7 @@ import {
 } from '@/app/lib/certificates/syncIssuanceQueue';
 
 export async function GET(request: NextRequest) {
-  const authResult = await requireCertificatesModuleUser();
+  const authResult = await requireCertificatesCapability('issuance');
   if (authResult.error || !authResult.supabase) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }

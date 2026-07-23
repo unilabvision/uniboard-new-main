@@ -4,15 +4,41 @@ export function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+function parseCheckboxValue(raw: unknown): string[] | null {
+  if (raw === null || raw === undefined) return null;
+  if (Array.isArray(raw)) {
+    return raw.map((v) => String(v).trim()).filter(Boolean);
+  }
+  const str = String(raw).trim();
+  if (!str) return null;
+  try {
+    const parsed = JSON.parse(str);
+    if (Array.isArray(parsed)) {
+      return parsed.map((v) => String(v).trim()).filter(Boolean);
+    }
+  } catch {
+    // comma-separated fallback
+  }
+  return str
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 export function normalizeFieldValue(
   field: SiteApplicationFormField,
   raw: unknown
-): string | number | null {
+): string | number | string[] | null {
+  if (field.field_type === 'checkbox') {
+    const list = parseCheckboxValue(raw);
+    return list && list.length > 0 ? list : null;
+  }
+
   if (raw === null || raw === undefined) return null;
   const str = String(raw).trim();
   if (!str) return null;
 
-  if (field.field_type === 'number') {
+  if (field.field_type === 'number' || field.field_type === 'linear_scale' || field.field_type === 'rating') {
     const num = Number(str);
     return Number.isFinite(num) ? num : null;
   }
@@ -30,7 +56,7 @@ export function validateSubmissionFields(
   for (const field of fields) {
     const value = normalizeFieldValue(field, values[field.field_key]);
 
-    if (field.required && (value === null || value === '')) {
+    if (field.required && (value === null || value === '' || (Array.isArray(value) && value.length === 0))) {
       errors[field.field_key] = 'required';
       continue;
     }
@@ -44,7 +70,8 @@ export function validateSubmissionFields(
 
     if (field.field_type === 'url' && typeof value === 'string') {
       try {
-        const candidate = value.startsWith('http://') || value.startsWith('https://') ? value : `https://${value}`;
+        const candidate =
+          value.startsWith('http://') || value.startsWith('https://') ? value : `https://${value}`;
         new URL(candidate);
       } catch {
         errors[field.field_key] = 'invalid_url';
@@ -52,9 +79,24 @@ export function validateSubmissionFields(
       }
     }
 
-    if (field.field_type === 'select' && typeof value === 'string') {
+    if (
+      (field.field_type === 'select' ||
+        field.field_type === 'dropdown' ||
+        field.field_type === 'linear_scale' ||
+        field.field_type === 'rating') &&
+      (typeof value === 'string' || typeof value === 'number')
+    ) {
       const allowed = (field.options || []).map((o) => o.value);
-      if (allowed.length > 0 && !allowed.includes(value)) {
+      const asStr = String(value);
+      if (allowed.length > 0 && !allowed.includes(asStr)) {
+        errors[field.field_key] = 'invalid_option';
+        continue;
+      }
+    }
+
+    if (field.field_type === 'checkbox' && Array.isArray(value)) {
+      const allowed = new Set((field.options || []).map((o) => o.value));
+      if (allowed.size > 0 && value.some((v) => !allowed.has(v))) {
         errors[field.field_key] = 'invalid_option';
         continue;
       }

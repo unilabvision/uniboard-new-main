@@ -144,6 +144,29 @@ export async function GET() {
       (uma: { is_super_admin?: boolean }) => uma.is_super_admin === true
     );
 
+    const { decodeCapabilitiesFromRow, isAccessLevel } = await import(
+      '@/app/lib/moduleAccess/rbac'
+    );
+
+    const memberships = (userModules ?? []).map(
+      (row: {
+        id?: string;
+        module_key?: string;
+        panel_organization_id?: string | null;
+        access_level?: string | null;
+        is_super_admin?: boolean;
+        capabilities?: unknown;
+        notes?: unknown;
+      }) => ({
+        id: row.id,
+        moduleKey: row.module_key,
+        panelOrganizationId: row.panel_organization_id ?? null,
+        accessLevel: isAccessLevel(row.access_level) ? row.access_level : null,
+        capabilities: decodeCapabilitiesFromRow(row),
+        isSuperAdmin: row.is_super_admin === true,
+      })
+    );
+
     let modules: Array<{
       key: string;
       name_tr: string;
@@ -256,6 +279,7 @@ export async function GET() {
       userId,
       modules,
       isSuperAdmin,
+      memberships,
       totalCount: modules.length,
       ...(isDev && {
         debug: {

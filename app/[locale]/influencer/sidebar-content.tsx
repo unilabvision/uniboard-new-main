@@ -10,83 +10,27 @@ import {
 
 export const influencerSidebarContent = {
   tr: {
-    title: "Influencer Panel",
+    title: 'Influencer Panel',
     items: [
-      {
-        name: "Ana Sayfa",
-        href: "/",
-        icon: Home
-      },
-      {
-        name: "Kodlarım",
-        href: "/codes",
-        icon: Tag
-      },
-      {
-        name: "Satışlarım",
-        href: "/sales",
-        icon: DollarSign
-      },
-      {
-        name: "Performans",
-        href: "/analytics",
-        icon: BarChart3
-      },
-      {
-        name: "Kampanyalarım",
-        href: "/campaigns",
-        icon: Star
-      },
-      {
-        name: "Dokümanlarım",
-        href: "/docs",
-        icon: Link2
-      },
-      {
-        name: "Yetkilendirme",
-        href: "/access",
-        icon: Shield
-      },
-    ]
+      { name: 'Ana Sayfa', href: '/', icon: Home, capability: 'home' },
+      { name: 'Kodlarım', href: '/codes', icon: Tag, capability: 'codes' },
+      { name: 'Satışlarım', href: '/sales', icon: DollarSign, capability: 'sales' },
+      { name: 'Performans', href: '/analytics', icon: BarChart3, capability: 'analytics' },
+      { name: 'Kampanyalarım', href: '/campaigns', icon: Star, capability: 'campaigns' },
+      { name: 'Dokümanlarım', href: '/docs', icon: Link2, capability: 'docs' },
+      { name: 'Yetkilendirme', href: '/access', icon: Shield, capability: 'access' },
+    ],
   },
   en: {
-    title: "Influencer Panel",
+    title: 'Influencer Panel',
     items: [
-       {
-        name: "Home",
-        href: "/",
-        icon: Home
-      },
-      {
-        name: "My Codes",
-        href: "/codes",
-        icon: Tag
-      },
-      {
-        name: "My Sales",
-        href: "/sales",
-        icon: DollarSign
-      },
-      {
-        name: "Performance",
-        href: "/analytics",
-        icon: BarChart3
-      },
-      {
-        name: "My Campaigns", 
-        href: "/campaigns",
-        icon: Star
-      },
-      {
-        name: "Docs",
-        href: "/docs",
-        icon: Link2
-      },
-      {
-        name: "Access Control",
-        href: "/access",
-        icon: Shield
-      },
-    ]
-  }
+      { name: 'Home', href: '/', icon: Home, capability: 'home' },
+      { name: 'My Codes', href: '/codes', icon: Tag, capability: 'codes' },
+      { name: 'My Sales', href: '/sales', icon: DollarSign, capability: 'sales' },
+      { name: 'Performance', href: '/analytics', icon: BarChart3, capability: 'analytics' },
+      { name: 'My Campaigns', href: '/campaigns', icon: Star, capability: 'campaigns' },
+      { name: 'Docs', href: '/docs', icon: Link2, capability: 'docs' },
+      { name: 'Access Control', href: '/access', icon: Shield, capability: 'access' },
+    ],
+  },
 };

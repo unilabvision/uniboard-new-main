@@ -39,10 +39,18 @@ export const MODULE_ACCESS_REGISTRY: Record<string, ModuleAccessDefinition> = {
   },
   lms: {
     primaryModuleKey: 'courses',
-    moduleKeys: ['courses', 'lms', 'students'],
+    moduleKeys: ['courses', 'lms'],
     dashboardPath: 'lms',
     nameTr: 'Kurs Yönetimi',
     nameEn: 'Course Management',
+    managePolicy: 'moduleHolder',
+  },
+  students: {
+    primaryModuleKey: 'students',
+    moduleKeys: ['students', 'student'],
+    dashboardPath: 'students',
+    nameTr: 'Öğrenci Yönetimi',
+    nameEn: 'Student Management',
     managePolicy: 'moduleHolder',
   },
   'lms-2': {

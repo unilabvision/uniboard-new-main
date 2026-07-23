@@ -7,7 +7,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 export async function GET(_request: NextRequest, context: RouteContext) {
   try {
     const { id } = await context.params;
-    const access = await requireInfluencerUser();
+    const access = await requireInfluencerUser('codes');
     if (access.error || !access.supabase || !access.userId) {
       return NextResponse.json(
         { error: access.error || 'Unauthorized' },

@@ -1,9 +1,11 @@
 import {
   SITE_APPLICATION_FILE_RETENTION_DAYS,
   SITE_APPLICATION_MAX_FILE_BYTES,
+  TEAM_APPLICATION_MAX_FILE_BYTES,
   SITE_APPLICATION_STORAGE_BUCKET,
   SITE_APPLICATION_STORAGE_FOLDER,
 } from './config';
+import type { SiteApplicationFormType } from './formTypes';
 
 const BLOCKED_EXTENSIONS = new Set([
   'exe',
@@ -19,6 +21,14 @@ const BLOCKED_EXTENSIONS = new Set([
   'sh',
 ]);
 
+export function getMaxFileBytesForFormType(
+  formType: SiteApplicationFormType | string | null | undefined
+): number {
+  return formType === 'team'
+    ? TEAM_APPLICATION_MAX_FILE_BYTES
+    : SITE_APPLICATION_MAX_FILE_BYTES;
+}
+
 export function formatFileSize(bytes: number): string {
   if (bytes === 0) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB'];
@@ -32,16 +42,24 @@ export function sanitizeFileName(name: string): string {
   return base.slice(0, 180) || 'attachment';
 }
 
-export function validateAttachmentFile(file: File): string | null {
+export function validateAttachmentFile(
+  file: Pick<File, 'name' | 'size'>,
+  options?: { maxBytes?: number; locale?: 'tr' | 'en' }
+): string | null {
+  const maxBytes = options?.maxBytes ?? SITE_APPLICATION_MAX_FILE_BYTES;
+  const isEn = options?.locale === 'en';
+
   if (file.size <= 0) {
-    return 'Dosya boş olamaz.';
+    return isEn ? 'File cannot be empty.' : 'Dosya boş olamaz.';
   }
-  if (file.size > SITE_APPLICATION_MAX_FILE_BYTES) {
-    return `Dosya boyutu en fazla ${formatFileSize(SITE_APPLICATION_MAX_FILE_BYTES)} olabilir.`;
+  if (file.size > maxBytes) {
+    return isEn
+      ? `File size must be at most ${formatFileSize(maxBytes)}.`
+      : `Dosya boyutu en fazla ${formatFileSize(maxBytes)} olabilir.`;
   }
   const ext = file.name.split('.').pop()?.toLowerCase() || '';
   if (BLOCKED_EXTENSIONS.has(ext)) {
-    return 'Bu dosya türüne izin verilmiyor.';
+    return isEn ? 'This file type is not allowed.' : 'Bu dosya türüne izin verilmiyor.';
   }
   return null;
 }

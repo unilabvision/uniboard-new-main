@@ -2,13 +2,13 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Users, Clock, CheckCircle, ChevronRight, FormInput, CalendarDays } from 'lucide-react';
+import { Users, Clock, CheckCircle, ChevronRight, FormInput } from 'lucide-react';
 import type { SiteApplication } from '@/app/types/siteApplications';
 
 const texts = {
   tr: {
     title: 'Site Başvuruları',
-    subtitle: 'myunilab.net formlarından gelen başvuruları yönetin',
+    subtitle: 'myunilab.net formlarından gelen ekip başvurularını yönetin',
     total: 'Toplam',
     forms: 'Aktif Form',
     pending: 'Bekleyen',
@@ -16,14 +16,12 @@ const texts = {
     recent: 'Son Başvurular',
     viewAll: 'Tümünü Gör',
     manageForms: 'Formları Yönet',
-    eventsOverview: 'Etkinlik Özeti',
-    eventsOverviewHint: 'Etkinliklere göre kayıt, sertifika ve ödemeler',
     noApplications: 'Henüz başvuru yok',
     loading: 'Yükleniyor...',
   },
   en: {
     title: 'Site Applications',
-    subtitle: 'Manage applications from myunilab.net forms',
+    subtitle: 'Manage team applications from myunilab.net forms',
     total: 'Total',
     forms: 'Active Forms',
     pending: 'Pending',
@@ -31,8 +29,6 @@ const texts = {
     recent: 'Recent Applications',
     viewAll: 'View All',
     manageForms: 'Manage Forms',
-    eventsOverview: 'Events Overview',
-    eventsOverviewHint: 'Registrations, certificates and payments by event',
     noApplications: 'No applications yet',
     loading: 'Loading...',
   },
@@ -82,13 +78,6 @@ export default function SiteApplicationsDashboard({
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
-            href={`/${locale}/site-applications/events`}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#990000] text-white rounded-lg hover:bg-[#800000]"
-          >
-            <CalendarDays className="w-4 h-4" />
-            {t.eventsOverview}
-          </Link>
-          <Link
             href={`/${locale}/site-applications/forms`}
             className="inline-flex items-center gap-2 px-4 py-2.5 border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800"
           >
@@ -112,20 +101,6 @@ export default function SiteApplicationsDashboard({
           </div>
         ))}
       </div>
-
-      <Link
-        href={`/${locale}/site-applications/events`}
-        className="mb-8 flex items-center justify-between gap-4 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-5 py-4 hover:bg-neutral-50 dark:hover:bg-neutral-700/30"
-      >
-        <div className="flex items-center gap-3 min-w-0">
-          <CalendarDays className="w-5 h-5 text-[#990000] shrink-0" />
-          <div className="min-w-0">
-            <div className="font-semibold text-neutral-900 dark:text-neutral-100">{t.eventsOverview}</div>
-            <div className="text-sm text-neutral-500 truncate">{t.eventsOverviewHint}</div>
-          </div>
-        </div>
-        <ChevronRight className="w-4 h-4 text-neutral-400 shrink-0" />
-      </Link>
 
       <div className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700">
         <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-200 dark:border-neutral-700">

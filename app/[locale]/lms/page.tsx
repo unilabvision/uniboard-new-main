@@ -15,7 +15,6 @@ import { useUser } from '@clerk/nextjs';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import Image from 'next/image';
 import { sanitizeHtml } from '@/app/lib/lms/htmlContent';
-import CourseEnrollmentPanel from '@/app/components/lms/CourseEnrollmentPanel';
 import {
   getCoursePackagePrices,
   updateCoursePrices,
@@ -943,7 +942,6 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState('date-desc');
   const [currentPage, setCurrentPage] = useState(1);
-  const [managementPanel, setManagementPanel] = useState<'courses' | 'enrollments'>('courses');
   const itemsPerPage = 12; // 4 columns x 3 rows grid
   
   // Delete modal states
@@ -1261,52 +1259,25 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
               </h1>
               <div className="w-8 h-px bg-[#990000] mt-2"></div>
             </div>
-            <Link 
-              href={`/${locale}/lms/create`} 
-              className="flex items-center px-3 py-1.5 bg-[#990000] hover:bg-[#880000] text-white text-sm font-medium rounded-md transition-colors"
-            >
-              <PlusCircle className="w-4 h-4 mr-1" />
-              {t.createNew}
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                href={`/${locale}/students`}
+                className="flex items-center px-3 py-1.5 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-200 text-sm font-medium rounded-md transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800"
+              >
+                <Users className="w-4 h-4 mr-1" />
+                {locale === 'tr' ? 'Öğrenci Yönetimi' : 'Students'}
+              </Link>
+              <Link 
+                href={`/${locale}/lms/create`} 
+                className="flex items-center px-3 py-1.5 bg-[#990000] hover:bg-[#880000] text-white text-sm font-medium rounded-md transition-colors"
+              >
+                <PlusCircle className="w-4 h-4 mr-1" />
+                {t.createNew}
+              </Link>
+            </div>
           </div>
         </div>
 
-        {/* Management panel switch — preserves course list state when toggling */}
-        <div className="border-b border-neutral-200 dark:border-neutral-700 mb-6">
-          <nav className="flex gap-6">
-            <button
-              type="button"
-              onClick={() => setManagementPanel('courses')}
-              className={`flex items-center px-1 py-3 border-b-2 text-sm font-medium transition-colors ${
-                managementPanel === 'courses'
-                  ? 'border-[#990000] text-[#990000]'
-                  : 'border-transparent text-neutral-500 hover:text-neutral-700 dark:text-neutral-400'
-              }`}
-            >
-              <BookOpen className="w-4 h-4 mr-2" />
-              {t.panelCourses}
-            </button>
-            <button
-              type="button"
-              onClick={() => setManagementPanel('enrollments')}
-              className={`flex items-center px-1 py-3 border-b-2 text-sm font-medium transition-colors ${
-                managementPanel === 'enrollments'
-                  ? 'border-[#990000] text-[#990000]'
-                  : 'border-transparent text-neutral-500 hover:text-neutral-700 dark:text-neutral-400'
-              }`}
-            >
-              <Users className="w-4 h-4 mr-2" />
-              {t.panelEnrollments}
-            </button>
-          </nav>
-        </div>
-
-        {managementPanel === 'enrollments' ? (
-          <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4 sm:p-6">
-            <CourseEnrollmentPanel locale={locale} />
-          </div>
-        ) : (
-          <>
         {/* Search Bar */}
         <div className="relative mb-4">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-400 dark:text-neutral-500 w-4 h-4" />
@@ -1488,8 +1459,6 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
             <div className="text-center mt-3 text-xs text-neutral-500 dark:text-neutral-400">
               {totalItems} kurs • {currentPage}/{totalPages} sayfa
             </div>
-          </>
-        )}
           </>
         )}
       </div>

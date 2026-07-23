@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireSiteApplicationsModuleUser } from '@/app/api/site-applications/access/_helpers';
+import { requireSiteApplicationsOrEventsUser } from '@/app/api/site-applications/access/_helpers';
 import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
 import { syncCertificatePaymentsFromOrders } from '@/app/lib/siteApplications/syncPayments';
 import { sendCertificatePaymentReminderEmail } from '@/app/_services/certificatePaymentReminderEmail';
@@ -32,7 +32,7 @@ type RemindTarget = {
  * Göndermeden önce orders sync çalışır; ödeme alınmışsa mail gitmez.
  */
 export async function POST(request: NextRequest) {
-  const authResult = await requireSiteApplicationsModuleUser();
+  const authResult = await requireSiteApplicationsOrEventsUser('ops');
   if (authResult.error || !authResult.supabase) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }

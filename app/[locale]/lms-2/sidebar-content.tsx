@@ -1,4 +1,4 @@
-import { 
+import {
   Home,
   Settings,
   BarChart3,
@@ -10,68 +10,24 @@ import {
 
 export const lmsSidebarContent = {
   tr: {
-    title: "Eğitim Yönetim Sistemi",
+    title: 'Eğitim Yönetim Sistemi',
     items: [
-      {
-        name: "Ana Sayfa",
-        href: "/",
-        icon: Home
-      },
-      {
-        name: "İlerleme Takibi",
-        href: "/progress",
-        icon: BarChart3
-      },
-      {
-        name: "Ayarlar",
-        href: "/settings",
-        icon: Settings
-      },
-      {
-        name: "Yetkilendirme",
-        href: "/access",
-        icon: Shield
-      }
-    ]
+      { name: 'Ana Sayfa', href: '/', icon: Home, capability: 'home' },
+      { name: 'İlerleme Takibi', href: '/progress', icon: BarChart3, capability: 'progress' },
+      { name: 'Ayarlar', href: '/settings', icon: Settings, capability: 'settings' },
+      { name: 'Yetkilendirme', href: '/access', icon: Shield, capability: 'access' },
+    ],
   },
   en: {
-    title: "Learning Management System",
+    title: 'Learning Management System',
     items: [
-      {
-        name: "Home",
-        href: "/",
-        icon: Home
-      },
-      {
-        name: "Progress Tracking",
-        href: "/progress",
-        icon: BarChart3
-      },
-      {
-        name: "My Certificates",
-        href: "/certificates",
-        icon: Award
-      },
-      {
-        name: "Course Templates",
-        href: "/templates",
-        icon: Library
-      },
-      {
-        name: "Create Course",
-        href: "/create",
-        icon: PlusCircle
-      },
-      {
-        name: "Settings",
-        href: "/settings",
-        icon: Settings
-      },
-      {
-        name: "Access Control",
-        href: "/access",
-        icon: Shield
-      }
-    ]
-  }
+      { name: 'Home', href: '/', icon: Home, capability: 'home' },
+      { name: 'Progress Tracking', href: '/progress', icon: BarChart3, capability: 'progress' },
+      { name: 'My Certificates', href: '/certificates', icon: Award, capability: 'certificates' },
+      { name: 'Course Templates', href: '/templates', icon: Library, capability: 'templates' },
+      { name: 'Create Course', href: '/create', icon: PlusCircle, capability: 'create' },
+      { name: 'Settings', href: '/settings', icon: Settings, capability: 'settings' },
+      { name: 'Access Control', href: '/access', icon: Shield, capability: 'access' },
+    ],
+  },
 };

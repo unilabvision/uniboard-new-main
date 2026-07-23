@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useUserModules } from '../../../../hooks/useUserModules';
 import { slugifyFormValue } from '@/app/lib/siteApplications/config';
 import {
@@ -78,8 +78,15 @@ const texts = {
 
 function NewSiteApplicationFormContent({ locale }: { locale: string }) {
   const router = useRouter();
+  const pathname = usePathname() || '';
   const searchParams = useSearchParams();
-  const formType = (searchParams.get('type') === 'event' ? 'event' : 'team') as SiteApplicationFormType;
+  const isEventsHub = pathname.includes('/events/forms');
+  const formsBase = isEventsHub
+    ? `/${locale}/events/forms`
+    : `/${locale}/site-applications/forms`;
+  const formType = (
+    isEventsHub || searchParams.get('type') === 'event' ? 'event' : 'team'
+  ) as SiteApplicationFormType;
   const { isSuperAdmin, loading: modulesLoading } = useUserModules();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -145,7 +152,7 @@ function NewSiteApplicationFormContent({ locale }: { locale: string }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || t.error);
-      router.push(`/${locale}/site-applications/forms/${data.form.id}`);
+      router.push(`${formsBase}/${data.form.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : t.error);
     } finally {
@@ -161,7 +168,7 @@ function NewSiteApplicationFormContent({ locale }: { locale: string }) {
     );
   }
 
-  if (!isSuperAdmin) {
+  if (!isSuperAdmin && !(isEventsHub && !isTeam)) {
     return (
       <div className="p-8 max-w-lg">
         <p className="text-red-600">{t.forbidden}</p>
@@ -172,7 +179,7 @@ function NewSiteApplicationFormContent({ locale }: { locale: string }) {
   return (
     <div className="p-6 lg:p-8 max-w-3xl mx-auto">
       <Link
-        href={`/${locale}/site-applications/forms${isTeam ? '?tab=team' : '?tab=event'}`}
+        href={`${formsBase}${isTeam ? '?tab=team' : '?tab=event'}`}
         className="inline-flex items-center gap-1 text-sm text-neutral-600 hover:text-[#990000] mb-6"
       >
         <ArrowLeft className="w-4 h-4" />

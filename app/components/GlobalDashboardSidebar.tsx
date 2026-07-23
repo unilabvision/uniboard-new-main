@@ -21,6 +21,11 @@ import {
 } from 'lucide-react';
 import { useUser, useClerk } from '@clerk/nextjs';
 import { getModuleHref } from '@/utils/moduleRoutes';
+import {
+  hasFeature,
+  type AccessLevel,
+  type PanelMembership,
+} from '@/app/lib/moduleAccess/rbac';
 
 interface ModuleContent {
   title: string;
@@ -28,6 +33,8 @@ interface ModuleContent {
     name: string;
     href: string;
     icon: React.ComponentType<{ className?: string }>;
+    capability?: string;
+    crossModule?: boolean;
   }>;
 }
 
@@ -42,6 +49,13 @@ interface SidebarProps {
     icon: string;
     category: string;
   }>;
+  memberships?: Array<{
+    moduleKey?: string;
+    accessLevel: string | null;
+    capabilities: string[] | null;
+    isSuperAdmin: boolean;
+  }>;
+  isSuperAdmin?: boolean;
 }
 
 // Global dil metinleri - ortak öğeler için
@@ -72,7 +86,12 @@ const sidebarTexts = {
   }
 };
 
-function GlobalDashboardSidebarInner({ locale, modules }: SidebarProps) {
+function GlobalDashboardSidebarInner({
+  locale,
+  modules,
+  memberships = [],
+  isSuperAdmin = false,
+}: SidebarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [moduleContent, setModuleContent] = useState<Record<string, ModuleContent> | null>(null);
@@ -126,6 +145,10 @@ function GlobalDashboardSidebarInner({ locale, modules }: SidebarProps) {
       (['events', 'etkinlik', 'etkinlikler'].includes(currentModule) &&
         modules.some((m) =>
           ['events', 'etkinlik', 'etkinlikler'].includes(m.key)
+        )) ||
+      (['students', 'student'].includes(currentModule) &&
+        modules.some((m) =>
+          ['students', 'student', 'lms', 'courses'].includes(m.key)
         )) ||
       currentModule === 'settings');
 
@@ -197,6 +220,17 @@ function GlobalDashboardSidebarInner({ locale, modules }: SidebarProps) {
                 content = lmsSidebarContent;
               } catch (error) {
                 console.error('Could not load lms sidebar content', error);
+                content = null;
+              }
+              break;
+
+            case 'students':
+            case 'student':
+              try {
+                const { studentsSidebarContent } = await import('../../app/[locale]/students/sidebar-content');
+                content = studentsSidebarContent;
+              } catch (error) {
+                console.error('Could not load students sidebar content', error);
                 content = null;
               }
               break;
@@ -337,6 +371,57 @@ function GlobalDashboardSidebarInner({ locale, modules }: SidebarProps) {
     }
     
     const content = moduleContent[locale as keyof typeof moduleContent] || moduleContent.tr;
+
+    const moduleAliases: Record<string, string[]> = {
+      events: ['events', 'etkinlik', 'etkinlikler'],
+      'site-applications': [
+        'site-applications',
+        'site_basvurular',
+        'site-basvurular',
+        'basvurular',
+      ],
+      certificates: ['certificates'],
+      internship: ['internship', 'staj', 'career', 'kariyer', 'careers'],
+      analytics: ['analytics', 'reports'],
+      influencer: ['influencer'],
+      lms: ['lms', 'courses'],
+      students: ['students', 'student'],
+      'lms-2': ['lms-2'],
+      settings: ['settings', 'admin'],
+    };
+
+    const aliases =
+      (currentModule && moduleAliases[currentModule]) ||
+      (currentModule ? [currentModule] : []);
+
+    const moduleMemberships = memberships.filter((m) =>
+      aliases.includes(m.moduleKey || '')
+    );
+    const strongest = [...moduleMemberships].sort((a, b) => {
+      const rank = (l: string | null) =>
+        l === 'admin' ? 3 : l === 'editor' ? 2 : l === 'viewer' ? 1 : 3;
+      return rank(b.accessLevel) - rank(a.accessLevel);
+    })[0];
+
+    const canSee = (capability?: string) => {
+      if (isSuperAdmin) return true;
+      if (!capability) return true;
+      if (!strongest) return true;
+      const membership: PanelMembership = {
+        id: 'sidebar',
+        moduleKey: strongest.moduleKey || currentModule || '',
+        panelOrganizationId: null,
+        accessLevel: (strongest.accessLevel as AccessLevel | null) ?? null,
+        capabilities: strongest.capabilities,
+        isSuperAdmin: false,
+        isEnabled: true,
+      };
+      return hasFeature(membership, capability, false);
+    };
+
+    const filteredItems = (content as ModuleContent).items.filter((item) =>
+      canSee(item.capability)
+    );
     
     
     return [
@@ -348,10 +433,12 @@ function GlobalDashboardSidebarInner({ locale, modules }: SidebarProps) {
         active: pathname === `/${locale}/`
       },
       // Modül özel navigation items
-      ...(content as ModuleContent).items.map((item) => {
+      ...filteredItems.map((item) => {
         const fullHref = item.href.startsWith('http')
           ? item.href
-          : `${basePath}${item.href === '/' ? '' : item.href}`;
+          : item.crossModule
+            ? `/${locale}${item.href.startsWith('/') ? item.href : `/${item.href}`}`
+            : `${basePath}${item.href === '/' ? '' : item.href}`;
         const [itemPath, itemQuery = ''] = fullHref.split('?');
         const normalizedPath = pathname.replace(/\/$/, '') || pathname;
         const normalizedItem = itemPath.replace(/\/$/, '') || itemPath;

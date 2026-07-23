@@ -17,7 +17,7 @@ export default function LMSLayout({ children, params }: LMSLayoutProps) {
   const [mounted, setMounted] = useState(false);
   const [hasLMSAccess, setHasLMSAccess] = useState<boolean | null>(null);
   
-  const { modules, loading, error, isSuperAdmin } = useUserModules();
+  const { modules, loading, error, isSuperAdmin, memberships } = useUserModules();
 
   // Resolve params
   useEffect(() => {
@@ -167,7 +167,7 @@ export default function LMSLayout({ children, params }: LMSLayoutProps) {
 
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex">
-      <GlobalDashboardSidebar locale={locale} modules={modulesWithCategory} />
+      <GlobalDashboardSidebar locale={locale} modules={modulesWithCategory} memberships={memberships} isSuperAdmin={isSuperAdmin} />
       <main className="flex-1 min-w-0 min-h-screen overflow-x-hidden pt-14 lg:pt-0">
         {children}
       </main>

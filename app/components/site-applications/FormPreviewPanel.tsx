@@ -80,6 +80,7 @@ export default function FormPreviewPanel({
           sorted.map((field) => {
             const label = isEn ? field.label_en : field.label_tr;
             const placeholder = isEn ? field.placeholder_en : field.placeholder_tr;
+            const options = normalizeFieldOptions(field.options);
             return (
               <div key={field.field_key}>
                 <label className="block text-sm font-medium text-neutral-800 dark:text-neutral-200 mb-1.5">
@@ -90,7 +91,7 @@ export default function FormPreviewPanel({
                   <div className="h-20 rounded-lg border border-neutral-200 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-900/40" />
                 ) : field.field_type === 'select' ? (
                   <div className="space-y-2">
-                    {normalizeFieldOptions(field.options).map((opt) => (
+                    {options.map((opt) => (
                       <label
                         key={opt.value}
                         className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400"
@@ -100,9 +101,60 @@ export default function FormPreviewPanel({
                       </label>
                     ))}
                   </div>
+                ) : field.field_type === 'checkbox' ? (
+                  <div className="space-y-2">
+                    {options.map((opt) => (
+                      <label
+                        key={opt.value}
+                        className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400"
+                      >
+                        <span className="w-4 h-4 rounded border-2 border-neutral-300" />
+                        {isEn ? opt.label_en : opt.label_tr}
+                      </label>
+                    ))}
+                  </div>
+                ) : field.field_type === 'dropdown' ? (
+                  <div className="h-10 rounded-lg border border-neutral-200 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-900/40 flex items-center px-3 text-sm text-neutral-400">
+                    {isEn ? 'Select' : 'Seçiniz'}
+                  </div>
+                ) : field.field_type === 'linear_scale' ? (
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-[10px] text-neutral-400 px-0.5">
+                      <span>{isEn ? 'Low' : 'Düşük'}</span>
+                      <span>{isEn ? 'High' : 'Yüksek'}</span>
+                    </div>
+                    <div className="relative flex items-center justify-between px-1">
+                      <div className="absolute left-3 right-3 top-1/2 h-px bg-neutral-200 dark:bg-neutral-600" />
+                      {options.map((opt) => (
+                        <span
+                          key={opt.value}
+                          className="relative z-[1] flex h-7 w-7 items-center justify-center rounded-full border border-neutral-300 dark:border-neutral-500 bg-white dark:bg-neutral-800 text-[10px] font-medium text-neutral-500"
+                        >
+                          {opt.label_tr}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : field.field_type === 'rating' ? (
+                  <div className="flex gap-1">
+                    {options.map((opt) => (
+                      <span key={opt.value} className="text-amber-400 text-lg leading-none">
+                        ★
+                      </span>
+                    ))}
+                  </div>
+                ) : field.field_type === 'file' ? (
+                  <div className="h-16 rounded-lg border border-dashed border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-900/40 flex items-center justify-center text-xs text-neutral-400">
+                    {isEn ? 'File upload' : 'Dosya yükleme'}
+                  </div>
                 ) : (
                   <div className="h-10 rounded-lg border border-neutral-200 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-900/40 flex items-center px-3 text-sm text-neutral-400">
-                    {placeholder || (isEn ? 'Your answer' : 'Yanıtınız')}
+                    {placeholder ||
+                      (field.field_type === 'time'
+                        ? '00:00'
+                        : isEn
+                          ? 'Your answer'
+                          : 'Yanıtınız')}
                   </div>
                 )}
               </div>

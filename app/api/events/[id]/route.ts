@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { eventsDb, parseBooleanField } from '@/app/lib/events/config';
-import { requireEventsModuleUser } from '@/app/api/events/_helpers';
+import { requireEventsModuleUser, requireEventsCapability } from '@/app/api/events/_helpers';
 import type { MyuniEventInput } from '@/app/types/events';
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -27,7 +27,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
-  const authResult = await requireEventsModuleUser();
+  const authResult = await requireEventsCapability('edit');
   if (authResult.error || !authResult.supabase) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }

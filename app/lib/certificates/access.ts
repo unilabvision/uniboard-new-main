@@ -1,5 +1,11 @@
 import { auth } from '@clerk/nextjs/server';
 import { getCertificatesServiceSupabase } from '@/app/lib/certificates/issuance';
+import {
+  hasFeature,
+  loadUserAccessRows,
+  resolveMembershipFromRows,
+  type PanelMembership,
+} from '@/app/lib/moduleAccess/rbac';
 
 const CERTIFICATES_MODULE_KEY = 'certificates';
 
@@ -12,30 +18,27 @@ export async function requireCertificatesModuleUser() {
       userId: null,
       supabase: null,
       isSuperAdmin: false,
+      membership: null as PanelMembership | null,
     };
   }
 
   const supabase = getCertificatesServiceSupabase();
-  const { data: rows, error } = await supabase
-    .from('user_module_access')
-    .select('module_key, is_enabled, is_super_admin')
-    .eq('clerk_user_id', userId)
-    .eq('is_enabled', true);
-
-  if (error) {
+  let rows: Awaited<ReturnType<typeof loadUserAccessRows>>;
+  try {
+    rows = await loadUserAccessRows(supabase, userId);
+  } catch (e) {
     return {
-      error: error.message,
+      error: (e instanceof Error ? e.message : 'Error') as string,
       status: 500 as const,
       userId: null,
       supabase: null,
       isSuperAdmin: false,
+      membership: null,
     };
   }
 
-  const isSuperAdmin = (rows || []).some((r) => r.is_super_admin === true);
-  const hasModule =
-    isSuperAdmin ||
-    (rows || []).some((r) => r.module_key === CERTIFICATES_MODULE_KEY);
+  const resolved = resolveMembershipFromRows(rows, CERTIFICATES_MODULE_KEY);
+  const hasModule = resolved.isSuperAdmin || Boolean(resolved.membership);
 
   if (!hasModule) {
     return {
@@ -44,8 +47,34 @@ export async function requireCertificatesModuleUser() {
       userId: null,
       supabase: null,
       isSuperAdmin: false,
+      membership: null,
     };
   }
 
-  return { error: null, status: 200 as const, userId, supabase, isSuperAdmin };
+  return {
+    error: null,
+    status: 200 as const,
+    userId,
+    supabase,
+    isSuperAdmin: resolved.isSuperAdmin,
+    membership: resolved.membership,
+  };
+}
+
+export async function requireCertificatesCapability(required: string) {
+  const base = await requireCertificatesModuleUser();
+  if (base.error || !base.supabase) return base;
+
+  if (!hasFeature(base.membership, required, base.isSuperAdmin)) {
+    return {
+      error: 'Forbidden' as const,
+      status: 403 as const,
+      userId: null,
+      supabase: null,
+      isSuperAdmin: false,
+      membership: null as PanelMembership | null,
+    };
+  }
+
+  return base;
 }

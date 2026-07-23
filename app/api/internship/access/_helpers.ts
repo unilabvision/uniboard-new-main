@@ -1,6 +1,11 @@
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { createClient } from '@supabase/supabase-js';
 import { INTERNSHIP_PLATFORM_MODULE_KEYS } from '@/app/types/internship';
+import {
+  hasFeature,
+  loadUserAccessRows,
+  resolveMembershipFromRows,
+} from '@/app/lib/moduleAccess/rbac';
 
 export const INTERNSHIP_MODULE_KEYS = [...INTERNSHIP_PLATFORM_MODULE_KEYS] as string[];
 
@@ -20,19 +25,26 @@ export async function requireInternshipAccessManager() {
   }
 
   const supabase = getServiceSupabase();
-  const { data: rows, error } = await supabase
-    .from('user_module_access')
-    .select('module_key, is_enabled, is_super_admin')
-    .eq('clerk_user_id', userId)
-    .eq('is_enabled', true);
-
-  if (error) {
-    return { error: error.message, status: 500 as const, userId: null, supabase: null };
+  let rows: Awaited<ReturnType<typeof loadUserAccessRows>>;
+  try {
+    rows = await loadUserAccessRows(supabase, userId);
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : 'Error',
+      status: 500 as const,
+      userId: null,
+      supabase: null,
+    };
   }
 
+  const resolved = resolveMembershipFromRows(rows, 'internship');
   const canManage =
-    (rows ?? []).some((r) => r.is_super_admin === true) ||
-    (rows ?? []).some(
+    resolved.isSuperAdmin ||
+    hasFeature(resolved.membership, 'access', false) ||
+    (resolved.membership?.accessLevel == null &&
+      resolved.membership?.capabilities == null &&
+      Boolean(resolved.membership)) ||
+    rows.some(
       (r) => r.is_enabled && INTERNSHIP_MODULE_KEYS.includes(r.module_key)
     );
 
@@ -41,6 +53,55 @@ export async function requireInternshipAccessManager() {
   }
 
   return { error: null, status: 200 as const, userId, supabase };
+}
+
+export async function requireInternshipCapability(required: string) {
+  const { userId } = await auth();
+  if (!userId) {
+    return {
+      error: 'Unauthorized',
+      status: 401 as const,
+      userId: null,
+      supabase: null,
+      isSuperAdmin: false,
+    };
+  }
+
+  const supabase = getServiceSupabase();
+  const rows = await loadUserAccessRows(supabase, userId);
+  const resolved = resolveMembershipFromRows(rows, 'internship');
+  const hasModule =
+    resolved.isSuperAdmin ||
+    Boolean(resolved.membership) ||
+    rows.some((r) => INTERNSHIP_MODULE_KEYS.includes(r.module_key));
+
+  if (!hasModule) {
+    return {
+      error: 'Forbidden',
+      status: 403 as const,
+      userId: null,
+      supabase: null,
+      isSuperAdmin: false,
+    };
+  }
+
+  if (!hasFeature(resolved.membership, required, resolved.isSuperAdmin)) {
+    return {
+      error: 'Forbidden',
+      status: 403 as const,
+      userId: null,
+      supabase: null,
+      isSuperAdmin: false,
+    };
+  }
+
+  return {
+    error: null,
+    status: 200 as const,
+    userId,
+    supabase,
+    isSuperAdmin: resolved.isSuperAdmin,
+  };
 }
 
 export async function clerkUserToResult(user: {
@@ -52,7 +113,10 @@ export async function clerkUserToResult(user: {
   imageUrl: string;
 }) {
   const email = user.emailAddresses[0]?.emailAddress || '';
-  const name = [user.firstName, user.lastName].filter(Boolean).join(' ').trim() || user.username || email;
+  const name =
+    [user.firstName, user.lastName].filter(Boolean).join(' ').trim() ||
+    user.username ||
+    email;
   return {
     clerkUserId: user.id,
     email,

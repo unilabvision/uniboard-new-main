@@ -9,13 +9,14 @@ import {
 } from '@/app/lib/siteApplications/formTypes';
 import { normalizeFieldOptions } from '@/app/lib/siteApplications/forms';
 import {
-  requireSiteApplicationsModuleUser,
   requireSiteApplicationsSuperAdmin,
+  requireEventFormsWriteUser,
+  requireSiteApplicationsOrEventsUser,
 } from '@/app/api/site-applications/access/_helpers';
 import type { SiteApplicationFormInput } from '@/app/types/siteApplicationForms';
 
 export async function GET() {
-  const authResult = await requireSiteApplicationsModuleUser();
+  const authResult = await requireSiteApplicationsOrEventsUser('forms');
   if (authResult.error) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
@@ -40,12 +41,16 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const authResult = await requireSiteApplicationsSuperAdmin();
+  const body = (await request.json()) as SiteApplicationFormInput;
+  const formType = body.form_type ?? (body.event_id ? 'event' : 'team');
+  const authResult =
+    formType === 'event'
+      ? await requireEventFormsWriteUser()
+      : await requireSiteApplicationsSuperAdmin();
   if (authResult.error) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
 
-  const body = (await request.json()) as SiteApplicationFormInput;
   const titleTr = body.title_tr?.trim();
   const titleEn = body.title_en?.trim();
 
@@ -53,7 +58,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
 
-  const formType = body.form_type ?? (body.event_id ? 'event' : 'team');
   if (formType === 'event' && !body.event_id) {
     return NextResponse.json({ error: 'Etkinlik formları için bir etkinlik seçilmelidir.' }, { status: 400 });
   }

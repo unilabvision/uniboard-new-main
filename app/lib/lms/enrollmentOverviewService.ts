@@ -344,18 +344,28 @@ async function fetchClerkUserDetails(userIds: string[]) {
       const data = await response.json();
       Object.entries(data.users || {}).forEach(([userId, userData]) => {
         const user = userData as {
+          fullName?: string;
+          email?: string;
           firstName?: string;
           lastName?: string;
           username?: string;
           emailAddresses?: Array<{ emailAddress?: string }>;
           imageUrl?: string;
         };
+        const email =
+          user.email || user.emailAddresses?.[0]?.emailAddress || '';
         userDetailsMap.set(userId, {
           fullName:
-            user.firstName && user.lastName
+            user.fullName ||
+            (user.firstName && user.lastName
               ? `${user.firstName} ${user.lastName}`
-              : user.firstName || user.lastName || user.username || `Kullanıcı ${userId.substring(0, 8)}`,
-          email: user.emailAddresses?.[0]?.emailAddress || '',
+              : null) ||
+            user.firstName ||
+            user.lastName ||
+            user.username ||
+            email ||
+            `Kullanıcı ${userId.substring(0, 8)}`,
+          email,
           imageUrl: user.imageUrl || null,
         });
       });
@@ -443,19 +453,53 @@ function collectEntitlementLabels(
 export async function getEnrollmentOverview(options?: {
   courseId?: string;
 }): Promise<PersonEnrollmentOverview[]> {
-  let enrollmentsQuery = supabase
-    .from('myuni_enrollments')
-    .select('course_id, user_id, enrolled_at, progress_percentage, is_active, tier_id')
-    .eq('is_active', true);
+  // Browser anon RLS blocks most enrollment rows → use admin API (service role)
+  let enrollments: EnrollmentRow[] = [];
+  if (typeof window !== 'undefined') {
+    const courseIdsPayload: string[] = options?.courseId
+      ? []
+      : (
+          await supabase.from('myuni_courses').select('id').eq('is_active', true)
+        ).data?.map((c) => c.id as string) || [];
 
-  if (options?.courseId) {
-    enrollmentsQuery = enrollmentsQuery.eq('course_id', options.courseId);
+    if (!options?.courseId && courseIdsPayload.length === 0) {
+      return [];
+    }
+
+    const res = await fetch('/api/lms/admin-enrollments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(
+        options?.courseId
+          ? { courseId: options.courseId }
+          : { courseIds: courseIdsPayload }
+      ),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Enrollment fetch failed');
+    enrollments = ((json.enrollments || []) as EnrollmentRow[]).filter(
+      (e) => e.is_active !== false
+    );
+  } else {
+    let enrollmentsQuery = supabase
+      .from('myuni_enrollments')
+      .select(
+        'course_id, user_id, enrolled_at, progress_percentage, is_active, tier_id'
+      )
+      .or('is_active.eq.true,is_active.is.null');
+
+    if (options?.courseId) {
+      enrollmentsQuery = enrollmentsQuery.eq('course_id', options.courseId);
+    }
+
+    const { data: enrollmentsData, error: enrollmentsError } =
+      await enrollmentsQuery;
+    if (enrollmentsError) throw enrollmentsError;
+    enrollments = ((enrollmentsData || []) as EnrollmentRow[]).filter(
+      (e) => e.is_active !== false
+    );
   }
 
-  const { data: enrollmentsData, error: enrollmentsError } = await enrollmentsQuery;
-  if (enrollmentsError) throw enrollmentsError;
-
-  const enrollments = (enrollmentsData || []) as EnrollmentRow[];
   if (enrollments.length === 0) return [];
 
   const courseIds = [...new Set(enrollments.map((e) => e.course_id))];

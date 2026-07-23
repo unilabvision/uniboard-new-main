@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState, Suspense } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useUserModules } from '../../../hooks/useUserModules';
 import {
   getSiteApplicationPublicPath,
@@ -85,11 +85,11 @@ const texts = {
 };
 
 function FormsListContent({ locale }: { locale: string }) {
-  const searchParams = useSearchParams();
-  const initialTab = searchParams.get('tab');
-  const [tab, setTab] = useState<SiteApplicationFormType | 'all'>(
-    initialTab === 'event' ? 'event' : initialTab === 'team' ? 'team' : 'team'
-  );
+  const pathname = usePathname() || '';
+  const isEventsHub = pathname.includes('/events/forms');
+  const formsBase = isEventsHub
+    ? `/${locale}/events/forms`
+    : `/${locale}/site-applications/forms`;
   const [forms, setForms] = useState<FormWithEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const { isSuperAdmin, loading: modulesLoading } = useUserModules();
@@ -113,10 +113,10 @@ function FormsListContent({ locale }: { locale: string }) {
   const filteredForms = useMemo(() => {
     return forms.filter((form) => {
       const type = form.form_type ?? inferFormType(form);
-      if (tab === 'all') return true;
-      return type === tab;
+      if (isEventsHub) return type === 'event';
+      return type === 'team';
     });
-  }, [forms, tab]);
+  }, [forms, isEventsHub]);
 
   if (modulesLoading || loading) {
     return (
@@ -127,63 +127,56 @@ function FormsListContent({ locale }: { locale: string }) {
     );
   }
 
-  const emptyMessage =
-    tab === 'team' ? t.emptyTeam : tab === 'event' ? t.emptyEvent : t.emptyAll;
+  const emptyMessage = isEventsHub ? t.emptyEvent : t.emptyTeam;
 
   return (
     <div className="p-6 lg:p-8 max-w-6xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">{t.title}</h1>
-          <p className="text-neutral-600 dark:text-neutral-400 mt-1">{t.subtitle}</p>
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">
+            {isEventsHub
+              ? locale === 'tr'
+                ? 'Etkinlik Formları'
+                : 'Event Forms'
+              : t.title}
+          </h1>
+          <p className="text-neutral-600 dark:text-neutral-400 mt-1">
+            {isEventsHub
+              ? locale === 'tr'
+                ? 'Etkinlik başvuru formları ve sertifika paketleri'
+                : 'Event application forms and certificate packages'
+              : t.subtitle}
+          </p>
         </div>
-        {isSuperAdmin && (
+        {(isSuperAdmin || isEventsHub) && (
           <div className="flex flex-wrap gap-2">
-            <Link
-              href={`/${locale}/site-applications/forms/new?type=team`}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#990000] text-white rounded-lg hover:bg-[#800000]"
-            >
-              <Users className="w-4 h-4" />
-              {t.newTeamForm}
-            </Link>
-            <Link
-              href={`/${locale}/site-applications/forms/new?type=event`}
-              className="inline-flex items-center gap-2 px-4 py-2.5 border border-[#990000] text-[#990000] rounded-lg hover:bg-[#990000]/5"
-            >
-              <Calendar className="w-4 h-4" />
-              {t.newEventForm}
-            </Link>
+            {!isEventsHub && isSuperAdmin && (
+              <Link
+                href={`${formsBase}/new?type=team`}
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#990000] text-white rounded-lg hover:bg-[#800000]"
+              >
+                <Users className="w-4 h-4" />
+                {t.newTeamForm}
+              </Link>
+            )}
+            {isEventsHub && (
+              <Link
+                href={`${formsBase}/new?type=event`}
+                className="inline-flex items-center gap-2 px-4 py-2.5 border border-[#990000] text-[#990000] rounded-lg hover:bg-[#990000]/5"
+              >
+                <Calendar className="w-4 h-4" />
+                {t.newEventForm}
+              </Link>
+            )}
           </div>
         )}
       </div>
 
-      {!isSuperAdmin && (
+      {!isSuperAdmin && !isEventsHub && (
         <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 p-4 text-amber-800 dark:text-amber-200 text-sm">
           {t.superAdminOnly}
         </div>
       )}
-
-      <div className="flex gap-2 mb-6 border-b border-neutral-200 dark:border-neutral-700">
-        {([
-          ['team', t.tabTeam, Users],
-          ['event', t.tabEvent, Calendar],
-          ['all', t.tabAll, FileText],
-        ] as const).map(([key, label, Icon]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setTab(key)}
-            className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              tab === key
-                ? 'border-[#990000] text-[#990000]'
-                : 'border-transparent text-neutral-500 hover:text-neutral-800'
-            }`}
-          >
-            <Icon className="w-4 h-4" />
-            {label}
-          </button>
-        ))}
-      </div>
 
       {filteredForms.length === 0 ? (
         <div className="rounded-xl border border-dashed border-neutral-300 dark:border-neutral-700 p-12 text-center text-neutral-500">
@@ -270,7 +263,7 @@ function FormsListContent({ locale }: { locale: string }) {
                     )}
                     {isSuperAdmin && (
                       <Link
-                        href={`/${locale}/site-applications/forms/${form.id}`}
+                        href={`${formsBase}/${form.id}`}
                         className="inline-flex items-center gap-1.5 px-3 py-2 text-sm bg-[#990000] text-white rounded-lg hover:bg-[#800000]"
                       >
                         <Settings className="w-4 h-4" />

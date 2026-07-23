@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { use } from 'react';
+import { usePathname } from 'next/navigation';
 import { useUserModules } from '../../../../hooks/useUserModules';
 import {
   getSiteApplicationPublicPath,
@@ -46,6 +47,7 @@ const texts = {
     active: 'Yayında (başvuru alınsın)',
     showOnWebsite: 'Menüde göster',
     allowsAttachment: 'Ek dosya izni',
+    teamFileLimit: 'Ekip formu dosya limiti: en fazla 10 MB (depolama).',
     teamBadge: 'UNILAB Ekip Başvurusu',
     eventBadge: 'Etkinlik Başvuru Formu',
     teamMenuHint: 'Ekip başvuruları Site Başvuruları → Ekip sekmesinde listelenir.',
@@ -77,6 +79,7 @@ const texts = {
     active: 'Published (accept submissions)',
     showOnWebsite: 'Show in menu',
     allowsAttachment: 'Allow attachments',
+    teamFileLimit: 'Team form file limit: max 10 MB (storage).',
     teamBadge: 'UNILAB Team Application',
     eventBadge: 'Event Application Form',
     teamMenuHint: 'Team applications appear under Site Applications → Team tab.',
@@ -102,6 +105,11 @@ export default function EditSiteApplicationFormPage({
   params: Promise<{ locale: string; id: string }>;
 }) {
   const { locale, id } = use(params);
+  const pathname = usePathname() || '';
+  const isEventsHub = pathname.includes('/events/forms');
+  const formsBase = isEventsHub
+    ? `/${locale}/events/forms`
+    : `/${locale}/site-applications/forms`;
   const { isSuperAdmin, loading: modulesLoading } = useUserModules();
   const t = texts[locale as keyof typeof texts] || texts.tr;
 
@@ -234,16 +242,17 @@ export default function EditSiteApplicationFormPage({
     );
   }
 
-  if (!isSuperAdmin) {
-    return <div className="p-8 text-red-600">{t.forbidden}</div>;
-  }
-
   if (!form) {
     return <div className="p-8">Form not found</div>;
   }
 
   const formType: SiteApplicationFormType = form.form_type ?? inferFormType(form);
   const isTeam = formType === 'team';
+
+  if (!isSuperAdmin && !(isEventsHub && !isTeam)) {
+    return <div className="p-8 text-red-600">{t.forbidden}</div>;
+  }
+
   const previewSlug = locale === 'en' ? form.slug_en : form.slug_tr;
   const linkedEvent = events.find((e) => e.id === form.event_id);
   const previewHref = isTeam
@@ -272,7 +281,7 @@ export default function EditSiteApplicationFormPage({
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-8">
       <div className="flex items-center justify-between gap-4">
         <Link
-          href={`/${locale}/site-applications/forms?tab=${isTeam ? 'team' : 'event'}`}
+          href={`${formsBase}?tab=${isTeam ? 'team' : 'event'}`}
           className="inline-flex items-center gap-1 text-sm text-neutral-600 hover:text-[#990000]"
         >
           <ArrowLeft className="w-4 h-4" />
@@ -353,6 +362,11 @@ export default function EditSiteApplicationFormPage({
             <Toggle label={t.showOnWebsite} checked={form.show_on_website} onChange={(v) => setForm({ ...form, show_on_website: v })} />
           )}
           <Toggle label={t.allowsAttachment} checked={form.allows_attachment} onChange={(v) => setForm({ ...form, allows_attachment: v })} />
+          {isTeam && (
+            <p className="text-xs text-amber-700 dark:text-amber-300 sm:col-span-2">
+              {t.teamFileLimit}
+            </p>
+          )}
         </div>
         {!isTeam && (
           <EventPackageSettingsPanel
@@ -385,7 +399,12 @@ export default function EditSiteApplicationFormPage({
               </button>
             )}
           </div>
-          <FormFieldEditor locale={locale} fields={fields} setFields={setFields} />
+          <FormFieldEditor
+            locale={locale}
+            fields={fields}
+            setFields={setFields}
+            formType={formType === 'event' ? 'event' : 'team'}
+          />
           <button
             onClick={saveFields}
             disabled={savingFields || fields.length === 0}

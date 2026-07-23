@@ -9,6 +9,7 @@ import {
   toPublicPackages,
 } from '@/app/lib/siteApplications/packages';
 import { inferFormType } from '@/app/lib/siteApplications/formTypes';
+import { getMaxFileBytesForFormType } from '@/app/lib/siteApplications/files';
 
 export function fieldKeyFromLabel(label: string, existingKeys: Set<string>): string {
   const base =
@@ -82,6 +83,8 @@ export function toPublicForm(
     subtitle: isEn ? form.subtitle_en : form.subtitle_tr,
     success_message: isEn ? form.success_message_en : form.success_message_tr,
     allows_attachment: form.allows_attachment,
+    form_type: formType,
+    max_file_bytes: getMaxFileBytesForFormType(formType),
     packages,
     fields: [...fields]
       .sort((a, b) => a.order_index - b.order_index)

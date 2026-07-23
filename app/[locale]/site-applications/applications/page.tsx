@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import {
   Search,
   RefreshCw,
@@ -190,6 +190,8 @@ export default function SiteApplicationsListPage({
   const [remindFlash, setRemindFlash] = useState<string | null>(null);
   const perPage = 20;
   const searchParams = useSearchParams();
+  const pathname = usePathname() || '';
+  const isEventsHub = pathname.includes('/events/registrations');
   const statusParam = searchParams.get('status');
   const categoryParam = searchParams.get('category');
   const eventIdParam = searchParams.get('eventId')?.trim() || '';
@@ -207,12 +209,9 @@ export default function SiteApplicationsListPage({
       ? searchParams.get('paymentStatus')!
       : '';
 
-  const categoryFilter =
-    categoryParam === 'team' || categoryParam === 'event'
-      ? categoryParam
-      : eventIdParam || eventNameParam
-        ? 'event'
-        : 'all';
+  const categoryFilter = isEventsHub
+    ? 'event'
+    : 'team';
   const statusFilter =
     statusParam && STATUS_FILTERS.includes(statusParam as SiteApplicationStatus)
       ? (statusParam as SiteApplicationStatus)
@@ -222,8 +221,13 @@ export default function SiteApplicationsListPage({
   const hasEventScope = Boolean(eventIdParam || eventNameParam);
 
   const t = texts[locale as keyof typeof texts] || texts.tr;
-  const baseListPath = `/${locale}/site-applications/applications`;
-  const eventsOverviewPath = `/${locale}/site-applications/events`;
+  const baseListPath = isEventsHub
+    ? `/${locale}/events/registrations`
+    : `/${locale}/site-applications/applications`;
+  const eventsOverviewPath = `/${locale}/events/overview`;
+  const detailBasePath = isEventsHub
+    ? `/${locale}/events/registrations`
+    : `/${locale}/site-applications/applications`;
 
   const pageTitle = useMemo(() => {
     if (hasEventScope && eventNameParam) return eventNameParam;
@@ -301,7 +305,7 @@ export default function SiteApplicationsListPage({
       overrides.paymentStatus !== undefined ? overrides.paymentStatus : paymentStatusParam;
 
     if (status) qs.set('status', status);
-    if (category && category !== 'all') qs.set('category', category);
+    qs.set('category', category === 'all' ? categoryFilter : category);
     if (eventId) qs.set('eventId', eventId);
     if (eventName) qs.set('eventName', eventName);
     if (registrationTier) qs.set('registrationTier', registrationTier);
@@ -321,7 +325,7 @@ export default function SiteApplicationsListPage({
       });
       if (formFilter !== 'all') params.set('form', formFilter);
       if (statusFilter) params.set('status', statusFilter);
-      if (categoryFilter !== 'all') params.set('category', categoryFilter);
+      params.set('category', categoryFilter);
       if (search.trim()) params.set('search', search.trim());
       if (eventIdParam) params.set('eventId', eventIdParam);
       if (eventNameParam) params.set('eventName', eventNameParam);
@@ -393,7 +397,6 @@ export default function SiteApplicationsListPage({
   };
 
   const filteredForms = useMemo(() => {
-    if (categoryFilter === 'all') return forms;
     return forms.filter((form) => {
       const type = form.form_type ?? inferFormType(form);
       return categoryFilter === type;
@@ -488,35 +491,6 @@ export default function SiteApplicationsListPage({
             )}
           </div>
         )}
-      </div>
-
-      <div className="flex gap-2 mb-4 border-b border-neutral-200 dark:border-neutral-700">
-        {(
-          [
-            ['team', t.tabTeam],
-            ['event', t.tabEvent],
-            ['all', t.tabAll],
-          ] as const
-        ).map(([key, label]) => (
-          <Link
-            key={key}
-            href={buildListHref({
-              status: statusFilter,
-              category: key,
-              eventId: key === 'event' ? eventIdParam || null : null,
-              eventName: key === 'event' ? eventNameParam || null : null,
-              registrationTier: key === 'event' ? registrationTierParam || null : null,
-              paymentStatus: key === 'event' ? paymentStatusParam || null : null,
-            })}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              categoryFilter === key
-                ? 'border-[#990000] text-[#990000]'
-                : 'border-transparent text-neutral-500 hover:text-neutral-800'
-            }`}
-          >
-            {label}
-          </Link>
-        ))}
       </div>
 
       <div className="flex flex-wrap gap-2 mb-4">
@@ -768,7 +742,7 @@ export default function SiteApplicationsListPage({
                             </button>
                           )}
                           <Link
-                            href={`/${locale}/site-applications/applications/${app.id}`}
+                            href={`${detailBasePath}/${app.id}`}
                             className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-[#990000] dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
                           >
                             <Eye className="w-4 h-4" />

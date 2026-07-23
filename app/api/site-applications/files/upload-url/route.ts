@@ -3,8 +3,11 @@ import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import {
   buildAttachmentStoragePath,
+  getMaxFileBytesForFormType,
   validateAttachmentFile,
 } from '@/app/lib/siteApplications';
+import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
+import { inferFormType } from '@/app/lib/siteApplications/formTypes';
 import { getApplicationTypeSlug, resolveActiveForm } from '@/app/lib/siteApplications/resolveForm';
 
 function getSupabase() {
@@ -35,8 +38,19 @@ export async function POST(request: NextRequest) {
     }
 
     const { form, event } = resolved;
+    const formType = inferFormType(form);
 
-    if (!form.allows_attachment) {
+    // Allow upload when form attachments are on OR the form has a file field
+    let allowUpload = Boolean(form.allows_attachment);
+    if (!allowUpload) {
+      const { data: fields } = await supabase
+        .from(siteApplicationsDb.formFields)
+        .select('field_type')
+        .eq('form_id', form.id);
+      allowUpload = (fields || []).some((f) => f.field_type === 'file');
+    }
+
+    if (!allowUpload) {
       return NextResponse.json({ error: 'Attachments not allowed' }, { status: 400 });
     }
 
@@ -48,10 +62,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid file metadata' }, { status: 400 });
     }
 
-    const validationError = validateAttachmentFile({
-      name: fileName,
-      size: fileSize,
-    } as File);
+    const maxBytes = getMaxFileBytesForFormType(formType);
+    const validationError = validateAttachmentFile(
+      { name: fileName, size: fileSize },
+      { maxBytes, locale }
+    );
     if (validationError) {
       return NextResponse.json({ error: validationError }, { status: 400 });
     }
@@ -80,6 +95,8 @@ export async function POST(request: NextRequest) {
       signedUrl: data.signedUrl,
       token: data.token,
       mimeType,
+      maxFileBytes: maxBytes,
+      formType,
     });
   } catch (err) {
     console.error('Upload URL error:', err);

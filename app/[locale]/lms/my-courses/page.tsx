@@ -1,1 +1,1 @@
-export { default } from '../../students/page';
+export { default } from '../../students/my-courses/page';

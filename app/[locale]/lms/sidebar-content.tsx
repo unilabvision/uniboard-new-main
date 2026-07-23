@@ -1,81 +1,40 @@
-import { 
+import {
   Home,
   Settings,
-  BarChart3,
   PlusCircle,
   Shield,
-  Video,
+  Users,
 } from 'lucide-react';
 
 export const lmsSidebarContent = {
   tr: {
-    title: "Eğitim Yönetim Sistemi",
+    title: 'Eğitim Yönetim Sistemi',
     items: [
+      { name: 'Kurs Yönetimi', href: '/', icon: Home, capability: 'courses' },
+      { name: 'Kurs Oluştur', href: '/create', icon: PlusCircle, capability: 'create' },
       {
-        name: "Kurs Yönetimi",
-        href: "/",
-        icon: Home
+        name: 'Öğrenci Yönetimi',
+        href: '/students',
+        icon: Users,
+        crossModule: true,
       },
-      {
-        name: "Kurs Oluştur",
-        href: "/create",
-        icon: PlusCircle
-      },
-      {
-        name: "İlerleme Takibi",
-        href: "/progress",
-        icon: BarChart3
-      },
-      {
-        name: "Öğrenci Paneli",
-        href: "/my-courses",
-        icon: Video
-      },
-      {
-        name: "Ayarlar",
-        href: "/settings",
-        icon: Settings
-      },
-      {
-        name: "Yetkilendirme",
-        href: "/access",
-        icon: Shield
-      }
-    ]
+      { name: 'Ayarlar', href: '/settings', icon: Settings, capability: 'settings' },
+      { name: 'Yetkilendirme', href: '/access', icon: Shield, capability: 'access' },
+    ],
   },
   en: {
-    title: "Learning Management System",
+    title: 'Learning Management System',
     items: [
+      { name: 'Course Management', href: '/', icon: Home, capability: 'courses' },
+      { name: 'Create Course', href: '/create', icon: PlusCircle, capability: 'create' },
       {
-        name: "Course Management",
-        href: "/",
-        icon: Home
+        name: 'Student Management',
+        href: '/students',
+        icon: Users,
+        crossModule: true,
       },
-      {
-        name: "Create Course",
-        href: "/create",
-        icon: PlusCircle
-      },
-      {
-        name: "Progress Tracking",
-        href: "/progress",
-        icon: BarChart3
-      },
-      {
-        name: "Student Panel",
-        href: "/my-courses",
-        icon: Video
-      },
-      {
-        name: "Settings",
-        href: "/settings",
-        icon: Settings
-      },
-      {
-        name: "Access Control",
-        href: "/access",
-        icon: Shield
-      }
-    ]
-  }
+      { name: 'Settings', href: '/settings', icon: Settings, capability: 'settings' },
+      { name: 'Access Control', href: '/access', icon: Shield, capability: 'access' },
+    ],
+  },
 };

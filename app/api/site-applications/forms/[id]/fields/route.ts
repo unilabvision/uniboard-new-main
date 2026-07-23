@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
-import { requireSiteApplicationsSuperAdmin } from '@/app/api/site-applications/access/_helpers';
+import { requireEventFormsWriteUser } from '@/app/api/site-applications/access/_helpers';
 import type { SiteApplicationFormFieldInput } from '@/app/types/siteApplicationForms';
 import { normalizeFieldOptions } from '@/app/lib/siteApplications/forms';
 
@@ -13,13 +13,19 @@ const ALLOWED_TYPES = new Set([
   'textarea',
   'number',
   'date',
+  'time',
   'url',
   'select',
+  'checkbox',
+  'dropdown',
+  'linear_scale',
+  'rating',
+  'file',
 ]);
 
 export async function PUT(request: NextRequest, context: RouteContext) {
   const { id: formId } = await context.params;
-  const authResult = await requireSiteApplicationsSuperAdmin();
+  const authResult = await requireEventFormsWriteUser();
   if (authResult.error) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
@@ -47,11 +53,17 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     if (!field.label_tr?.trim() || !field.label_en?.trim()) {
       return NextResponse.json({ error: 'Field labels are required' }, { status: 400 });
     }
-    if (field.field_type === 'select') {
+    if (
+      field.field_type === 'select' ||
+      field.field_type === 'checkbox' ||
+      field.field_type === 'dropdown' ||
+      field.field_type === 'linear_scale' ||
+      field.field_type === 'rating'
+    ) {
       const options = normalizeFieldOptions(field.options);
       if (options.length === 0) {
         return NextResponse.json(
-          { error: `Select field "${key}" requires at least one option` },
+          { error: `Field "${key}" requires at least one option` },
           { status: 400 }
         );
       }

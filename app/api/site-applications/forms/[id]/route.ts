@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
 import { inferFormType } from '@/app/lib/siteApplications/formTypes';
 import {
-  requireSiteApplicationsModuleUser,
-  requireSiteApplicationsSuperAdmin,
+  requireSiteApplicationsOrEventsUser,
+  requireEventFormsWriteUser,
 } from '@/app/api/site-applications/access/_helpers';
 import type { SiteApplicationFormInput } from '@/app/types/siteApplicationForms';
 import {
@@ -15,7 +15,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(_request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
-  const authResult = await requireSiteApplicationsModuleUser();
+  const authResult = await requireSiteApplicationsOrEventsUser('forms');
   if (authResult.error) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
@@ -43,7 +43,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
-  const authResult = await requireSiteApplicationsSuperAdmin();
+  const authResult = await requireEventFormsWriteUser();
   if (authResult.error) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
@@ -118,7 +118,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
 export async function DELETE(_request: NextRequest, context: RouteContext) {
   const { id } = await context.params;
-  const authResult = await requireSiteApplicationsSuperAdmin();
+  const authResult = await requireEventFormsWriteUser();
   if (authResult.error) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }

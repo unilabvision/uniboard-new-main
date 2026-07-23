@@ -10,8 +10,14 @@ export type SiteApplicationFieldType =
   | 'textarea'
   | 'number'
   | 'date'
+  | 'time'
   | 'url'
-  | 'select';
+  | 'select'
+  | 'checkbox'
+  | 'dropdown'
+  | 'linear_scale'
+  | 'rating'
+  | 'file';
 
 export interface SiteApplicationFormFieldOption {
   value: string;
@@ -95,6 +101,10 @@ export interface PublicSiteApplicationForm {
   subtitle: string | null;
   success_message: string | null;
   allows_attachment: boolean;
+  /** team | event — used for file size limits on the client */
+  form_type?: 'team' | 'event' | null;
+  /** Max upload size in bytes for this form */
+  max_file_bytes?: number;
   packages?: PublicRegistrationPackage[];
   fields: Array<{
     field_key: string;

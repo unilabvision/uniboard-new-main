@@ -15,26 +15,32 @@ function getAdminSupabase() {
 
 async function requireAnalyticsAccess(userId: string) {
   const supabase = getAdminSupabase();
-  const { data: rows, error } = await supabase
-    .from('user_module_access')
-    .select('module_key, is_enabled, is_super_admin')
-    .eq('clerk_user_id', userId)
-    .eq('is_enabled', true);
-
-  if (error) {
-    return { ok: false as const, status: 500, error: error.message, supabase };
+  const { loadUserAccessRows, resolveMembershipFromRows, hasFeature } =
+    await import('@/app/lib/moduleAccess/rbac');
+  let rows: Awaited<ReturnType<typeof loadUserAccessRows>>;
+  try {
+    rows = await loadUserAccessRows(supabase, userId);
+  } catch (e) {
+    return {
+      ok: false as const,
+      status: 500,
+      error: e instanceof Error ? e.message : 'Error',
+      supabase,
+    };
   }
 
-  const isSuperAdmin = (rows ?? []).some((r) => r.is_super_admin === true);
-  const hasModule =
-    isSuperAdmin ||
-    (rows ?? []).some(
-      (r) =>
-        (r.module_key === 'analytics' || r.module_key === 'reports') &&
-        r.is_enabled
-    );
+  const resolved = resolveMembershipFromRows(rows, 'analytics');
+  const hasModule = resolved.isSuperAdmin || Boolean(resolved.membership);
 
   if (!hasModule) {
+    return { ok: false as const, status: 403, error: 'Forbidden', supabase };
+  }
+
+  // Overview capability when RBAC is set; legacy full access passes
+  if (
+    !hasFeature(resolved.membership, 'overview', resolved.isSuperAdmin) &&
+    resolved.membership?.accessLevel != null
+  ) {
     return { ok: false as const, status: 403, error: 'Forbidden', supabase };
   }
 

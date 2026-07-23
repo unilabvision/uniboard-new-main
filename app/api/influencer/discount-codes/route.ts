@@ -10,7 +10,7 @@ const DEFAULT_COMMISSION = 15;
 
 export async function GET() {
   try {
-    const access = await requireInfluencerUser();
+    const access = await requireInfluencerUser('codes');
     if (access.error || !access.supabase || !access.userId) {
       return NextResponse.json(
         { error: access.error || 'Unauthorized' },
@@ -95,7 +95,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const access = await requireInfluencerUser();
+    const access = await requireInfluencerUser('codes');
     if (access.error || !access.supabase || !access.userId) {
       return NextResponse.json(
         { error: access.error || 'Unauthorized' },

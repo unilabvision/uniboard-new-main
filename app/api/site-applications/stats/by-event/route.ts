@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { siteApplicationsDb, eventApplicationOrFilter } from '@/app/lib/siteApplications/config';
-import { requireSiteApplicationsModuleUser } from '@/app/api/site-applications/access/_helpers';
+import { requireSiteApplicationsOrEventsUser } from '@/app/api/site-applications/access/_helpers';
 import { fetchActiveEvents } from '@/app/lib/siteApplications/events';
 import { backfillPendingEventApplications } from '@/app/lib/siteApplications/eventAutoAccept';
 import { syncCertificatePaymentsFromOrders } from '@/app/lib/siteApplications/syncPayments';
@@ -42,7 +42,7 @@ function toNumber(value: unknown): number {
  * Kaynak: source=event_website veya event_id / event_name dolu kayıtlar.
  */
 export async function GET() {
-  const authResult = await requireSiteApplicationsModuleUser();
+  const authResult = await requireSiteApplicationsOrEventsUser();
   if (authResult.error || !authResult.supabase) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }

@@ -1,6 +1,7 @@
 // hooks/useUserModules.ts
 import { useState, useEffect, useCallback } from 'react';
 import { useUser } from '@clerk/nextjs';
+import type { AccessLevel } from '@/app/lib/moduleAccess/rbac';
 
 interface Module {
   key: string;
@@ -13,6 +14,15 @@ interface Module {
   is_super_admin?: boolean;
 }
 
+export type ModuleMembership = {
+  id?: string;
+  moduleKey?: string;
+  panelOrganizationId: string | null;
+  accessLevel: AccessLevel | null;
+  capabilities: string[] | null;
+  isSuperAdmin: boolean;
+};
+
 interface UseUserModulesReturn {
   modules: Module[];
   loading: boolean;
@@ -20,12 +30,14 @@ interface UseUserModulesReturn {
   refetch: () => void;
   /** Kullanıcı süper admin ise true - tüm modüllere erişim */
   isSuperAdmin: boolean;
+  memberships: ModuleMembership[];
 }
 
 type ModulesCache = {
   userId: string;
   modules: Module[];
   isSuperAdmin: boolean;
+  memberships: ModuleMembership[];
   fetchedAt: number;
 };
 
@@ -50,6 +62,9 @@ export function useUserModules(): UseUserModulesReturn {
   const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState<string | null>(null);
   const [isSuperAdmin, setIsSuperAdmin] = useState(cached?.isSuperAdmin ?? false);
+  const [memberships, setMemberships] = useState<ModuleMembership[]>(
+    cached?.memberships ?? []
+  );
 
   const fetchModules = useCallback(async (options?: { silent?: boolean }) => {
     if (!user || !isLoaded) {
@@ -82,16 +97,19 @@ export function useUserModules(): UseUserModulesReturn {
       const nextIsSuperAdmin =
         data.isSuperAdmin ??
         nextModules.some((m: Module) => m.is_super_admin === true);
+      const nextMemberships: ModuleMembership[] = data.memberships || [];
 
       modulesCache = {
         userId: user.id,
         modules: nextModules,
         isSuperAdmin: nextIsSuperAdmin,
+        memberships: nextMemberships,
         fetchedAt: Date.now(),
       };
 
       setModules(nextModules);
       setIsSuperAdmin(nextIsSuperAdmin);
+      setMemberships(nextMemberships);
     } catch (err: unknown) {
       console.error('useUserModules error:', err);
       if (!hasCache) {
@@ -113,6 +131,7 @@ export function useUserModules(): UseUserModulesReturn {
       modulesCache = null;
       setModules([]);
       setIsSuperAdmin(false);
+      setMemberships([]);
       setLoading(false);
       return;
     }
@@ -127,5 +146,6 @@ export function useUserModules(): UseUserModulesReturn {
     error,
     refetch,
     isSuperAdmin,
+    memberships,
   };
 }

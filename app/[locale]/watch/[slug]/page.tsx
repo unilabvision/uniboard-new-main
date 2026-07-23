@@ -223,7 +223,7 @@ export default function WatchCoursePage() {
         <div className="text-center text-white">
           <BookOpen className="w-16 h-16 mx-auto mb-4 opacity-50" />
           <p>{error || t.notFound}</p>
-          <Link href={`/${locale}/students`} className="mt-4 inline-block text-[#ff6666] hover:underline">
+          <Link href={`/${locale}/students/my-courses`} className="mt-4 inline-block text-[#ff6666] hover:underline">
             {t.backToCourses}
           </Link>
         </div>
@@ -254,7 +254,7 @@ export default function WatchCoursePage() {
       <header className="border-b border-neutral-800 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link
-            href={`/${locale}/students`}
+            href={`/${locale}/students/my-courses`}
             className="flex items-center text-neutral-400 hover:text-white transition-colors text-sm"
           >
             <ArrowLeft className="w-4 h-4 mr-1" />
