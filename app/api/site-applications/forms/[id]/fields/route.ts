@@ -23,6 +23,51 @@ const ALLOWED_TYPES = new Set([
   'file',
 ]);
 
+type FieldBackupRow = {
+  form_id: string;
+  field_key: string;
+  field_type: string;
+  label_tr: string;
+  label_en: string;
+  placeholder_tr: string | null;
+  placeholder_en: string | null;
+  required: boolean;
+  order_index: number;
+  options: unknown;
+  is_contact: boolean;
+};
+
+function toInsertRow(
+  field: {
+    field_key: string;
+    field_type: string;
+    label_tr: string;
+    label_en: string;
+    placeholder_tr?: string | null;
+    placeholder_en?: string | null;
+    required?: boolean;
+    order_index?: number;
+    options?: unknown;
+    is_contact?: boolean;
+  },
+  formId: string,
+  index: number
+) {
+  return {
+    form_id: formId,
+    field_key: field.field_key,
+    field_type: field.field_type,
+    label_tr: field.label_tr,
+    label_en: field.label_en,
+    placeholder_tr: field.placeholder_tr?.trim?.() || field.placeholder_tr || null,
+    placeholder_en: field.placeholder_en?.trim?.() || field.placeholder_en || null,
+    required: field.required ?? false,
+    order_index: field.order_index ?? index,
+    options: normalizeFieldOptions(field.options),
+    is_contact: field.is_contact ?? false,
+  };
+}
+
 export async function PUT(request: NextRequest, context: RouteContext) {
   const { id: formId } = await context.params;
   const authResult = await requireEventFormsWriteUser();
@@ -105,30 +150,34 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: 'Form not found' }, { status: 404 });
   }
 
-  // Insert first, then delete old rows — never wipe questions if insert fails
-  // (e.g. missing DB enum values for field_type).
+  // Backup full rows first. Unique(form_id, field_key) means we must delete
+  // before insert — if insert fails we restore the backup.
   const { data: existing, error: existingError } = await supabase
     .from(siteApplicationsDb.formFields)
-    .select('id')
-    .eq('form_id', formId);
+    .select(
+      'form_id, field_key, field_type, label_tr, label_en, placeholder_tr, placeholder_en, required, order_index, options, is_contact'
+    )
+    .eq('form_id', formId)
+    .order('order_index', { ascending: true });
 
   if (existingError) {
     return NextResponse.json({ error: existingError.message }, { status: 500 });
   }
 
-  const rows = fields.map((field, index) => ({
-    form_id: formId,
-    field_key: field.field_key,
-    field_type: field.field_type,
-    label_tr: field.label_tr,
-    label_en: field.label_en,
-    placeholder_tr: field.placeholder_tr?.trim() || null,
-    placeholder_en: field.placeholder_en?.trim() || null,
-    required: field.required ?? false,
-    order_index: field.order_index ?? index,
-    options: normalizeFieldOptions(field.options),
-    is_contact: field.is_contact ?? false,
-  }));
+  const backup: FieldBackupRow[] = (existing ?? []).map((row, index) =>
+    toInsertRow(row as FieldBackupRow, formId, index)
+  );
+
+  const { error: deleteError } = await supabase
+    .from(siteApplicationsDb.formFields)
+    .delete()
+    .eq('form_id', formId);
+
+  if (deleteError) {
+    return NextResponse.json({ error: deleteError.message }, { status: 500 });
+  }
+
+  const rows = fields.map((field, index) => toInsertRow(field, formId, index));
 
   const { data, error } = await supabase
     .from(siteApplicationsDb.formFields)
@@ -137,22 +186,19 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     .order('order_index', { ascending: true });
 
   if (error) {
+    if (backup.length > 0) {
+      const { error: restoreError } = await supabase
+        .from(siteApplicationsDb.formFields)
+        .insert(backup);
+      if (restoreError) {
+        console.error('Form fields restore failed:', restoreError.message);
+      }
+    }
+
     const hint = /field_type|check constraint|invalid input|enum/i.test(error.message)
       ? ' — DB field_type enum may be outdated; run scripts/migrations/add-site-application-form-field-types.sql'
       : '';
     return NextResponse.json({ error: `${error.message}${hint}` }, { status: 500 });
-  }
-
-  const existingIds = (existing ?? []).map((row) => row.id).filter(Boolean);
-  if (existingIds.length > 0) {
-    const { error: deleteError } = await supabase
-      .from(siteApplicationsDb.formFields)
-      .delete()
-      .in('id', existingIds);
-
-    if (deleteError) {
-      console.error('Form fields cleanup failed:', deleteError.message);
-    }
   }
 
   // Touch parent form so SQL updated_at + public "latest form" queries stay in sync
