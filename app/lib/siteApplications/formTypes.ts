@@ -233,7 +233,8 @@ export function emptyEventFormState() {
     success_message_tr: '',
     success_message_en: '',
     is_active: false,
-    show_on_website: false,
+    // Required by myunilab.net public event form APIs alongside is_active
+    show_on_website: true,
     allows_attachment: false,
     event_id: '' as string,
   };

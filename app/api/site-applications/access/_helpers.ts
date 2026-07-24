@@ -150,6 +150,7 @@ export async function requireSiteApplicationsOrEventsUser(
   return { error: null, status: 200 as const, userId, supabase, isSuperAdmin };
 }
 
+/** Write access for form settings/fields: Events forms OR Site-applications forms OR super-admin. */
 export async function requireEventFormsWriteUser() {
   const { userId } = await auth();
   if (!userId) {
@@ -176,8 +177,10 @@ export async function requireEventFormsWriteUser() {
     };
   }
 
-  const resolved = resolveMembershipFromRows(rows, EVENTS_MODULE_KEY);
-  if (resolved.isSuperAdmin) {
+  const eventsResolved = resolveMembershipFromRows(rows, EVENTS_MODULE_KEY);
+  const siteResolved = resolveMembershipFromRows(rows, SITE_APPLICATIONS_MODULE_KEY);
+  const isSuperAdmin = eventsResolved.isSuperAdmin || siteResolved.isSuperAdmin;
+  if (isSuperAdmin) {
     return {
       error: null,
       status: 200 as const,
@@ -187,11 +190,15 @@ export async function requireEventFormsWriteUser() {
     };
   }
 
-  const allowed =
-    hasEventsAccess(resolved.moduleKeys, false) &&
-    hasFeature(resolved.membership, 'forms', false);
+  const moduleKeys = rows.map((r) => r.module_key);
+  const eventsFormsOk =
+    hasEventsAccess(moduleKeys, false) &&
+    hasFeature(eventsResolved.membership, 'forms', false);
+  const siteFormsOk =
+    hasSiteApplicationsAccess(moduleKeys, false) &&
+    hasFeature(siteResolved.membership, 'forms', false);
 
-  if (!allowed) {
+  if (!eventsFormsOk && !siteFormsOk) {
     return {
       error: 'Forbidden',
       status: 403 as const,

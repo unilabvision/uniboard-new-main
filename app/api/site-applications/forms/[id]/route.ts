@@ -83,6 +83,15 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     updates.form_type = body.form_type;
   }
 
+  // myunilab.net event APIs historically require show_on_website=true.
+  // Event forms hide that toggle in the UI — force it on when publishing.
+  const publishingEvent =
+    (body.form_type === 'event' || Boolean(body.event_id) || Boolean(updates.event_id)) &&
+    (body.is_active === true || updates.is_active === true);
+  if (publishingEvent) {
+    updates.show_on_website = true;
+  }
+
   if (body.package_settings !== undefined) {
     const normalized = normalizePackageSettings(body.package_settings);
     const formType =

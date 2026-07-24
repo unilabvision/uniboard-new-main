@@ -60,10 +60,12 @@ const texts = {
     connectionNeedPublish:
       'Form henüz yayında değil — veya etkinlik formu için etkinlik seçilmedi. Sitede görünmez.',
     connectionVerifyOk: 'Site API doğrulandı',
-    connectionVerifyFail: 'Site API formu bulamadı. Yayında mı ve doğru etkinliğe bağlı mı kontrol edin.',
+    connectionVerifyFail: 'Site API formu bulamadı. Yayında mı, etkinliğe bağlı mı ve en az bir soru kaydedildi mi kontrol edin.',
     openLive: 'Canlı sitede aç',
     sitePreviewHint:
       'Soldaki “Site Önizleme” etkinlik listesini açar. Form değişiklikleri için bu sayfadaki başvuru linkini kullanın (.../basvuru).',
+    questionHint:
+      'Soru metnini üstteki TR/EN satırlarına yazın. Ortadaki kesik çizgili kutu yalnızca önizlemedir — oraya yazılamaz.',
     eventsLoadError: 'Etkinlik listesi yüklenemedi',
     linkedEvent: 'Bağlı etkinlik',
     noEvent: 'Etkinlik seçilmedi',
@@ -108,10 +110,12 @@ const texts = {
       'Form is not published — or event form has no linked event. It will not appear on the site.',
     connectionVerifyOk: 'Site API OK',
     connectionVerifyFail:
-      'Site API could not find this form. Check Published + linked event.',
+      'Site API could not find this form. Check Published + linked event + at least one saved question.',
     openLive: 'Open on live site',
     sitePreviewHint:
       '“Site Preview” opens the event list. Use the /basvuru application link on this page to see form changes.',
+    questionHint:
+      'Type the question in the TR/EN rows above. The dashed box is answer preview only — it is not editable.',
     eventsLoadError: 'Could not load events list',
     linkedEvent: 'Linked event',
     noEvent: 'No event selected',
@@ -238,6 +242,10 @@ export default function EditSiteApplicationFormPage({
       return { ok: false, error: t.eventInactive };
     }
 
+    // Align with myunilab.net: event forms must be show_on_website when published
+    const showOnWebsite =
+      formType === 'event' && next.is_active ? true : next.show_on_website;
+
     const res = await fetch(`/api/site-applications/forms/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -251,7 +259,7 @@ export default function EditSiteApplicationFormPage({
         success_message_tr: next.success_message_tr,
         success_message_en: next.success_message_en,
         is_active: next.is_active,
-        show_on_website: next.show_on_website,
+        show_on_website: showOnWebsite,
         allows_attachment: next.allows_attachment,
         event_id: next.event_id,
         form_type: formType,
@@ -692,6 +700,7 @@ export default function EditSiteApplicationFormPage({
               {fields.length} {locale === 'en' ? 'questions' : 'soru'}
             </span>
           </div>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400">{t.questionHint}</p>
           {fields.length === 0 && (
             <button
               type="button"

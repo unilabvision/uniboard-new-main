@@ -82,10 +82,11 @@ const texts = {
     previewFile: 'Dosya yükleme alanı',
     previewShort: 'Kısa yanıt metni',
     previewLong: 'Uzun yanıt metni…',
+    answerPreview: 'Yanıt alanı (önizleme — buraya yazılmaz)',
     fileLimitTeam: 'Ekip formu dosya limiti (depolama)',
     fileLimitEvent: 'Dosya boyutu limiti',
     localeHint:
-      'Üst satır = Türkçe (TR site). Alt satır = İngilizce. Sağdaki önizleme seçili panele göre güncellenir; canlı sitede görmek için “Kaydet ve yayınla” şart.',
+      'Soru metnini TR/EN satırlarına yazın. Kesik çizgili kutu yalnızca yanıt önizlemesidir. Canlı sitede görmek için “Kaydet ve yayınla” şart.',
     badgeTr: 'TR',
     badgeEn: 'EN',
   },
@@ -114,10 +115,11 @@ const texts = {
     previewFile: 'File upload field',
     previewShort: 'Short answer text',
     previewLong: 'Long answer text…',
+    answerPreview: 'Answer field (preview — not editable here)',
     fileLimitTeam: 'Team form file limit (storage)',
     fileLimitEvent: 'File size limit',
     localeHint:
-      'Primary row follows UI language. Right preview updates live; use Save & publish to push to the public site.',
+      'Type the question in the TR/EN rows. The dashed box is answer preview only. Use Save & publish for the live site.',
     badgeTr: 'TR',
     badgeEn: 'EN',
   },
@@ -674,19 +676,21 @@ export default function FormFieldEditor({
                 </div>
               )}
               {!isOptionFieldType(field.field_type) && field.field_type !== 'file' && (
-                <input
-                  disabled
-                  placeholder={
-                    field.field_type === 'textarea'
-                      ? t.previewLong
-                      : field.field_type === 'time'
-                        ? '00:00'
-                        : isEn
-                          ? typeMeta.en
-                          : typeMeta.tr
-                  }
-                  className="w-full rounded-lg border border-dashed border-neutral-200 dark:border-neutral-600 px-3 py-2.5 text-sm text-neutral-400 bg-neutral-50/50 dark:bg-neutral-900/30"
-                />
+                <div
+                  aria-hidden
+                  className="w-full rounded-lg border border-dashed border-neutral-200 dark:border-neutral-600 px-3 py-2.5 text-sm text-neutral-400 bg-neutral-50/50 dark:bg-neutral-900/30 select-none pointer-events-none"
+                >
+                  <span className="block text-[10px] uppercase tracking-wide text-neutral-400 mb-1">
+                    {t.answerPreview}
+                  </span>
+                  {field.field_type === 'textarea'
+                    ? t.previewLong
+                    : field.field_type === 'time'
+                      ? '00:00'
+                      : field.placeholder_tr ||
+                        (isEn ? typeMeta.en : typeMeta.tr) ||
+                        t.previewShort}
+                </div>
               )}
 
               {field.field_type !== 'file' &&

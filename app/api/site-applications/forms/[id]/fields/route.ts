@@ -76,13 +76,16 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   }
 
   const supabase = authResult.supabase!;
-  const { error: deleteError } = await supabase
+
+  // Insert first, then delete old rows — never wipe questions if insert fails
+  // (e.g. missing DB enum values for field_type).
+  const { data: existing, error: existingError } = await supabase
     .from(siteApplicationsDb.formFields)
-    .delete()
+    .select('id')
     .eq('form_id', formId);
 
-  if (deleteError) {
-    return NextResponse.json({ error: deleteError.message }, { status: 500 });
+  if (existingError) {
+    return NextResponse.json({ error: existingError.message }, { status: 500 });
   }
 
   const rows = fields.map((field, index) => ({
@@ -106,7 +109,23 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     .order('order_index', { ascending: true });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const hint = /field_type|check constraint|invalid input|enum/i.test(error.message)
+      ? ' — DB field_type enum may be outdated; run scripts/migrations/add-site-application-form-field-types.sql'
+      : '';
+    return NextResponse.json({ error: `${error.message}${hint}` }, { status: 500 });
+  }
+
+  const existingIds = (existing ?? []).map((row) => row.id).filter(Boolean);
+  if (existingIds.length > 0) {
+    const { error: deleteError } = await supabase
+      .from(siteApplicationsDb.formFields)
+      .delete()
+      .in('id', existingIds);
+
+    if (deleteError) {
+      // New rows are live; old duplicates may remain until next save.
+      console.error('Form fields cleanup failed:', deleteError.message);
+    }
   }
 
   return NextResponse.json({ fields: data ?? [] });
