@@ -59,8 +59,12 @@ const texts = {
       'Bağlı: yayın ayarları kaydedildi. Ekip formları slug ile, etkinlik formları etkinlik slug’ı (/etkinlik/{slug}/basvuru) ile sitede açılır.',
     connectionNeedPublish:
       'Form henüz yayında değil — veya etkinlik formu için etkinlik seçilmedi. Sitede görünmez.',
-    connectionVerifyOk: 'Site API doğrulandı',
+    connectionVerifyOk: 'DB + site API senkron',
     connectionVerifyFail: 'Site API formu bulamadı. Yayında mı, etkinliğe bağlı mı ve en az bir soru kaydedildi mi kontrol edin.',
+    syncMismatch:
+      'Dikkat: sitedeki /basvuru başka bir form ID’sine bağlı. Bu paneli kaydetmek o formu güncellemez — aşağıdaki form ID ile SQL’deki kaydı karşılaştırın.',
+    syncDbOk: 'Sorular veritabanına yazıldı',
+    formIdLabel: 'Form ID (SQL ile aynı olmalı)',
     openLive: 'Canlı sitede aç',
     sitePreviewHint:
       'Soldaki “Site Önizleme” etkinlik listesini açar. Form değişiklikleri için bu sayfadaki başvuru linkini kullanın (.../basvuru).',
@@ -108,9 +112,13 @@ const texts = {
       'Connected: publish settings saved. Team forms open by slug; event forms open at /event/{slug}/basvuru.',
     connectionNeedPublish:
       'Form is not published — or event form has no linked event. It will not appear on the site.',
-    connectionVerifyOk: 'Site API OK',
+    connectionVerifyOk: 'DB + site API in sync',
     connectionVerifyFail:
       'Site API could not find this form. Check Published + linked event + at least one saved question.',
+    syncMismatch:
+      'Warning: the live /basvuru URL is bound to a different form ID. Saving this panel will not update that form — compare Form ID with SQL.',
+    syncDbOk: 'Questions written to database',
+    formIdLabel: 'Form ID (must match SQL)',
     openLive: 'Open on live site',
     sitePreviewHint:
       '“Site Preview” opens the event list. Use the /basvuru application link on this page to see form changes.',
@@ -310,43 +318,93 @@ export default function EditSiteApplicationFormPage({
       }
 
       const normalized = fields.map((field, index) => {
-        const payload = { ...field, order_index: index };
+        const labelTr = field.label_tr?.trim() || '';
+        const labelEn = field.label_en?.trim() || labelTr;
+        const payload = {
+          ...field,
+          label_tr: labelTr,
+          label_en: labelEn,
+          order_index: index,
+        };
         delete (payload as { client_id?: string }).client_id;
         return payload;
       });
+
+      const missingLabel = normalized.find((f) => !f.label_tr);
+      if (missingLabel) {
+        throw new Error(
+          locale === 'en'
+            ? 'Every question needs TR text before publish.'
+            : 'Yayınlamadan önce her sorunun TR metni dolu olmalı.'
+        );
+      }
+
       const res = await fetch(`/api/site-applications/forms/${id}/fields`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields: normalized }),
       });
+      const saved = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error);
+        throw new Error(saved.error || 'Save failed');
       }
-      const saved = await res.json().catch(() => null);
-      if (Array.isArray(saved?.fields)) {
-        setFields(
-          saved.fields.map(
-            (
-              f: SiteApplicationFormField & { client_id?: string },
-              i: number
-            ) => ({
-              client_id: f.id || fields[i]?.client_id || `saved_${i}_${f.field_key}`,
-              field_key: f.field_key,
-              field_type: f.field_type,
-              label_tr: f.label_tr,
-              label_en: f.label_en,
-              placeholder_tr: f.placeholder_tr || undefined,
-              placeholder_en: f.placeholder_en || undefined,
-              required: f.required,
-              order_index: f.order_index,
-              options: normalizeFieldOptions(f.options),
-              is_contact: f.is_contact,
-            })
-          )
+      if (!saved.synced || !Array.isArray(saved.fields)) {
+        throw new Error(
+          locale === 'en'
+            ? 'Database did not confirm the write.'
+            : 'Veritabanı yazmayı onaylamadı.'
         );
-      } else {
-        setFields(normalized.map((f, i) => ({ ...f, client_id: fields[i]?.client_id })));
+      }
+
+      setFields(
+        saved.fields.map(
+          (
+            f: SiteApplicationFormField & { client_id?: string },
+            i: number
+          ) => ({
+            client_id: f.id || fields[i]?.client_id || `saved_${i}_${f.field_key}`,
+            field_key: f.field_key,
+            field_type: f.field_type,
+            label_tr: f.label_tr,
+            label_en: f.label_en,
+            placeholder_tr: f.placeholder_tr || undefined,
+            placeholder_en: f.placeholder_en || undefined,
+            required: f.required,
+            order_index: f.order_index,
+            options: normalizeFieldOptions(f.options),
+            is_contact: f.is_contact,
+          })
+        )
+      );
+
+      // Round-trip: reload from DB so panel state == SQL
+      const reload = await fetch(`/api/site-applications/forms/${id}`, {
+        cache: 'no-store',
+      });
+      if (reload.ok) {
+        const reloadData = await reload.json();
+        if (reloadData.form) {
+          setForm((prev) => (prev ? { ...prev, ...reloadData.form } : reloadData.form));
+          if (Array.isArray(reloadData.form.fields)) {
+            setFields(
+              reloadData.form.fields.map(
+                (f: SiteApplicationFormField, i: number) => ({
+                  client_id: f.id || `reloaded_${i}_${f.field_key}`,
+                  field_key: f.field_key,
+                  field_type: f.field_type,
+                  label_tr: f.label_tr,
+                  label_en: f.label_en,
+                  placeholder_tr: f.placeholder_tr || undefined,
+                  placeholder_en: f.placeholder_en || undefined,
+                  required: f.required,
+                  order_index: f.order_index,
+                  options: normalizeFieldOptions(f.options),
+                  is_contact: f.is_contact,
+                })
+              )
+            );
+          }
+        }
       }
 
       const eventIdForVerify = form?.event_id ?? null;
@@ -364,12 +422,14 @@ export default function EditSiteApplicationFormPage({
             : '';
         showMessage(
           settingsResult.warning ||
-            `${t.savedAll} — ${t.connectionVerifyOk}: ${verify.count} soru${pkgInfo}`,
+            `${t.syncDbOk} (${saved.field_count} soru) — ${t.connectionVerifyOk}: ${verify.count} soru${pkgInfo}`,
           Boolean(settingsResult.warning)
         );
+      } else if (verify.detail?.includes('başka forma')) {
+        showMessage(`${t.syncDbOk} — ${t.syncMismatch} (${verify.detail})`, true);
       } else {
         showMessage(
-          `${t.savedAll} — ${t.connectionVerifyFail}${verify.detail ? ` (${verify.detail})` : ''}`,
+          `${t.syncDbOk} — ${t.connectionVerifyFail}${verify.detail ? ` (${verify.detail})` : ''}`,
           true
         );
       }
@@ -565,6 +625,12 @@ export default function EditSiteApplicationFormPage({
         <h1 className="text-2xl font-bold mt-1">{displayTitle}</h1>
         <p className="text-sm text-neutral-500 mt-1">
           {isTeam ? t.teamMenuHint : t.eventMenuHint}
+        </p>
+        <p className="mt-2 text-xs text-neutral-500">
+          {t.formIdLabel}:{' '}
+          <code className="font-mono text-neutral-800 dark:text-neutral-200 break-all">
+            {form.id}
+          </code>
         </p>
       </div>
 
