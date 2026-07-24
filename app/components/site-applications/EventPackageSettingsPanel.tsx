@@ -13,7 +13,7 @@ interface EventPackageSettingsPanelProps {
 const texts = {
   tr: {
     title: 'Kayıt paketleri',
-    hint: 'Kayıt her zaman ücretsizdir. Sertifika paketini açtığınızda sitede iki paket kartı görünür.',
+    hint: 'Kayıt her zaman ücretsizdir. Sertifika paketini açtığınızda sitede iki paket kartı görünür. Paketler bağlı etkinlik slug’ına (/etkinlik/{slug}/basvuru) bu form üzerinden yazılır — “Ayarları Kaydet” veya etkinlik seçince otomatik kaydolur.',
     enableCertificate: 'Sertifika paketini aktifleştir (ücretli)',
     price: 'Sertifika ücreti',
     currency: 'Para birimi',
@@ -26,7 +26,7 @@ const texts = {
   },
   en: {
     title: 'Registration packages',
-    hint: 'Registration is always free. When the certificate package is enabled, two package cards appear on the site.',
+    hint: 'Registration is always free. When the certificate package is enabled, two package cards appear on the site. Packages are stored on this form and served at the linked event slug (/event/{slug}/basvuru) after save.',
     enableCertificate: 'Enable certificate package (paid)',
     price: 'Certificate price',
     currency: 'Currency',

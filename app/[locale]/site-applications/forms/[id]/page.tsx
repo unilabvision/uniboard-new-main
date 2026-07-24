@@ -51,9 +51,19 @@ const texts = {
     teamFileLimit: 'Ekip formu dosya limiti: en fazla 10 MB (depolama).',
     teamBadge: 'UNILAB Ekip Başvurusu',
     eventBadge: 'Etkinlik Başvuru Formu',
-    teamMenuHint: 'Ekip başvuruları Site Başvuruları → Ekip sekmesinde listelenir.',
-    eventMenuHint: 'Etkinlik başvuruları Site Başvuruları → Etkinlik sekmesinde listelenir.',
-    pageAddress: 'Başvuru sayfası',
+    teamMenuHint: 'Ekip başvuruları → Site Başvuruları (Ekip) modülünde listelenir.',
+    eventMenuHint: 'Etkinlik formları → Etkinlik Yönetimi → Formlar. Kayıtlar Dashboard’da izlenir.',
+    pageAddress: 'Başvuru sayfası (canlı site)',
+    connectionTitle: 'Site bağlantısı',
+    connectionOk:
+      'Bağlı: yayın ayarları kaydedildi. Ekip formları slug ile, etkinlik formları etkinlik slug’ı (/etkinlik/{slug}/basvuru) ile sitede açılır.',
+    connectionNeedPublish:
+      'Form henüz yayında değil — veya etkinlik formu için etkinlik seçilmedi. Sitede görünmez.',
+    connectionVerifyOk: 'Site API doğrulandı',
+    connectionVerifyFail: 'Site API formu bulamadı. Yayında mı ve doğru etkinliğe bağlı mı kontrol edin.',
+    openLive: 'Canlı sitede aç',
+    sitePreviewHint:
+      'Soldaki “Site Önizleme” etkinlik listesini açar. Form değişiklikleri için bu sayfadaki başvuru linkini kullanın (.../basvuru).',
     eventsLoadError: 'Etkinlik listesi yüklenemedi',
     linkedEvent: 'Bağlı etkinlik',
     noEvent: 'Etkinlik seçilmedi',
@@ -88,9 +98,20 @@ const texts = {
     teamFileLimit: 'Team form file limit: max 10 MB (storage).',
     teamBadge: 'UNILAB Team Application',
     eventBadge: 'Event Application Form',
-    teamMenuHint: 'Team applications appear under Site Applications → Team tab.',
-    eventMenuHint: 'Event applications appear under Site Applications → Event tab.',
-    pageAddress: 'Application page',
+    teamMenuHint: 'Team applications are listed under Team Applications.',
+    eventMenuHint: 'Event forms live under Event Management → Forms. Registrations appear on the Events Dashboard.',
+    pageAddress: 'Application page (live site)',
+    connectionTitle: 'Site connection',
+    connectionOk:
+      'Connected: publish settings saved. Team forms open by slug; event forms open at /event/{slug}/basvuru.',
+    connectionNeedPublish:
+      'Form is not published — or event form has no linked event. It will not appear on the site.',
+    connectionVerifyOk: 'Site API OK',
+    connectionVerifyFail:
+      'Site API could not find this form. Check Published + linked event.',
+    openLive: 'Open on live site',
+    sitePreviewHint:
+      '“Site Preview” opens the event list. Use the /basvuru application link on this page to see form changes.',
     eventsLoadError: 'Could not load events list',
     linkedEvent: 'Linked event',
     noEvent: 'No event selected',
@@ -154,7 +175,8 @@ export default function EditSiteApplicationFormPage({
           setPackageSettings(parsePackageSettingsFromForm(data.form));
           setLinkedEvent(data.form.linked_event ?? null);
           setFields(
-            (data.form.fields as SiteApplicationFormField[] | undefined)?.map((f) => ({
+            (data.form.fields as SiteApplicationFormField[] | undefined)?.map((f, i) => ({
+              client_id: f.id || `loaded_${i}_${f.field_key}`,
               field_key: f.field_key,
               field_type: f.field_type,
               label_tr: f.label_tr,
@@ -191,19 +213,27 @@ export default function EditSiteApplicationFormPage({
     setMessage(text || null);
   };
 
-  const persistSettings = async (): Promise<{ ok: boolean; warning?: string; error?: string }> => {
+  const persistSettings = async (
+    overrides?: Partial<SiteApplicationForm>
+  ): Promise<{ ok: boolean; warning?: string; error?: string }> => {
     if (!form) return { ok: false, error: 'Form not found' };
 
-    const formType: SiteApplicationFormType = form.form_type ?? inferFormType(form);
-    if (formType === 'event' && form.is_active && !form.event_id) {
+    const next = { ...form, ...overrides };
+    const nextPackages =
+      overrides && 'package_settings' in overrides && overrides.package_settings
+        ? normalizePackageSettings(overrides.package_settings)
+        : packageSettings;
+    const formType: SiteApplicationFormType = next.form_type ?? inferFormType(next);
+    if (formType === 'event' && next.is_active && !next.event_id) {
       return { ok: false, error: t.eventRequired };
     }
     if (
       formType === 'event' &&
-      form.is_active &&
-      form.event_id &&
-      linkedEvent?.id === form.event_id &&
-      linkedEvent.is_active === false
+      next.is_active &&
+      next.event_id &&
+      linkedEvent?.id === next.event_id &&
+      linkedEvent.is_active === false &&
+      !overrides?.event_id
     ) {
       return { ok: false, error: t.eventInactive };
     }
@@ -212,20 +242,20 @@ export default function EditSiteApplicationFormPage({
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        slug_tr: form.slug_tr,
-        slug_en: form.slug_en,
-        title_tr: form.title_tr,
-        title_en: form.title_en,
-        subtitle_tr: form.subtitle_tr,
-        subtitle_en: form.subtitle_en,
-        success_message_tr: form.success_message_tr,
-        success_message_en: form.success_message_en,
-        is_active: form.is_active,
-        show_on_website: form.show_on_website,
-        allows_attachment: form.allows_attachment,
-        event_id: form.event_id,
+        slug_tr: next.slug_tr,
+        slug_en: next.slug_en,
+        title_tr: next.title_tr,
+        title_en: next.title_en,
+        subtitle_tr: next.subtitle_tr,
+        subtitle_en: next.subtitle_en,
+        success_message_tr: next.success_message_tr,
+        success_message_en: next.success_message_en,
+        is_active: next.is_active,
+        show_on_website: next.show_on_website,
+        allows_attachment: next.allows_attachment,
+        event_id: next.event_id,
         form_type: formType,
-        package_settings: packageSettings,
+        package_settings: nextPackages,
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -234,6 +264,9 @@ export default function EditSiteApplicationFormPage({
     }
     if (data.form) {
       setForm((prev) => (prev ? { ...prev, ...data.form } : data.form));
+      if (data.form.package_settings) {
+        setPackageSettings(parsePackageSettingsFromForm(data.form));
+      }
     }
     return { ok: true, warning: data.warning };
   };
@@ -268,10 +301,11 @@ export default function EditSiteApplicationFormPage({
         return;
       }
 
-      const normalized = fields.map((field, index) => ({
-        ...field,
-        order_index: index,
-      }));
+      const normalized = fields.map((field, index) => {
+        const payload = { ...field, order_index: index };
+        delete (payload as { client_id?: string }).client_id;
+        return payload;
+      });
       const res = await fetch(`/api/site-applications/forms/${id}/fields`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -281,12 +315,114 @@ export default function EditSiteApplicationFormPage({
         const data = await res.json();
         throw new Error(data.error);
       }
-      setFields(normalized);
-      showMessage(settingsResult.warning || t.savedAll, Boolean(settingsResult.warning));
+      const saved = await res.json().catch(() => null);
+      if (Array.isArray(saved?.fields)) {
+        setFields(
+          saved.fields.map(
+            (
+              f: SiteApplicationFormField & { client_id?: string },
+              i: number
+            ) => ({
+              client_id: f.id || fields[i]?.client_id || `saved_${i}_${f.field_key}`,
+              field_key: f.field_key,
+              field_type: f.field_type,
+              label_tr: f.label_tr,
+              label_en: f.label_en,
+              placeholder_tr: f.placeholder_tr || undefined,
+              placeholder_en: f.placeholder_en || undefined,
+              required: f.required,
+              order_index: f.order_index,
+              options: normalizeFieldOptions(f.options),
+              is_contact: f.is_contact,
+            })
+          )
+        );
+      } else {
+        setFields(normalized.map((f, i) => ({ ...f, client_id: fields[i]?.client_id })));
+      }
+
+      const eventIdForVerify = form?.event_id ?? null;
+      const verify = await verifyPublicFormLive({
+        formId: id,
+        eventSlug:
+          events.find((e) => e.id === eventIdForVerify)?.slug ||
+          linkedEvent?.slug ||
+          undefined,
+      });
+      if (verify.ok) {
+        const pkgInfo =
+          typeof verify.packages === 'number' && verify.packages > 0
+            ? `, ${verify.packages} paket`
+            : '';
+        showMessage(
+          settingsResult.warning ||
+            `${t.savedAll} — ${t.connectionVerifyOk}: ${verify.count} soru${pkgInfo}`,
+          Boolean(settingsResult.warning)
+        );
+      } else {
+        showMessage(
+          `${t.savedAll} — ${t.connectionVerifyFail}${verify.detail ? ` (${verify.detail})` : ''}`,
+          true
+        );
+      }
     } catch (err) {
       showMessage(err instanceof Error ? err.message : 'Error', true);
     } finally {
       setSavingFields(false);
+    }
+  };
+
+  const verifyPublicFormLive = async (opts?: {
+    eventSlug?: string;
+    formId?: string;
+  }): Promise<{
+    ok: boolean;
+    count: number;
+    packages?: number;
+    detail?: string;
+  }> => {
+    if (!form) return { ok: false, count: 0 };
+    const formTypeNow: SiteApplicationFormType = form.form_type ?? inferFormType(form);
+    const eventSlug =
+      opts?.eventSlug ||
+      events.find((e) => e.id === form.event_id)?.slug ||
+      linkedEvent?.slug ||
+      '';
+    const formSlug = locale === 'en' ? form.slug_en : form.slug_tr;
+
+    const url =
+      formTypeNow === 'event' && eventSlug
+        ? `/api/site-applications/public/forms/by-event/${encodeURIComponent(eventSlug)}?locale=${locale}`
+        : `/api/site-applications/public/forms/${encodeURIComponent(formSlug)}?locale=${locale}`;
+
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        return { ok: false, count: 0, detail: data.error || String(res.status) };
+      }
+      const count = Array.isArray(data.form?.fields) ? data.form.fields.length : 0;
+      const packages = Array.isArray(data.form?.packages) ? data.form.packages.length : 0;
+      if (opts?.formId && data.form?.id && data.form.id !== opts.formId) {
+        return {
+          ok: false,
+          count,
+          packages,
+          detail: `slug başka forma bağlı (${data.form.id})`,
+        };
+      }
+      return {
+        ok: count > 0,
+        count,
+        packages,
+        detail: count === 0 ? 'fields empty' : undefined,
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        count: 0,
+        detail: err instanceof Error ? err.message : 'fetch failed',
+      };
     }
   };
 
@@ -313,7 +449,7 @@ export default function EditSiteApplicationFormPage({
   const previewSlug = locale === 'en' ? form.slug_en : form.slug_tr;
   const eventFromList = events.find((e) => e.id === form.event_id);
   const resolvedLinkedEvent = eventFromList || linkedEvent;
-  const previewHref = isTeam
+  const liveHref = isTeam
     ? getAbsoluteTeamFormPublicPath(locale, previewSlug)
     : resolvedLinkedEvent
       ? getAbsoluteEventApplicationPath(locale, resolvedLinkedEvent.slug)
@@ -322,11 +458,16 @@ export default function EditSiteApplicationFormPage({
     Boolean(form.event_id) &&
     resolvedLinkedEvent != null &&
     resolvedLinkedEvent.is_active === false;
+  const isConnectedToSite =
+    form.is_active &&
+    !linkedEventInactive &&
+    (isTeam || Boolean(resolvedLinkedEvent));
   const defaultFieldsTemplate = getDefaultFieldsForFormType(formType);
   const displayTitle = locale === 'en' ? form.title_en : form.title_tr;
   const displaySubtitle = locale === 'en' ? form.subtitle_en : form.subtitle_tr;
 
-  const handleEventChange = (eventId: string) => {
+  const handleEventChange = async (eventId: string) => {
+    if (!form) return;
     const selected = events.find((ev) => ev.id === eventId);
     const patch: Partial<SiteApplicationForm> = { event_id: eventId || null };
     if (selected) {
@@ -335,11 +476,54 @@ export default function EditSiteApplicationFormPage({
       patch.slug_en = slugs.slug_en;
       if (!form.title_tr) patch.title_tr = `${selected.title} Başvurusu`;
       if (!form.title_en) patch.title_en = `${selected.title} Application`;
-      setLinkedEvent(selected);
+      setLinkedEvent({ ...selected, is_active: selected.is_active ?? true });
     } else {
       setLinkedEvent(null);
     }
     setForm({ ...form, ...patch });
+
+    // Persist immediately so /etkinlik/{slug}/basvuru binds to this form (packages included).
+    setSavingSettings(true);
+    showMessage('');
+    try {
+      const result = await persistSettings({
+        event_id: patch.event_id ?? null,
+        slug_tr: patch.slug_tr,
+        slug_en: patch.slug_en,
+        title_tr: patch.title_tr,
+        title_en: patch.title_en,
+      });
+      if (!result.ok) {
+        showMessage(result.error || 'Error', true);
+        return;
+      }
+      if (selected?.slug) {
+        const verify = await verifyPublicFormLive({
+          eventSlug: selected.slug,
+          formId: id,
+        });
+        if (verify.ok) {
+          showMessage(
+            result.warning ||
+              `${t.saved} — ${selected.slug} slug’ına bağlandı (${verify.count} soru${
+                verify.packages ? `, ${verify.packages} paket` : ''
+              })`,
+            Boolean(result.warning)
+          );
+        } else {
+          showMessage(
+            `${t.saved} — slug doğrulanamadı: ${verify.detail || t.connectionVerifyFail}. Yayında işaretleyip tekrar kaydedin.`,
+            true
+          );
+        }
+      } else {
+        showMessage(result.warning || t.saved, Boolean(result.warning));
+      }
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : 'Error', true);
+    } finally {
+      setSavingSettings(false);
+    }
   };
 
   return (
@@ -355,13 +539,13 @@ export default function EditSiteApplicationFormPage({
         {form.is_active &&
           (isTeam || (resolvedLinkedEvent && !linkedEventInactive)) && (
           <a
-            href={previewHref}
+            href={liveHref}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-sm text-[#990000]"
           >
             <ExternalLink className="w-4 h-4" />
-            {t.openForm}
+            {t.openLive}
           </a>
         )}
       </div>
@@ -374,6 +558,18 @@ export default function EditSiteApplicationFormPage({
         <p className="text-sm text-neutral-500 mt-1">
           {isTeam ? t.teamMenuHint : t.eventMenuHint}
         </p>
+      </div>
+
+      <div
+        className={`rounded-lg border px-4 py-3 text-sm ${
+          isConnectedToSite
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-100 dark:border-emerald-800'
+            : 'border-amber-200 bg-amber-50 text-amber-900 dark:bg-amber-900/20 dark:text-amber-100'
+        }`}
+      >
+        <p className="font-medium">{t.connectionTitle}</p>
+        <p className="mt-1">{isConnectedToSite ? t.connectionOk : t.connectionNeedPublish}</p>
+        <p className="mt-2 text-xs opacity-90">{t.sitePreviewHint}</p>
       </div>
 
       {message && (
@@ -417,12 +613,39 @@ export default function EditSiteApplicationFormPage({
                 ))}
               </select>
               {eventsError && <p className="text-xs text-red-600 mt-1">{eventsError}</p>}
+              {resolvedLinkedEvent && (
+                <p className="text-xs text-neutral-500 mt-2">
+                  {locale === 'en' ? 'Public slug' : 'Site slug'}:{' '}
+                  <span className="font-mono text-neutral-800 dark:text-neutral-200">
+                    {resolvedLinkedEvent.slug}
+                  </span>
+                  {' → '}
+                  <span className="font-mono">
+                    /{locale === 'en' ? 'en/event' : 'tr/etkinlik'}/
+                    {resolvedLinkedEvent.slug}/basvuru
+                  </span>
+                  . {locale === 'en'
+                    ? 'Packages + questions on this form are served at that URL after publish.'
+                    : 'Paketler + sorular yayından sonra bu adreste sunulur. Etkinlik seçimi otomatik kaydedilir.'}
+                </p>
+              )}
             </div>
           )}
-          <div className="sm:col-span-2">
-            <label className="text-sm font-medium block mb-1">{t.pageAddress}</label>
-            <div className="rounded-xl border bg-neutral-50 dark:bg-neutral-900/40 px-3 py-2.5 text-sm font-mono break-all">
-              {previewHref}
+          <div className="sm:col-span-2 space-y-2">
+            <label className="text-sm font-medium block">{t.pageAddress}</label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="flex-1 rounded-xl border bg-neutral-50 dark:bg-neutral-900/40 px-3 py-2.5 text-sm font-mono break-all">
+                {liveHref}
+              </div>
+              <a
+                href={liveHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-1 px-3 py-2 rounded-xl border text-sm text-[#990000] shrink-0"
+              >
+                <ExternalLink className="w-4 h-4" />
+                {t.openLive}
+              </a>
             </div>
           </div>
           <Field label={t.titleTr} value={form.title_tr} onChange={(v) => setForm({ ...form, title_tr: v })} />
@@ -465,16 +688,19 @@ export default function EditSiteApplicationFormPage({
         <section className="lg:col-span-3 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">{t.fields}</h2>
-            {fields.length === 0 && (
-              <button
-                type="button"
-                onClick={() => setFields(defaultFieldsTemplate)}
-                className="text-sm px-3 py-1.5 border rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800"
-              >
-                {t.defaultFields}
-              </button>
-            )}
+            <span className="text-xs text-neutral-500">
+              {fields.length} {locale === 'en' ? 'questions' : 'soru'}
+            </span>
           </div>
+          {fields.length === 0 && (
+            <button
+              type="button"
+              onClick={() => setFields(defaultFieldsTemplate)}
+              className="text-sm px-3 py-1.5 border rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800"
+            >
+              {t.defaultFields}
+            </button>
+          )}
           <FormFieldEditor
             locale={locale}
             fields={fields}
@@ -499,6 +725,8 @@ export default function EditSiteApplicationFormPage({
             subtitle={displaySubtitle}
             fields={fields}
             packages={!isTeam ? packageSettings : undefined}
+            formType={isTeam ? 'team' : 'event'}
+            allowsAttachment={form.allows_attachment}
           />
         </aside>
       </div>

@@ -82,6 +82,8 @@ export interface SiteApplicationFormInput {
 }
 
 export interface SiteApplicationFormFieldInput {
+  /** Stable UI key only — not persisted */
+  client_id?: string;
   field_key: string;
   field_type: SiteApplicationFieldType;
   label_tr: string;

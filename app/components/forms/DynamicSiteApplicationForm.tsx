@@ -44,6 +44,9 @@ interface DynamicSiteApplicationFormProps {
   formSlug?: string;
   /** Event slug from /etkinlik/{eventSlug}/basvuru */
   eventSlug?: string;
+  /** Admin editor preview — same UI as the public form */
+  previewConfig?: PublicSiteApplicationForm | null;
+  previewMode?: boolean;
 }
 
 const ui = {
@@ -153,14 +156,20 @@ export default function DynamicSiteApplicationForm({
   locale,
   formSlug,
   eventSlug,
+  previewConfig = null,
+  previewMode = false,
 }: DynamicSiteApplicationFormProps) {
   const t = ui[locale as keyof typeof ui] || ui.tr;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
-  const [formConfig, setFormConfig] = useState<PublicSiteApplicationForm | null>(null);
-  const [resolvedFormSlug, setResolvedFormSlug] = useState<string>('');
-  const [loading, setLoading] = useState(true);
+  const [formConfig, setFormConfig] = useState<PublicSiteApplicationForm | null>(
+    previewMode ? previewConfig : null
+  );
+  const [resolvedFormSlug, setResolvedFormSlug] = useState<string>(
+    previewMode ? previewConfig?.slug || '' : ''
+  );
+  const [loading, setLoading] = useState(!previewMode);
   const [values, setValues] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
@@ -187,10 +196,20 @@ export default function DynamicSiteApplicationForm({
       locale: locale === 'en' ? 'en' : 'tr',
     });
 
-  const isEventForm = Boolean(eventSlug || (formConfig?.packages?.length ?? 0) > 0);
+  const isEventForm = Boolean(
+    eventSlug || (formConfig?.packages?.length ?? 0) > 0 || formConfig?.form_type === 'event'
+  );
   const [selectedPackage, setSelectedPackage] = useState<RegistrationPackageId>('free');
 
   useEffect(() => {
+    if (previewMode) {
+      setFormConfig(previewConfig);
+      setResolvedFormSlug(previewConfig?.slug || '');
+      setLoading(false);
+      setSuccess(false);
+      return;
+    }
+
     const load = async () => {
       try {
         const url = eventSlug
@@ -221,7 +240,7 @@ export default function DynamicSiteApplicationForm({
       setFormConfig(null);
       setLoading(false);
     }
-  }, [formSlug, eventSlug, locale]);
+  }, [previewMode, previewConfig, formSlug, eventSlug, locale]);
 
   const progress = useMemo(() => {
     if (!formConfig) return 0;
@@ -344,6 +363,7 @@ export default function DynamicSiteApplicationForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (previewMode) return;
     if (!formConfig) return;
 
     const { valid, fieldErrors } = validateClient();
@@ -516,7 +536,11 @@ export default function DynamicSiteApplicationForm({
       <FormShell>
         <div className="rounded-3xl border border-red-200 bg-red-50/90 dark:bg-red-950/30 p-8 text-center text-red-700 dark:text-red-300">
           <AlertCircle className="w-10 h-10 mx-auto mb-3 opacity-80" />
-          {t.notFound}
+          {previewMode
+            ? locale === 'tr'
+              ? 'Önizleme için soru ekleyin.'
+              : 'Add questions to preview the form.'
+            : t.notFound}
         </div>
       </FormShell>
     );
@@ -558,8 +582,14 @@ export default function DynamicSiteApplicationForm({
 
   return (
     <FormShell>
-      <div className="grid lg:grid-cols-12 gap-8 lg:gap-10 items-start">
-        {/* Sol panel — masaüstünde nefes alan alan */}
+      <div
+        className={
+          previewMode
+            ? 'w-full'
+            : 'grid lg:grid-cols-12 gap-8 lg:gap-10 items-start'
+        }
+      >
+        {!previewMode && (
         <aside className="lg:col-span-4 space-y-5 order-1">
           <div className="rounded-3xl bg-gradient-to-br from-[#990000] via-[#b30000] to-rose-700 p-6 md:p-8 text-white shadow-xl shadow-[#990000]/20">
             <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider bg-white/15 rounded-full px-3 py-1 mb-4">
@@ -600,16 +630,30 @@ export default function DynamicSiteApplicationForm({
             )}
           </div>
         </aside>
+        )}
 
         {/* Form kartı */}
-        <div className="lg:col-span-8 order-2">
+        <div className={previewMode ? 'w-full' : 'lg:col-span-8 order-2'}>
           <form
             ref={formRef}
             onSubmit={handleSubmit}
-            className="rounded-3xl border border-neutral-200/80 dark:border-neutral-700 bg-white/90 dark:bg-neutral-800/70 backdrop-blur-sm shadow-xl shadow-neutral-200/30 dark:shadow-none overflow-hidden"
+            className={`rounded-3xl border border-neutral-200/80 dark:border-neutral-700 bg-white/90 dark:bg-neutral-800/70 backdrop-blur-sm shadow-xl shadow-neutral-200/30 dark:shadow-none overflow-hidden ${
+              previewMode ? 'pointer-events-auto' : ''
+            }`}
           >
-            <div className="px-6 md:px-10 pt-8 pb-6 border-b border-neutral-100 dark:border-neutral-700/80 bg-gradient-to-r from-neutral-50/80 to-white dark:from-neutral-800/50 dark:to-neutral-800/30">
-              <h1 className="text-2xl md:text-3xl font-bold text-neutral-900 dark:text-neutral-50 mb-2">
+            {previewMode && (
+              <div className="px-4 py-2 bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200/80 dark:border-amber-800 text-[11px] font-medium text-amber-800 dark:text-amber-200">
+                {locale === 'tr'
+                  ? 'Canlı form önizlemesi — gönderim kapalı. Kaydet ve yayınla ile siteye yazılır.'
+                  : 'Live form preview — submit disabled. Save & publish to push to the site.'}
+              </div>
+            )}
+            <div className={`border-b border-neutral-100 dark:border-neutral-700/80 bg-gradient-to-r from-neutral-50/80 to-white dark:from-neutral-800/50 dark:to-neutral-800/30 ${
+              previewMode ? 'px-5 pt-5 pb-4' : 'px-6 md:px-10 pt-8 pb-6'
+            }`}>
+              <h1 className={`font-bold text-neutral-900 dark:text-neutral-50 mb-2 ${
+                previewMode ? 'text-xl' : 'text-2xl md:text-3xl'
+              }`}>
                 {formConfig.title}
               </h1>
               {formConfig.subtitle && (
@@ -1001,7 +1045,7 @@ export default function DynamicSiteApplicationForm({
 
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || previewMode}
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-10 py-3.5 rounded-2xl bg-gradient-to-r from-[#990000] to-rose-700 text-white font-semibold shadow-lg shadow-[#990000]/25 hover:shadow-xl hover:shadow-[#990000]/30 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 disabled:hover:scale-100 transition-all duration-200"
               >
                 {submitting ? (

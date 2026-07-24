@@ -48,7 +48,7 @@ type Totals = {
 
 const texts = {
   tr: {
-    title: 'Etkinlik Özeti',
+    title: 'Dashboard',
     subtitle: 'Etkinliklere göre kayıtlar, sertifika paketleri ve ödemeler',
     refresh: 'Yenile',
     search: 'Etkinlik ara...',
@@ -82,7 +82,7 @@ const texts = {
     noApps: 'Bu etkinlikte henüz kayıt yok',
   },
   en: {
-    title: 'Events Overview',
+    title: 'Dashboard',
     subtitle: 'Registrations, certificate packages and payments by event',
     refresh: 'Refresh',
     search: 'Search events...',

@@ -58,11 +58,11 @@ const FIELD_TYPE_META: Record<
 
 const texts = {
   tr: {
-    question: 'Soru',
-    questionEn: 'Soru (EN)',
+    question: 'Soru metni (TR) — sitede Türkçe bu görünür',
+    questionEn: 'Soru metni (EN) — English site',
     type: 'Soru türü',
     required: 'Zorunlu',
-    placeholder: 'Yardımcı metin (isteğe bağlı)',
+    placeholder: 'Yardımcı metin (TR)',
     placeholderEn: 'Placeholder (EN)',
     advanced: 'Gelişmiş ayarlar',
     fieldKey: 'Alan anahtarı',
@@ -84,14 +84,18 @@ const texts = {
     previewLong: 'Uzun yanıt metni…',
     fileLimitTeam: 'Ekip formu dosya limiti (depolama)',
     fileLimitEvent: 'Dosya boyutu limiti',
+    localeHint:
+      'Üst satır = Türkçe (TR site). Alt satır = İngilizce. Sağdaki önizleme seçili panele göre güncellenir; canlı sitede görmek için “Kaydet ve yayınla” şart.',
+    badgeTr: 'TR',
+    badgeEn: 'EN',
   },
   en: {
-    question: 'Question',
-    questionEn: 'Question (EN)',
+    question: 'Question text (EN) — shown on English site',
+    questionEn: 'Question text (TR) — Turkish site',
     type: 'Question type',
     required: 'Required',
-    placeholder: 'Helper text (optional)',
-    placeholderEn: 'Placeholder (EN)',
+    placeholder: 'Helper text (EN)',
+    placeholderEn: 'Helper text (TR)',
     advanced: 'Advanced settings',
     fieldKey: 'Field key',
     options: 'Options',
@@ -112,6 +116,10 @@ const texts = {
     previewLong: 'Long answer text…',
     fileLimitTeam: 'Team form file limit (storage)',
     fileLimitEvent: 'File size limit',
+    localeHint:
+      'Primary row follows UI language. Right preview updates live; use Save & publish to push to the public site.',
+    badgeTr: 'TR',
+    badgeEn: 'EN',
   },
 };
 
@@ -480,19 +488,23 @@ export default function FormFieldEditor({
 
   const handleLabelChange = (index: number, labelTr: string, field: SiteApplicationFormFieldInput) => {
     const patch: Partial<SiteApplicationFormFieldInput> = { label_tr: labelTr };
-    const looksAuto =
-      !field.field_key ||
-      field.field_key.startsWith('field_') ||
-      field.field_key === fieldKeyFromLabel(field.label_tr || '', new Set());
-
-    if (looksAuto && labelTr.trim()) {
-      const others = new Set(fields.filter((_, i) => i !== index).map((f) => f.field_key));
-      patch.field_key = fieldKeyFromLabel(labelTr, others);
-    }
+    // Only fill empty EN — do not rewrite field_key while typing (remounts inputs).
     if (!field.label_en?.trim() && labelTr.trim()) {
       patch.label_en = labelTr;
     }
     updateField(index, patch, setFields);
+  };
+
+  const syncFieldKeyFromLabel = (index: number, field: SiteApplicationFormFieldInput) => {
+    const labelTr = field.label_tr?.trim();
+    if (!labelTr) return;
+    const looksAuto =
+      !field.field_key ||
+      field.field_key.startsWith('field_') ||
+      field.field_key === fieldKeyFromLabel(field.label_tr || '', new Set());
+    if (!looksAuto) return;
+    const others = new Set(fields.filter((_, i) => i !== index).map((f) => f.field_key));
+    updateField(index, { field_key: fieldKeyFromLabel(labelTr, others) }, setFields);
   };
 
   const handleTypeChange = (index: number, field: SiteApplicationFormFieldInput, nextType: SiteApplicationFieldType) => {
@@ -520,6 +532,10 @@ export default function FormFieldEditor({
     setFields((prev) => [
       ...prev,
       {
+        client_id:
+          typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `new_${Date.now()}_${prev.length}`,
         field_key: `field_${prev.length + 1}`,
         field_type: 'text',
         label_tr: '',
@@ -549,28 +565,41 @@ export default function FormFieldEditor({
 
   return (
     <div className="space-y-4">
+      <p className="text-xs text-neutral-500 dark:text-neutral-400 px-1">{t.localeHint}</p>
       {fields.map((field, index) => {
         const typeMeta = FIELD_TYPE_META[field.field_type] || FIELD_TYPE_META.text;
+        const rowKey = field.client_id || `${field.field_key}-${index}`;
 
         return (
           <div
-            key={`${field.field_key}-${index}`}
+            key={rowKey}
             className="rounded-2xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800/80 shadow-sm overflow-visible"
           >
             <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3 border-b border-neutral-100 dark:border-neutral-700/80">
               <div className="flex-1 min-w-0 space-y-3">
-                <input
-                  value={field.label_tr}
-                  onChange={(e) => handleLabelChange(index, e.target.value, field)}
-                  placeholder={t.question}
-                  className="w-full text-lg font-medium bg-transparent border-0 border-b border-transparent focus:border-[#990000] focus:outline-none pb-1 text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400"
-                />
-                <input
-                  value={field.label_en}
-                  onChange={(e) => updateField(index, { label_en: e.target.value }, setFields)}
-                  placeholder={t.questionEn}
-                  className="w-full text-sm bg-transparent border-0 border-b border-neutral-200 dark:border-neutral-600 focus:border-[#990000] focus:outline-none pb-1 text-neutral-600 dark:text-neutral-400 placeholder:text-neutral-400"
-                />
+                <div className="space-y-1">
+                  <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-[#990000]/10 text-[#990000]">
+                    {t.badgeTr}
+                  </span>
+                  <input
+                    value={field.label_tr}
+                    onChange={(e) => handleLabelChange(index, e.target.value, field)}
+                    onBlur={() => syncFieldKeyFromLabel(index, field)}
+                    placeholder={t.question}
+                    className="w-full text-lg font-medium bg-transparent border-0 border-b border-transparent focus:border-[#990000] focus:outline-none pb-1 text-neutral-900 dark:text-neutral-100 placeholder:text-neutral-400"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-neutral-200 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300">
+                    {t.badgeEn}
+                  </span>
+                  <input
+                    value={field.label_en}
+                    onChange={(e) => updateField(index, { label_en: e.target.value }, setFields)}
+                    placeholder={t.questionEn}
+                    className="w-full text-sm bg-transparent border-0 border-b border-neutral-200 dark:border-neutral-600 focus:border-[#990000] focus:outline-none pb-1 text-neutral-600 dark:text-neutral-400 placeholder:text-neutral-400"
+                  />
+                </div>
               </div>
               <FieldTypePicker
                 value={field.field_type}

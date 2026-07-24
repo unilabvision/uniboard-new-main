@@ -31,8 +31,8 @@ type FormWithEvent = SiteApplicationForm & {
 
 const texts = {
   tr: {
-    title: 'Başvuru Formları',
-    subtitle: 'Ekip ve etkinlik başvuru formlarını ayrı ayrı yönetin',
+    title: 'Ekip Formları',
+    subtitle: 'UNILAB ekip başvuru formlarını yönetin',
     newTeamForm: 'Yeni Ekip Formu',
     newEventForm: 'Yeni Etkinlik Formu',
     tabTeam: 'Ekip Başvuruları',
@@ -57,8 +57,8 @@ const texts = {
     noLinkedEvent: '—',
   },
   en: {
-    title: 'Application Forms',
-    subtitle: 'Manage team and event application forms separately',
+    title: 'Team Forms',
+    subtitle: 'Manage UNILAB team application forms',
     newTeamForm: 'New Team Form',
     newEventForm: 'New Event Form',
     tabTeam: 'Team Applications',

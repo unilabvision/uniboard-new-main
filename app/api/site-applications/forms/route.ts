@@ -111,6 +111,13 @@ export async function POST(request: NextRequest) {
     form_type: formType,
   };
 
+  if (eventId) {
+    await authResult.supabase!
+      .from(siteApplicationsDb.forms)
+      .update({ event_id: null })
+      .eq('event_id', eventId);
+  }
+
   const { data, error } = await authResult.supabase!
     .from(siteApplicationsDb.forms)
     .insert(insertPayload)

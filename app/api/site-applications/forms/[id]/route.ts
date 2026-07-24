@@ -79,6 +79,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (body.show_on_website !== undefined) updates.show_on_website = body.show_on_website;
   if (body.allows_attachment !== undefined) updates.allows_attachment = body.allows_attachment;
   if (body.event_id !== undefined) updates.event_id = body.event_id || null;
+  if (body.form_type === 'team' || body.form_type === 'event') {
+    updates.form_type = body.form_type;
+  }
 
   if (body.package_settings !== undefined) {
     const normalized = normalizePackageSettings(body.package_settings);
@@ -94,6 +97,20 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     updates.package_settings = normalized;
   }
 
+  // One active event → one form: release this event_id from any other forms
+  // so /etkinlik/{slug}/basvuru always resolves to this form (packages + fields).
+  const nextEventId =
+    typeof updates.event_id === 'string' && updates.event_id
+      ? updates.event_id
+      : null;
+  if (nextEventId) {
+    await authResult.supabase!
+      .from(siteApplicationsDb.forms)
+      .update({ event_id: null })
+      .eq('event_id', nextEventId)
+      .neq('id', id);
+  }
+
   let { data, error } = await authResult.supabase!
     .from(siteApplicationsDb.forms)
     .update(updates)
@@ -101,9 +118,25 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     .select('*')
     .single();
 
+  if (error && updates.form_type !== undefined) {
+    const retryWithoutType = { ...updates };
+    delete retryWithoutType.form_type;
+    const retry = await authResult.supabase!
+      .from(siteApplicationsDb.forms)
+      .update(retryWithoutType)
+      .eq('id', id)
+      .select('*')
+      .single();
+    if (!retry.error) {
+      data = retry.data;
+      error = null;
+    }
+  }
+
   if (error && updates.package_settings !== undefined) {
     const retryUpdates = { ...updates };
     delete retryUpdates.package_settings;
+    delete retryUpdates.form_type;
     const retry = await authResult.supabase!
       .from(siteApplicationsDb.forms)
       .update(retryUpdates)
@@ -123,6 +156,27 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Team forms: only one form per public slug should be on the website menu
+  if (
+    data &&
+    !data.event_id &&
+    data.show_on_website &&
+    (data.slug_tr || data.slug_en)
+  ) {
+    const slugFilters = [data.slug_tr, data.slug_en]
+      .filter(Boolean)
+      .map((s) => `slug_tr.eq.${s},slug_en.eq.${s}`)
+      .join(',');
+    if (slugFilters) {
+      await authResult.supabase!
+        .from(siteApplicationsDb.forms)
+        .update({ show_on_website: false })
+        .or(slugFilters)
+        .neq('id', id)
+        .is('event_id', null);
+    }
   }
 
   return NextResponse.json({ form: data });

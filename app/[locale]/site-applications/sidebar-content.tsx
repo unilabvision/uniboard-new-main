@@ -11,7 +11,7 @@ import {
 
 export const siteApplicationsSidebarContent = {
   tr: {
-    title: 'Site Başvuruları',
+    title: 'Ekip Başvuruları',
     items: [
       { name: 'Dashboard', href: '/', icon: Home, capability: 'dashboard' },
       { name: 'Başvurular', href: '/applications', icon: Users, capability: 'applications' },
@@ -24,7 +24,7 @@ export const siteApplicationsSidebarContent = {
     ],
   },
   en: {
-    title: 'Site Applications',
+    title: 'Team Applications',
     items: [
       { name: 'Dashboard', href: '/', icon: Home, capability: 'dashboard' },
       { name: 'Applications', href: '/applications', icon: Users, capability: 'applications' },
