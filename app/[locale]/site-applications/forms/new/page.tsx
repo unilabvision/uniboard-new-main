@@ -84,9 +84,7 @@ function NewSiteApplicationFormContent({ locale }: { locale: string }) {
   const formsBase = isEventsHub
     ? `/${locale}/events/forms`
     : `/${locale}/site-applications/forms`;
-  const formType = (
-    isEventsHub || searchParams.get('type') === 'event' ? 'event' : 'team'
-  ) as SiteApplicationFormType;
+  const formType = (isEventsHub ? 'event' : 'team') as SiteApplicationFormType;
   const { isSuperAdmin, loading: modulesLoading } = useUserModules();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +95,13 @@ function NewSiteApplicationFormContent({ locale }: { locale: string }) {
   const [showCustomSlug, setShowCustomSlug] = useState(false);
   const t = texts[locale as keyof typeof texts] || texts.tr;
   const isTeam = formType === 'team';
+
+  // Site Applications hub is team-only — bounce event creates to Events module
+  useEffect(() => {
+    if (!isEventsHub && searchParams.get('type') === 'event') {
+      router.replace(`/${locale}/events/forms/new?type=event`);
+    }
+  }, [isEventsHub, searchParams, locale, router]);
 
   const [form, setForm] = useState(isTeam ? emptyTeamFormState() : emptyEventFormState());
 

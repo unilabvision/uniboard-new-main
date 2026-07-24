@@ -15,11 +15,15 @@ import {
 } from '@/app/api/site-applications/access/_helpers';
 import type { SiteApplicationFormInput } from '@/app/types/siteApplicationForms';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const authResult = await requireSiteApplicationsOrEventsUser('forms');
   if (authResult.error) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
+
+  const typeFilter = request.nextUrl.searchParams.get('type');
+  const wantTeam = typeFilter === 'team';
+  const wantEvent = typeFilter === 'event';
 
   const { data, error } = await authResult.supabase!
     .from(siteApplicationsDb.forms)
@@ -30,12 +34,39 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const forms = (await attachLinkedEventsToForms(authResult.supabase!, data ?? [])).map(
-    (form) => ({
-      ...form,
-      form_type: inferFormType(form),
-    })
+  let forms = (await attachLinkedEventsToForms(authResult.supabase!, data ?? [])).map(
+    (form) => {
+      const form_type = inferFormType(form);
+      return { ...form, form_type };
+    }
   );
+
+  if (wantTeam) {
+    forms = forms.filter((form) => form.form_type === 'team');
+  } else if (wantEvent) {
+    forms = forms.filter((form) => form.form_type === 'event');
+  }
+
+  // Soft-repair: wrong form_type='team' on event-titled rows confuses mail/nav.
+  // Persist corrected type when we can (best-effort, non-blocking).
+  const repairs = forms.filter((form) => {
+    const raw = (data ?? []).find((row) => row.id === form.id);
+    return Boolean(raw && raw.form_type !== form.form_type && form.form_type === 'event');
+  });
+  if (repairs.length > 0) {
+    void Promise.all(
+      repairs.map((form) =>
+        authResult.supabase!
+          .from(siteApplicationsDb.forms)
+          .update({
+            form_type: 'event',
+            // Keep off About Us menu — event forms live under /etkinlik/{slug}/basvuru
+            show_on_website: form.event_id ? form.show_on_website : false,
+          })
+          .eq('id', form.id)
+      )
+    ).catch((err) => console.error('form_type repair failed:', err));
+  }
 
   return NextResponse.json({ forms });
 }

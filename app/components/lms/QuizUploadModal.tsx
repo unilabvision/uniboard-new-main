@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { 
   HelpCircle, Plus, X, Save, Trash2, ArrowUp, ArrowDown, 
-  AlertCircle, CheckCircle, Settings, FileText
+  AlertCircle, CheckCircle, Settings, FileText, Sparkles, Loader2
 } from 'lucide-react';
 import { CourseQuiz, QuizQuestion, QuizConfig } from '../../types/course';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
@@ -20,6 +20,8 @@ interface QuizUploadModalProps {
   onClose: () => void;
   orderIndex?: number;
   existingQuiz?: CourseQuiz;
+  courseTitle?: string;
+  lessonTitle?: string;
 }
 
 interface UploadState {
@@ -44,7 +46,9 @@ export default function QuizUploadModal({
   onQuizUploaded, 
   onClose, 
   orderIndex = 0,
-  existingQuiz 
+  existingQuiz,
+  courseTitle,
+  lessonTitle,
 }: QuizUploadModalProps) {
   
   const [formData, setFormData] = useState<QuizFormData>({
@@ -65,6 +69,76 @@ export default function QuizUploadModal({
   
   const [activeTab, setActiveTab] = useState<'basic' | 'questions' | 'settings'>('basic');
   const [editingQuestion, setEditingQuestion] = useState<string | null>(null);
+
+  const [showAiPanel, setShowAiPanel] = useState(false);
+  const [aiTopic, setAiTopic] = useState(lessonTitle || existingQuiz?.title || '');
+  const [aiQuestionCount, setAiQuestionCount] = useState(5);
+  const [aiDifficulty, setAiDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
+  const [aiReplace, setAiReplace] = useState(false);
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiError, setAiError] = useState('');
+
+  const generateQuestionsWithAi = async () => {
+    const topic = aiTopic.trim() || formData.title.trim();
+    if (!topic) {
+      setAiError('Konu veya quiz başlığı girin.');
+      return;
+    }
+
+    setAiGenerating(true);
+    setAiError('');
+    try {
+      const res = await fetch('/api/lms/quiz/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic,
+          lessonTitle: lessonTitle || undefined,
+          courseTitle: courseTitle || undefined,
+          questionCount: aiQuestionCount,
+          difficulty: aiDifficulty,
+          language: 'tr',
+          extraContext: formData.description || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Quiz üretilemedi');
+      }
+
+      const generated: QuizQuestion[] = (data.quiz?.questions || []).map(
+        (q: QuizQuestion) => ({
+          question: q.question,
+          options: q.options?.length ? q.options : ['Seçenek 1', 'Seçenek 2', 'Seçenek 3', 'Seçenek 4'],
+          correct: typeof q.correct === 'number' ? q.correct : 0,
+          points: q.points || 5,
+          explanation: q.explanation || '',
+        })
+      );
+
+      if (generated.length === 0) {
+        throw new Error('AI soru döndürmedi');
+      }
+
+      setFormData((prev) => ({
+        ...prev,
+        title: prev.title.trim() || data.quiz?.title || prev.title,
+        description: prev.description?.trim()
+          ? prev.description
+          : data.quiz?.description || prev.description,
+        questions: aiReplace ? generated : [...prev.questions, ...generated],
+      }));
+      setShowAiPanel(false);
+      setUploadState({
+        status: 'idle',
+        message: `${generated.length} soru AI ile eklendi — kaydetmeden önce gözden geçirin.`,
+      });
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : 'Quiz üretilemedi');
+    } finally {
+      setAiGenerating(false);
+    }
+  };
 
   // Add new question
   const addQuestion = () => {
@@ -563,24 +637,161 @@ export default function QuizUploadModal({
             {/* Questions Tab */}
             {activeTab === 'questions' && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
                   <h3 className="text-lg font-medium text-neutral-900 dark:text-neutral-100">
                     Quiz Soruları
                   </h3>
-                  <button
-                    onClick={addQuestion}
-                    className="inline-flex items-center px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md transition-colors text-sm font-medium"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Soru Ekle
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAiPanel((v) => !v);
+                        setAiError('');
+                      }}
+                      className="inline-flex items-center px-4 py-2 border border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-md transition-colors text-sm font-medium"
+                    >
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      Yapay Zeka
+                    </button>
+                    <button
+                      type="button"
+                      onClick={addQuestion}
+                      className="inline-flex items-center px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md transition-colors text-sm font-medium"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Soru Ekle
+                    </button>
+                  </div>
                 </div>
+
+                {showAiPanel && (
+                  <div className="rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50/60 dark:bg-purple-950/30 p-4 space-y-3">
+                    <div className="flex items-start gap-2">
+                      <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                          AI ile soru üret
+                        </p>
+                        <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                          Konuyu yazın; Gemini çoktan seçmeli sorular üretir. Kaydetmeden önce düzenleyebilirsiniz.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+                        Konu / içerik *
+                      </label>
+                      <textarea
+                        value={aiTopic}
+                        onChange={(e) => setAiTopic(e.target.value)}
+                        rows={2}
+                        disabled={aiGenerating}
+                        className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        placeholder="Örn: Embriyoloji — blastokist oluşumu ve implantasyon aşamaları"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+                          Soru sayısı
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={20}
+                          value={aiQuestionCount}
+                          disabled={aiGenerating}
+                          onChange={(e) =>
+                            setAiQuestionCount(
+                              Math.min(20, Math.max(1, parseInt(e.target.value, 10) || 5))
+                            )
+                          }
+                          className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-800 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
+                          Zorluk
+                        </label>
+                        <select
+                          value={aiDifficulty}
+                          disabled={aiGenerating}
+                          onChange={(e) =>
+                            setAiDifficulty(e.target.value as 'easy' | 'medium' | 'hard')
+                          }
+                          className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-800 text-sm"
+                        >
+                          <option value="easy">Kolay</option>
+                          <option value="medium">Orta</option>
+                          <option value="hard">Zor</option>
+                        </select>
+                      </div>
+                      <div className="flex items-end">
+                        <label className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300 pb-2">
+                          <input
+                            type="checkbox"
+                            checked={aiReplace}
+                            disabled={aiGenerating}
+                            onChange={(e) => setAiReplace(e.target.checked)}
+                            className="w-4 h-4 text-purple-600 border-neutral-300 rounded focus:ring-purple-500"
+                          />
+                          Mevcut soruları değiştir
+                        </label>
+                      </div>
+                    </div>
+
+                    {aiError && (
+                      <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        {aiError}
+                      </div>
+                    )}
+
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        disabled={aiGenerating}
+                        onClick={() => setShowAiPanel(false)}
+                        className="px-3 py-1.5 text-sm text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-md"
+                      >
+                        Kapat
+                      </button>
+                      <button
+                        type="button"
+                        disabled={aiGenerating}
+                        onClick={generateQuestionsWithAi}
+                        className="inline-flex items-center px-4 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-60 text-white rounded-md text-sm font-medium"
+                      >
+                        {aiGenerating ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Üretiliyor...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4 mr-2" />
+                            Soruları üret
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {uploadState.message && uploadState.status === 'idle' && (
+                  <div className="flex items-center gap-2 text-sm text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-900/20 px-3 py-2 rounded-md">
+                    <Sparkles className="w-4 h-4 shrink-0" />
+                    {uploadState.message}
+                  </div>
+                )}
 
                 {formData.questions.length === 0 ? (
                   <div className="text-center py-12 text-neutral-500 dark:text-neutral-400">
                     <HelpCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
                     <p>Henüz soru eklenmemiş</p>
-                    <p className="text-sm mt-2">İlk soruyu ekleyerek başlayın</p>
+                    <p className="text-sm mt-2">Manuel ekleyin veya Yapay Zeka ile üretin</p>
                   </div>
                 ) : (
                   <div className="space-y-4">

@@ -163,6 +163,161 @@ export class GeminiService {
     }
   }
 
+  /**
+   * Eğitim konusu / ders içeriğinden çoktan seçmeli quiz soruları üretir.
+   */
+  async generateQuizQuestions(input: {
+    topic: string;
+    lessonTitle?: string;
+    courseTitle?: string;
+    questionCount?: number;
+    difficulty?: 'easy' | 'medium' | 'hard';
+    language?: 'tr' | 'en';
+    extraContext?: string;
+  }): Promise<{
+    title: string;
+    description: string;
+    questions: Array<{
+      question: string;
+      options: string[];
+      correct: number;
+      points: number;
+      explanation?: string;
+    }>;
+  }> {
+    const count = Math.min(20, Math.max(1, input.questionCount ?? 5));
+    const lang = input.language === 'en' ? 'en' : 'tr';
+    const difficulty = input.difficulty || 'medium';
+    const difficultyLabel =
+      difficulty === 'easy'
+        ? lang === 'en'
+          ? 'easy'
+          : 'kolay'
+        : difficulty === 'hard'
+          ? lang === 'en'
+            ? 'hard'
+            : 'zor'
+          : lang === 'en'
+            ? 'medium'
+            : 'orta';
+
+    const prompt =
+      lang === 'en'
+        ? `Create a multiple-choice quiz for an online course lesson.
+
+Course: ${input.courseTitle || 'N/A'}
+Lesson: ${input.lessonTitle || 'N/A'}
+Topic: ${input.topic}
+Difficulty: ${difficultyLabel}
+Number of questions: ${count}
+${input.extraContext ? `Extra context:\n${input.extraContext}` : ''}
+
+Rules:
+- Exactly ${count} questions
+- Each question has exactly 4 options
+- "correct" is the 0-based index of the right option
+- points: 5 for each question
+- Include a short explanation for each question
+- Educational, accurate, no trick questions
+- Respond with ONLY valid JSON (no markdown fences):
+
+{
+  "title": "quiz title",
+  "description": "short description",
+  "questions": [
+    {
+      "question": "...",
+      "options": ["A", "B", "C", "D"],
+      "correct": 0,
+      "points": 5,
+      "explanation": "..."
+    }
+  ]
+}`
+        : `Online bir kurs dersi için çoktan seçmeli quiz oluştur.
+
+Kurs: ${input.courseTitle || 'Belirtilmedi'}
+Ders: ${input.lessonTitle || 'Belirtilmedi'}
+Konu: ${input.topic}
+Zorluk: ${difficultyLabel}
+Soru sayısı: ${count}
+${input.extraContext ? `Ek bağlam:\n${input.extraContext}` : ''}
+
+Kurallar:
+- Tam olarak ${count} soru
+- Her soruda tam 4 seçenek
+- "correct" doğru seçeneğin 0 tabanlı indeksi
+- Her soru 5 puan
+- Her soruya kısa açıklama ekle
+- Eğitici, doğru bilgi; aldatmaca soru yok
+- YALNIZCA geçerli JSON döndür (markdown kod bloğu kullanma):
+
+{
+  "title": "quiz başlığı",
+  "description": "kısa açıklama",
+  "questions": [
+    {
+      "question": "...",
+      "options": ["A", "B", "C", "D"],
+      "correct": 0,
+      "points": 5,
+      "explanation": "..."
+    }
+  ]
+}`;
+
+    const text = await this.generateContentWithFallback(prompt, 4096).then((r) => r.text);
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('AI geçerli JSON quiz üretmedi');
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]) as {
+      title?: string;
+      description?: string;
+      questions?: Array<{
+        question?: string;
+        options?: string[];
+        correct?: number;
+        points?: number;
+        explanation?: string;
+      }>;
+    };
+
+    const questions = (parsed.questions || [])
+      .map((q) => {
+        const options = Array.isArray(q.options)
+          ? q.options.map((o) => String(o || '').trim()).filter(Boolean).slice(0, 6)
+          : [];
+        while (options.length < 2) options.push(`Seçenek ${options.length + 1}`);
+        const correct =
+          typeof q.correct === 'number' && q.correct >= 0 && q.correct < options.length
+            ? q.correct
+            : 0;
+        return {
+          question: String(q.question || '').trim(),
+          options,
+          correct,
+          points: typeof q.points === 'number' && q.points > 0 ? q.points : 5,
+          explanation: q.explanation ? String(q.explanation).trim() : '',
+        };
+      })
+      .filter((q) => q.question && q.options.length >= 2)
+      .slice(0, count);
+
+    if (questions.length === 0) {
+      throw new Error('AI soru üretemedi — konuyu biraz daha ayrıntılı yazın');
+    }
+
+    return {
+      title:
+        String(parsed.title || '').trim() ||
+        (lang === 'en' ? `${input.topic} Quiz` : `${input.topic} Quiz`),
+      description: String(parsed.description || '').trim(),
+      questions,
+    };
+  }
+
   /** Aktif / son başarılı model adı */
   getActiveModelName(): string | null {
     return this.activeModelName;

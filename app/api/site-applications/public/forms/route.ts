@@ -5,7 +5,10 @@ import {
   getAbsoluteEventApplicationPath,
 } from '@/app/lib/siteApplications/config';
 import { attachLinkedEventsToForms } from '@/app/lib/siteApplications/events';
-import { getAbsoluteTeamFormPublicPath } from '@/app/lib/siteApplications/formTypes';
+import {
+  getAbsoluteTeamFormPublicPath,
+  inferFormType,
+} from '@/app/lib/siteApplications/formTypes';
 import {
   parsePackageSettingsFromForm,
   toPublicPackages,
@@ -29,7 +32,7 @@ export async function GET(request: NextRequest) {
     const { data, error } = await supabase
       .from(siteApplicationsDb.forms)
       .select(
-        'id, slug_tr, slug_en, title_tr, title_en, subtitle_tr, subtitle_en, event_id, package_settings, is_active, show_on_website'
+        'id, slug_tr, slug_en, title_tr, title_en, subtitle_tr, subtitle_en, event_id, package_settings, is_active, show_on_website, form_type'
       )
       .eq('is_active', true)
       .order('created_at', { ascending: false });
@@ -40,8 +43,14 @@ export async function GET(request: NextRequest) {
 
     const formsWithEvents = await attachLinkedEventsToForms(supabase, data ?? []);
 
+    // Hakkımızda / team nav: only real team forms (never etkinlik-titled leftovers)
     const standaloneForms = formsWithEvents
-      .filter((form) => !form.event_id && form.show_on_website)
+      .filter(
+        (form) =>
+          !form.event_id &&
+          form.show_on_website &&
+          inferFormType(form) === 'team'
+      )
       .map((form) => {
         const slug = locale === 'en' ? form.slug_en : form.slug_tr;
         return {
@@ -54,7 +63,7 @@ export async function GET(request: NextRequest) {
       });
 
     const eventApplications = formsWithEvents
-      .filter((form) => form.event_id && form.myuni_events)
+      .filter((form) => form.event_id && form.myuni_events && inferFormType(form) === 'event')
       .map((form) => {
         const event = form.myuni_events!;
         const packageSettings = parsePackageSettingsFromForm(form);

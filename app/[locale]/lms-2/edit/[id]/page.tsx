@@ -501,6 +501,7 @@ export default function EditCoursePage() {
           {activeTab === 'content' && (
             <CourseContentManager 
               courseId={courseId}
+              courseTitle={course.title}
               sections={sections}
               setSections={setSections}
             />
@@ -605,11 +606,13 @@ export default function EditCoursePage() {
 
 // Course Content Manager Component
 const CourseContentManager = ({ 
-  courseId, 
+  courseId,
+  courseTitle,
   sections, 
   setSections 
 }: { 
   courseId: string;
+  courseTitle?: string;
   sections: CourseSection[];
   setSections: React.Dispatch<React.SetStateAction<CourseSection[]>>;
 }) => {
@@ -1754,6 +1757,12 @@ const CourseContentManager = ({
           lessonId={selectedLessonForModule}
           onQuizUploaded={handleQuizUploaded}
           onClose={closeModals}
+          courseTitle={courseTitle}
+          lessonTitle={
+            sections
+              .flatMap((s) => s.lessons)
+              .find((l) => l.id === selectedLessonForModule)?.title
+          }
           orderIndex={
             sections
               .flatMap(s => s.lessons)

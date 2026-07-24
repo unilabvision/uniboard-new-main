@@ -98,7 +98,8 @@ function FormsListContent({ locale }: { locale: string }) {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch('/api/site-applications/forms');
+        const type = isEventsHub ? 'event' : 'team';
+        const res = await fetch(`/api/site-applications/forms?type=${type}`);
         if (res.ok) {
           const data = await res.json();
           setForms(data.forms || []);
@@ -108,7 +109,7 @@ function FormsListContent({ locale }: { locale: string }) {
       }
     };
     load();
-  }, []);
+  }, [isEventsHub]);
 
   const filteredForms = useMemo(() => {
     return forms.filter((form) => {

@@ -45,9 +45,7 @@ export function inferFormType(form: {
   title_tr?: string | null;
   title_en?: string | null;
 }): SiteApplicationFormType {
-  if (form.form_type === 'team' || form.form_type === 'event') {
-    return form.form_type;
-  }
+  // Strong signals win even if form_type was wrongly stored as "team"
   if (form.event_id) return 'event';
   if (isLegacyEventFormSlug(form.slug_tr) || isLegacyEventFormSlug(form.slug_en)) {
     return 'event';
@@ -57,11 +55,27 @@ export function inferFormType(form: {
   const hasEventHint = EVENT_FORM_HINT.test(blob);
   const hasTeamHint = TEAM_FORM_HINT.test(blob);
 
-  if (hasEventHint && !hasTeamHint) return 'event';
-  if (hasTeamHint && !hasEventHint) return 'team';
+  // Title/slug "Etkinlik…" always belongs to Events — even if form_type was stored as team
   if (hasEventHint) return 'event';
+  if (hasTeamHint) return 'team';
+
+  if (form.form_type === 'team' || form.form_type === 'event') {
+    return form.form_type;
+  }
 
   return 'team';
+}
+
+/** True when this row belongs in Event Management, not Site Applications (team). */
+export function isEventApplicationForm(form: {
+  event_id?: string | null;
+  form_type?: string | null;
+  slug_tr?: string | null;
+  slug_en?: string | null;
+  title_tr?: string | null;
+  title_en?: string | null;
+}): boolean {
+  return inferFormType(form) === 'event';
 }
 
 export function getTeamFormPublicPath(locale: string, slug: string): string {

@@ -42,7 +42,7 @@ export async function GET() {
     { count: total },
     { count: pending },
     { count: accepted },
-    { count: forms },
+    formsRes,
     { data: recent },
   ] = await Promise.all([
     totalQ,
@@ -50,18 +50,23 @@ export async function GET() {
     acceptedQ,
     supabase
       .from(siteApplicationsDb.forms)
-      .select('*', { count: 'exact', head: true })
+      .select('id, event_id, form_type, slug_tr, slug_en, title_tr, title_en')
       .eq('is_active', true)
       .is('event_id', null),
     recentQ,
   ]);
+
+  const { inferFormType } = await import('@/app/lib/siteApplications/formTypes');
+  const teamFormsCount = (formsRes.data ?? []).filter(
+    (form) => inferFormType(form) === 'team'
+  ).length;
 
   return NextResponse.json({
     stats: {
       total: total || 0,
       pending: pending || 0,
       accepted: accepted || 0,
-      forms: forms || 0,
+      forms: teamFormsCount,
     },
     recent: recent ?? [],
   });

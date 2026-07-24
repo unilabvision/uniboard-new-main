@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { use, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { use } from 'react';
-import { usePathname } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useUserModules } from '../../../../hooks/useUserModules';
 import {
   getAbsoluteSiteApplicationPublicPath,
@@ -148,6 +147,7 @@ export default function EditSiteApplicationFormPage({
   params: Promise<{ locale: string; id: string }>;
 }) {
   const { locale, id } = use(params);
+  const router = useRouter();
   const pathname = usePathname() || '';
   const isEventsHub = pathname.includes('/events/forms');
   const formsBase = isEventsHub
@@ -183,11 +183,24 @@ export default function EditSiteApplicationFormPage({
         const formRes = await fetch(`/api/site-applications/forms/${id}`);
         if (formRes.ok) {
           const data = await formRes.json();
-          setForm(data.form);
-          setPackageSettings(parsePackageSettingsFromForm(data.form));
-          setLinkedEvent(data.form.linked_event ?? null);
+          const loaded = data.form;
+          const type = loaded.form_type ?? inferFormType(loaded);
+
+          // Event forms belong only under Event Management — keep Site Applications team-only
+          if (!isEventsHub && type === 'event') {
+            router.replace(`/${locale}/events/forms/${id}`);
+            return;
+          }
+          if (isEventsHub && type === 'team') {
+            router.replace(`/${locale}/site-applications/forms/${id}`);
+            return;
+          }
+
+          setForm(loaded);
+          setPackageSettings(parsePackageSettingsFromForm(loaded));
+          setLinkedEvent(loaded.linked_event ?? null);
           setFields(
-            (data.form.fields as SiteApplicationFormField[] | undefined)?.map((f, i) => ({
+            (loaded.fields as SiteApplicationFormField[] | undefined)?.map((f, i) => ({
               client_id: f.id || `loaded_${i}_${f.field_key}`,
               field_key: f.field_key,
               field_type: f.field_type,
@@ -201,7 +214,6 @@ export default function EditSiteApplicationFormPage({
               is_contact: f.is_contact,
             })) || []
           );
-          const type = data.form.form_type ?? inferFormType(data.form);
           if (type === 'event') {
             const eventsRes = await fetch('/api/site-applications/events');
             if (eventsRes.ok) {
@@ -218,7 +230,7 @@ export default function EditSiteApplicationFormPage({
       }
     };
     load();
-  }, [id, t.eventsLoadError]);
+  }, [id, t.eventsLoadError, isEventsHub, locale, router]);
 
   const showMessage = (text: string, isError = false) => {
     setMessageIsError(isError);

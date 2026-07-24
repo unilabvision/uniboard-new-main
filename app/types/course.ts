@@ -148,7 +148,7 @@ export interface DragDropItem {
 }
 
 // Module Types for UI
-export type ModuleType = 'video' | 'notes' | 'quiz';
+export type ModuleType = 'video' | 'notes' | 'quiz' | 'url' | 'resource';
 
 export interface ModuleOption {
   type: ModuleType;

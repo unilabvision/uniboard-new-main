@@ -16,6 +16,7 @@ import VideoUploadModal from '@/app/components/lms/VideoUploadModal';
 import NoteUploadModal from '@/app/components/lms/NoteUploadModal';
 import QuizUploadModal from '@/app/components/lms/QuizUploadModal';
 import ModuleSelectionModal from '@/app/components/lms/ModuleSelectionModal';
+import ResourceLinkModal from '@/app/components/lms/ResourceLinkModal';
 import CourseEnrollmentPanel from '@/app/components/lms/CourseEnrollmentPanel';
 import { Course, CourseSection, CourseLesson, CourseVideo, CourseNote, CourseQuiz, ModuleType } from '@/app/types/course';
 import { buildCourseUpdatePayload } from '@/app/lib/lms/courseUtils';
@@ -450,6 +451,7 @@ export default function EditCoursePage() {
           {activeTab === 'content' && (
             <CourseContentManager 
               courseId={courseId}
+              courseTitle={course.title}
               sections={sections}
               setSections={setSections}
             />
@@ -562,11 +564,13 @@ export default function EditCoursePage() {
 
 // Course Content Manager Component
 const CourseContentManager = ({ 
-  courseId, 
+  courseId,
+  courseTitle,
   sections, 
   setSections 
 }: { 
   courseId: string;
+  courseTitle?: string;
   sections: CourseSection[];
   setSections: React.Dispatch<React.SetStateAction<CourseSection[]>>;
 }) => {
@@ -586,6 +590,8 @@ const CourseContentManager = ({
   const [showVideoUpload, setShowVideoUpload] = useState(false);
   const [showNoteUpload, setShowNoteUpload] = useState(false);
   const [showQuizUpload, setShowQuizUpload] = useState(false);
+  const [showResourceLink, setShowResourceLink] = useState(false);
+  const [resourceLinkMode, setResourceLinkMode] = useState<'url' | 'resource'>('url');
   const [editingQuiz, setEditingQuiz] = useState<CourseQuiz | null>(null);
   
   // Lesson editing
@@ -605,45 +611,41 @@ const CourseContentManager = ({
     if (!newSectionTitle.trim()) return;
 
     try {
-      const newSection: CourseSection = {
-        id: `temp-${Date.now()}`, // Temporary ID
-        course_id: courseId,
-        title: newSectionTitle,
-        description: '',
-        order_index: sections.length,
-        is_active: true,
-        lessons: []
-      };
-
-      // Add to database
-      const { data, error } = await supabase
-        .from('myuni_course_sections')
-        .insert([{
+      const res = await fetch('/api/lms/sections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           course_id: courseId,
-          title: newSectionTitle,
+          title: newSectionTitle.trim(),
           description: '',
           order_index: sections.length,
-          is_active: true
-        }])
-        .select()
-        .single();
+          is_active: true,
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || 'Section create failed');
 
-      if (error) throw error;
-
-      // Update local state
-      const sectionWithRealId = { ...newSection, id: data.id };
+      const data = payload.section;
+      const sectionWithRealId: CourseSection = {
+        id: data.id,
+        course_id: courseId,
+        title: data.title,
+        description: data.description || '',
+        order_index: data.order_index ?? sections.length,
+        is_active: data.is_active !== false,
+        lessons: [],
+      };
       setSections([...sections, sectionWithRealId]);
-      
-      // Reset form
       setNewSectionTitle('');
       setIsAddingSection(false);
-      
-      // Expand the new section
-      setExpandedSections(prev => new Set([...prev, data.id]));
-      
+      setExpandedSections((prev) => new Set([...prev, data.id]));
     } catch (error) {
       console.error('Error adding section:', error);
-      alert('Bölüm eklenirken bir hata oluştu');
+      alert(
+        error instanceof Error
+          ? `Bölüm eklenirken bir hata oluştu: ${error.message}`
+          : 'Bölüm eklenirken bir hata oluştu'
+      );
     }
   };
 
@@ -652,48 +654,50 @@ const CourseContentManager = ({
     if (!confirm('Bu bölümü ve tüm içeriğini silmek istediğinizden emin misiniz?')) return;
 
     try {
-      const { error } = await supabase
-        .from('myuni_course_sections')
-        .delete()
-        .eq('id', sectionId);
+      const res = await fetch('/api/lms/sections', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: sectionId }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || 'Delete failed');
 
-      if (error) throw error;
-
-      setSections(sections.filter(s => s.id !== sectionId));
-      
+      setSections(sections.filter((s) => s.id !== sectionId));
     } catch (error) {
       console.error('Error deleting section:', error);
-      alert('Bölüm silinirken bir hata oluştu');
+      alert(
+        error instanceof Error
+          ? `Bölüm silinirken bir hata oluştu: ${error.message}`
+          : 'Bölüm silinirken bir hata oluştu'
+      );
     }
   };
 
   // Move section up/down
   const moveSectionUp = async (sectionId: string) => {
-    const currentIndex = sections.findIndex(s => s.id === sectionId);
+    const currentIndex = sections.findIndex((s) => s.id === sectionId);
     if (currentIndex <= 0) return;
 
     const newSections = [...sections];
-    [newSections[currentIndex], newSections[currentIndex - 1]] = [newSections[currentIndex - 1], newSections[currentIndex]];
+    [newSections[currentIndex], newSections[currentIndex - 1]] = [
+      newSections[currentIndex - 1],
+      newSections[currentIndex],
+    ];
 
-    // Update order_index in database
     try {
       const updates = newSections.map((section, index) => ({
         id: section.id,
-        order_index: index
+        order_index: index,
       }));
-
-      for (const update of updates) {
-        await supabase
-          .from('myuni_course_sections')
-          .update({ 
-            order_index: update.order_index,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', update.id);
-      }
+      const res = await fetch('/api/lms/sections', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || 'Reorder failed');
 
       setSections(newSections);
-      
     } catch (error) {
       console.error('Error reordering sections:', error);
       alert('Bölüm sırası güncellenirken bir hata oluştu');
@@ -701,31 +705,29 @@ const CourseContentManager = ({
   };
 
   const moveSectionDown = async (sectionId: string) => {
-    const currentIndex = sections.findIndex(s => s.id === sectionId);
+    const currentIndex = sections.findIndex((s) => s.id === sectionId);
     if (currentIndex >= sections.length - 1) return;
 
     const newSections = [...sections];
-    [newSections[currentIndex], newSections[currentIndex + 1]] = [newSections[currentIndex + 1], newSections[currentIndex]];
+    [newSections[currentIndex], newSections[currentIndex + 1]] = [
+      newSections[currentIndex + 1],
+      newSections[currentIndex],
+    ];
 
-    // Update order_index in database
     try {
       const updates = newSections.map((section, index) => ({
         id: section.id,
-        order_index: index
+        order_index: index,
       }));
-
-      for (const update of updates) {
-        await supabase
-          .from('myuni_course_sections')
-          .update({ 
-            order_index: update.order_index,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', update.id);
-      }
+      const res = await fetch('/api/lms/sections', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || 'Reorder failed');
 
       setSections(newSections);
-      
     } catch (error) {
       console.error('Error reordering sections:', error);
       alert('Bölüm sırası güncellenirken bir hata oluştu');
@@ -746,79 +748,82 @@ const CourseContentManager = ({
     }
 
     try {
-      const { error } = await supabase
-        .from('myuni_course_sections')
-        .update({ 
+      const res = await fetch('/api/lms/sections', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: sectionId,
           title: editingSectionTitle.trim(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', sectionId);
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || 'Update failed');
 
-      if (error) throw error;
-
-      setSections(sections.map(s => 
-        s.id === sectionId 
-          ? { ...s, title: editingSectionTitle.trim() }
-          : s
-      ));
+      setSections(
+        sections.map((s) =>
+          s.id === sectionId ? { ...s, title: editingSectionTitle.trim() } : s
+        )
+      );
 
       setEditingSection(null);
       setEditingSectionTitle('');
-      
     } catch (error) {
       console.error('Error updating section title:', error);
       alert('Bölüm başlığı güncellenirken bir hata oluştu');
     }
   };
 
-  // Add new lesson (video dersi olarak — sitede bölüm altında görünür)
+  // Add new lesson — opens module picker (video / notes / quiz / url / resource)
   const addLesson = async (sectionId: string) => {
     if (!newLessonTitle.trim()) return;
 
     try {
-      const section = sections.find(s => s.id === sectionId);
+      const section = sections.find((s) => s.id === sectionId);
       if (!section) return;
 
-      const { data, error } = await supabase
-        .from('myuni_course_lessons')
-        .insert([{
+      const res = await fetch('/api/lms/lessons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           section_id: sectionId,
           title: newLessonTitle.trim(),
           description: '',
-          lesson_type: 'video',
+          lesson_type: 'content',
           order_index: section.lessons.length,
           is_active: true,
           is_locked: false,
-          is_completed: false
-        }])
-        .select()
-        .single();
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || 'Lesson create failed');
 
-      if (error) throw error;
-
+      const data = payload.lesson;
       const newLesson: CourseLesson = {
         ...data,
         videos: [],
         notes: [],
-        quizzes: []
+        quizzes: [],
       };
 
-      setSections(sections.map(s => 
-        s.id === sectionId 
-          ? { ...s, lessons: [...s.lessons, newLesson] }
-          : s
-      ));
+      setSections(
+        sections.map((s) =>
+          s.id === sectionId ? { ...s, lessons: [...s.lessons, newLesson] } : s
+        )
+      );
 
       setAddingLessonSectionId(null);
       setNewLessonTitle('');
       setExpandedLessons((prev) => new Set([...prev, data.id]));
       setSelectedLessonForModule(data.id);
       setSelectedLessonTitle(data.title);
-      setShowVideoUpload(true);
-      
+      setShowModuleSelection(true);
     } catch (error) {
       console.error('Error adding lesson:', error);
-      alert('Ders eklenirken bir hata oluştu');
+      alert(
+        error instanceof Error
+          ? `Ders eklenirken bir hata oluştu: ${error.message}`
+          : 'Ders eklenirken bir hata oluştu'
+      );
     }
   };
 
@@ -827,22 +832,28 @@ const CourseContentManager = ({
     if (!confirm('Bu dersi ve tüm içeriğini silmek istediğinizden emin misiniz?')) return;
 
     try {
-      const { error } = await supabase
-        .from('myuni_course_lessons')
-        .delete()
-        .eq('id', lessonId);
+      const res = await fetch('/api/lms/lessons', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: lessonId }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || 'Delete failed');
 
-      if (error) throw error;
-
-      setSections(sections.map(s => 
-        s.id === sectionId 
-          ? { ...s, lessons: s.lessons.filter(l => l.id !== lessonId) }
-          : s
-      ));
-      
+      setSections(
+        sections.map((s) =>
+          s.id === sectionId
+            ? { ...s, lessons: s.lessons.filter((l) => l.id !== lessonId) }
+            : s
+        )
+      );
     } catch (error) {
       console.error('Error deleting lesson:', error);
-      alert('Ders silinirken bir hata oluştu');
+      alert(
+        error instanceof Error
+          ? `Ders silinirken bir hata oluştu: ${error.message}`
+          : 'Ders silinirken bir hata oluştu'
+      );
     }
   };
 
@@ -866,32 +877,32 @@ const CourseContentManager = ({
     }
 
     try {
-      const { error } = await supabase
-        .from('myuni_course_lessons')
-        .update({ 
+      const res = await fetch('/api/lms/lessons', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: lessonId,
           title: editingLessonTitle.trim(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', lessonId);
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || 'Update failed');
 
-      if (error) throw error;
-
-      setSections(sections.map(s => 
-        s.id === sectionId 
-          ? { 
-              ...s, 
-              lessons: s.lessons.map(l => 
-                l.id === lessonId 
-                  ? { ...l, title: editingLessonTitle.trim() }
-                  : l
-              )
-            }
-          : s
-      ));
+      setSections(
+        sections.map((s) =>
+          s.id === sectionId
+            ? {
+                ...s,
+                lessons: s.lessons.map((l) =>
+                  l.id === lessonId ? { ...l, title: editingLessonTitle.trim() } : l
+                ),
+              }
+            : s
+        )
+      );
 
       setEditingLesson(null);
       setEditingLessonTitle('');
-      
     } catch (error) {
       console.error('Error updating lesson title:', error);
       alert('Ders başlığı güncellenirken bir hata oluştu');
@@ -900,38 +911,34 @@ const CourseContentManager = ({
 
   // Move lesson up/down
   const moveLessonUp = async (sectionId: string, lessonId: string) => {
-    const section = sections.find(s => s.id === sectionId);
+    const section = sections.find((s) => s.id === sectionId);
     if (!section) return;
 
-    const lessonIndex = section.lessons.findIndex(l => l.id === lessonId);
+    const lessonIndex = section.lessons.findIndex((l) => l.id === lessonId);
     if (lessonIndex <= 0) return;
 
     const newLessons = [...section.lessons];
-    [newLessons[lessonIndex], newLessons[lessonIndex - 1]] = [newLessons[lessonIndex - 1], newLessons[lessonIndex]];
+    [newLessons[lessonIndex], newLessons[lessonIndex - 1]] = [
+      newLessons[lessonIndex - 1],
+      newLessons[lessonIndex],
+    ];
 
-    // Update order_index in database
     try {
       const updates = newLessons.map((lesson, index) => ({
         id: lesson.id,
-        order_index: index
+        order_index: index,
       }));
+      const res = await fetch('/api/lms/lessons', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || 'Reorder failed');
 
-      for (const update of updates) {
-        await supabase
-          .from('myuni_course_lessons')
-          .update({ 
-            order_index: update.order_index,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', update.id);
-      }
-
-      setSections(sections.map(s => 
-        s.id === sectionId 
-          ? { ...s, lessons: newLessons }
-          : s
-      ));
-      
+      setSections(
+        sections.map((s) => (s.id === sectionId ? { ...s, lessons: newLessons } : s))
+      );
     } catch (error) {
       console.error('Error reordering lessons:', error);
       alert('Ders sırası güncellenirken bir hata oluştu');
@@ -939,38 +946,34 @@ const CourseContentManager = ({
   };
 
   const moveLessonDown = async (sectionId: string, lessonId: string) => {
-    const section = sections.find(s => s.id === sectionId);
+    const section = sections.find((s) => s.id === sectionId);
     if (!section) return;
 
-    const lessonIndex = section.lessons.findIndex(l => l.id === lessonId);
+    const lessonIndex = section.lessons.findIndex((l) => l.id === lessonId);
     if (lessonIndex >= section.lessons.length - 1) return;
 
     const newLessons = [...section.lessons];
-    [newLessons[lessonIndex], newLessons[lessonIndex + 1]] = [newLessons[lessonIndex + 1], newLessons[lessonIndex]];
+    [newLessons[lessonIndex], newLessons[lessonIndex + 1]] = [
+      newLessons[lessonIndex + 1],
+      newLessons[lessonIndex],
+    ];
 
-    // Update order_index in database
     try {
       const updates = newLessons.map((lesson, index) => ({
         id: lesson.id,
-        order_index: index
+        order_index: index,
       }));
+      const res = await fetch('/api/lms/lessons', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || 'Reorder failed');
 
-      for (const update of updates) {
-        await supabase
-          .from('myuni_course_lessons')
-          .update({ 
-            order_index: update.order_index,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', update.id);
-      }
-
-      setSections(sections.map(s => 
-        s.id === sectionId 
-          ? { ...s, lessons: newLessons }
-          : s
-      ));
-      
+      setSections(
+        sections.map((s) => (s.id === sectionId ? { ...s, lessons: newLessons } : s))
+      );
     } catch (error) {
       console.error('Error reordering lessons:', error);
       alert('Ders sırası güncellenirken bir hata oluştu');
@@ -1067,54 +1070,53 @@ const CourseContentManager = ({
     
     // Update lesson_type based on selected module type
     try {
-      const lessonTypeMap = {
-        'video': 'video',
-        'notes': 'notes', 
-        'quiz': 'quick'
+      const lessonTypeMap: Record<ModuleType, 'content' | 'video' | 'notes' | 'quick'> = {
+        video: 'video',
+        notes: 'notes',
+        quiz: 'quick',
+        url: 'notes',
+        resource: 'notes',
       };
-      
+
       const newLessonType = lessonTypeMap[moduleType];
-      
-      // Update lesson_type in database
-      const { error: updateError } = await supabase
-        .from('myuni_course_lessons')
-        .update({ 
+
+      const res = await fetch('/api/lms/lessons', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: selectedLessonForModule,
           lesson_type: newLessonType,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', selectedLessonForModule);
-      
-      if (updateError) {
-        console.error('Error updating lesson type:', updateError);
-        alert('Ders tipi güncellenirken hata oluştu');
-        return;
-      }
-      
-      // Update local state
-      setSections(sections.map(s => ({
-        ...s,
-        lessons: s.lessons.map(l => 
-          l.id === selectedLessonForModule
-            ? { ...l, lesson_type: newLessonType as 'content' | 'video' | 'notes' | 'quick' }
-            : l
-        )
-      })));
-      
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || 'Lesson type update failed');
+
+      setSections(
+        sections.map((s) => ({
+          ...s,
+          lessons: s.lessons.map((l) =>
+            l.id === selectedLessonForModule ? { ...l, lesson_type: newLessonType } : l
+          ),
+        }))
+      );
     } catch (error) {
       console.error('Error updating lesson type:', error);
       alert('Ders tipi güncellenirken hata oluştu');
       return;
     }
-    
+
     // Open appropriate modal
     setShowModuleSelection(false);
-    
+
     if (moduleType === 'video') {
       setShowVideoUpload(true);
     } else if (moduleType === 'notes') {
       setShowNoteUpload(true);
     } else if (moduleType === 'quiz') {
       setShowQuizUpload(true);
+    } else if (moduleType === 'url' || moduleType === 'resource') {
+      setResourceLinkMode(moduleType);
+      setShowResourceLink(true);
     }
   };
 
@@ -1219,6 +1221,7 @@ const CourseContentManager = ({
     setShowVideoUpload(false);
     setShowNoteUpload(false);
     setShowQuizUpload(false);
+    setShowResourceLink(false);
     setSelectedLessonForModule(null);
     setSelectedLessonTitle('');
     setEditingQuiz(null);
@@ -1296,7 +1299,8 @@ const CourseContentManager = ({
             Kurs İçeriği
           </h3>
           <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
-            Bölüm → Ders → Video yapısı. Eklediğiniz videolar sitede ilgili bölümün altında listelenir.
+            Bölüm → Ders → Modül. Video (Vimeo+Supabase), not, quiz, harici URL veya kaynak ekleyin;
+            içerikler sitede ilgili bölümün altında listelenir.
           </p>
         </div>
         
@@ -1838,8 +1842,23 @@ const CourseContentManager = ({
           onClose={closeModals}
           orderIndex={
             sections
-              .flatMap(s => s.lessons)
-              .find(l => l.id === selectedLessonForModule)?.notes?.length || 0
+              .flatMap((s) => s.lessons)
+              .find((l) => l.id === selectedLessonForModule)?.notes?.length || 0
+          }
+        />
+      )}
+
+      {/* URL / Resource Modal */}
+      {showResourceLink && selectedLessonForModule && (
+        <ResourceLinkModal
+          lessonId={selectedLessonForModule}
+          mode={resourceLinkMode}
+          onSaved={handleNoteUploaded}
+          onClose={closeModals}
+          orderIndex={
+            sections
+              .flatMap((s) => s.lessons)
+              .find((l) => l.id === selectedLessonForModule)?.notes?.length || 0
           }
         />
       )}
@@ -1850,6 +1869,12 @@ const CourseContentManager = ({
           lessonId={selectedLessonForModule}
           onQuizUploaded={handleQuizUploaded}
           onClose={closeModals}
+          courseTitle={courseTitle}
+          lessonTitle={
+            sections
+              .flatMap((s) => s.lessons)
+              .find((l) => l.id === selectedLessonForModule)?.title
+          }
           orderIndex={
             sections
               .flatMap(s => s.lessons)
