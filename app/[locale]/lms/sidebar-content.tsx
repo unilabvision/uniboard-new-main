@@ -4,6 +4,7 @@ import {
   PlusCircle,
   Shield,
   Users,
+  Tag,
 } from 'lucide-react';
 
 export const lmsSidebarContent = {
@@ -12,6 +13,7 @@ export const lmsSidebarContent = {
     items: [
       { name: 'Kurs Yönetimi', href: '/', icon: Home, capability: 'courses' },
       { name: 'Kurs Oluştur', href: '/create', icon: PlusCircle, capability: 'create' },
+      { name: 'İndirim Kodları', href: '/discount-codes', icon: Tag, capability: 'courses' },
       {
         name: 'Öğrenci Yönetimi',
         href: '/students',
@@ -27,6 +29,7 @@ export const lmsSidebarContent = {
     items: [
       { name: 'Course Management', href: '/', icon: Home, capability: 'courses' },
       { name: 'Create Course', href: '/create', icon: PlusCircle, capability: 'create' },
+      { name: 'Discount Codes', href: '/discount-codes', icon: Tag, capability: 'courses' },
       {
         name: 'Student Management',
         href: '/students',

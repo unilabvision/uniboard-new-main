@@ -7,7 +7,8 @@ import {
   Edit2, Trash2, MoreVertical,
   PlayCircle, Calendar, Clock,
   Users, Video,
-  TrendingUp, Check, X, Tag, Layers
+  TrendingUp, Check, X, Tag, Layers,
+  Download
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -1260,6 +1261,16 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
               <div className="w-8 h-px bg-[#990000] mt-2"></div>
             </div>
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href = '/api/lms/courses/export';
+                }}
+                className="flex items-center px-3 py-1.5 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-200 text-sm font-medium rounded-md transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800"
+              >
+                <Download className="w-4 h-4 mr-1" />
+                {locale === 'tr' ? 'Excel İndir' : 'Export Excel'}
+              </button>
               <Link
                 href={`/${locale}/students`}
                 className="flex items-center px-3 py-1.5 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-200 text-sm font-medium rounded-md transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800"
