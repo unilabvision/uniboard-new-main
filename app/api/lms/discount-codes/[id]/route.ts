@@ -3,6 +3,7 @@ import { requireLmsContentAdmin } from '@/app/api/lms/_helpers';
 import {
   applyHighValueFixedDefaults,
   DISCOUNT_ADMIN_SELECT,
+  resolveBalanceFields,
   type DiscountCodeAdminPayload,
 } from '@/app/lib/lms/discountCodesAdmin';
 
@@ -38,9 +39,28 @@ export async function PATCH(
     if (body.campaign_description !== undefined) {
       updates.campaign_description = body.campaign_description;
     }
-    if (body.has_balance_limit !== undefined) updates.has_balance_limit = body.has_balance_limit;
-    if (body.remaining_balance !== undefined) updates.remaining_balance = body.remaining_balance;
-    if (body.initial_balance !== undefined) updates.initial_balance = body.initial_balance;
+    if (body.has_balance_limit !== undefined || body.remaining_balance !== undefined || body.initial_balance !== undefined) {
+      const balance = resolveBalanceFields({
+        has_balance_limit:
+          body.has_balance_limit !== undefined
+            ? body.has_balance_limit
+            : (updates.has_balance_limit as boolean | undefined),
+        remaining_balance:
+          body.remaining_balance !== undefined ? body.remaining_balance : undefined,
+        initial_balance: body.initial_balance,
+      });
+      // If only remaining/initial sent without has_balance_limit flag, keep existing unless explicitly set
+      if (body.has_balance_limit !== undefined) {
+        updates.has_balance_limit = balance.has_balance_limit;
+        updates.remaining_balance = balance.remaining_balance;
+      } else {
+        if (body.remaining_balance !== undefined) {
+          updates.remaining_balance = body.remaining_balance;
+        } else if (body.initial_balance !== undefined) {
+          updates.remaining_balance = Number(body.initial_balance) || 0;
+        }
+      }
+    }
     if (body.minimum_order_amount !== undefined) {
       const n =
         body.minimum_order_amount == null

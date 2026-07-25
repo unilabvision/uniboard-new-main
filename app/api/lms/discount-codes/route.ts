@@ -3,6 +3,7 @@ import { requireLmsContentAdmin } from '@/app/api/lms/_helpers';
 import {
   applyHighValueFixedDefaults,
   DISCOUNT_ADMIN_SELECT,
+  resolveBalanceFields,
   type DiscountCodeAdminPayload,
 } from '@/app/lib/lms/discountCodesAdmin';
 
@@ -68,13 +69,7 @@ export async function POST(request: NextRequest) {
     }
 
     const discountType = body.discount_type === 'fixed' ? 'fixed' : 'percentage';
-    const hasBalanceLimit = Boolean(body.has_balance_limit);
-    const remainingBalance = hasBalanceLimit
-      ? (body.remaining_balance != null ? Number(body.remaining_balance) : 0)
-      : null;
-    const initialBalance = hasBalanceLimit
-      ? (body.initial_balance != null ? Number(body.initial_balance) : remainingBalance)
-      : null;
+    const balance = resolveBalanceFields(body);
 
     const row = applyHighValueFixedDefaults({
       code,
@@ -89,9 +84,8 @@ export async function POST(request: NextRequest) {
       is_campaign: Boolean(body.is_campaign),
       campaign_name: body.campaign_name ?? null,
       campaign_description: body.campaign_description ?? null,
-      has_balance_limit: hasBalanceLimit,
-      remaining_balance: remainingBalance,
-      initial_balance: initialBalance,
+      has_balance_limit: balance.has_balance_limit,
+      remaining_balance: balance.remaining_balance,
       minimum_order_amount:
         body.minimum_order_amount != null
           ? Math.max(0, Number(body.minimum_order_amount) || 0) || null

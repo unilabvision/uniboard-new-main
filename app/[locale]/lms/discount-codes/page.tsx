@@ -130,7 +130,8 @@ export default function LmsDiscountCodesPage() {
       applicable_course_ids: Array.isArray(row.applicable_courses) ? row.applicable_courses : [],
       has_balance_limit: row.has_balance_limit,
       remaining_balance: row.remaining_balance ?? 0,
-      initial_balance: row.initial_balance ?? 0,
+      // DB may not have initial_balance yet — fall back to remaining for the form seed.
+      initial_balance: row.initial_balance ?? row.remaining_balance ?? 0,
       minimum_order_amount: row.minimum_order_amount ?? 0,
       maximum_order_amount: row.maximum_order_amount ?? 0,
       full_course_only: !!row.full_course_only,
@@ -155,6 +156,10 @@ export default function LmsDiscountCodesPage() {
     setSubmitLoading(true);
     setSubmitError(null);
     try {
+      const balanceSeed = Math.max(
+        Number(form.remaining_balance) || 0,
+        Number(form.initial_balance) || 0
+      );
       const payload = {
         code: form.code.trim(),
         discount_amount: Number(form.discount_amount),
@@ -165,8 +170,10 @@ export default function LmsDiscountCodesPage() {
           ? form.applicable_course_ids
           : null,
         has_balance_limit: form.has_balance_limit,
-        remaining_balance: form.has_balance_limit ? Number(form.remaining_balance) || 0 : null,
-        initial_balance: form.has_balance_limit ? Number(form.initial_balance) || 0 : null,
+        // Prefer explicit remaining; otherwise seed from initial (DB column may be absent).
+        remaining_balance: form.has_balance_limit
+          ? Number(form.remaining_balance) || balanceSeed
+          : null,
         minimum_order_amount:
           Number(form.minimum_order_amount) > 0 ? Number(form.minimum_order_amount) : null,
         maximum_order_amount:

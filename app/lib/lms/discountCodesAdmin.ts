@@ -40,4 +40,34 @@ export type DiscountCodeAdminPayload = {
 };
 
 export const DISCOUNT_ADMIN_SELECT =
-  'id, code, discount_amount, discount_type, valid_until, applicable_courses, is_used, usage_count, max_usage, is_referral, is_campaign, campaign_name, campaign_description, has_balance_limit, remaining_balance, initial_balance, minimum_order_amount, maximum_order_amount, full_course_only, created_at';
+  'id, code, discount_amount, discount_type, valid_until, applicable_courses, is_used, usage_count, max_usage, is_referral, is_campaign, campaign_name, campaign_description, has_balance_limit, remaining_balance, minimum_order_amount, maximum_order_amount, full_course_only, created_at';
+
+/**
+ * Optional column — some shared DBs never got the migration.
+ * Prefer remaining_balance; treat initial_balance as create-time seed only when present.
+ */
+export function resolveBalanceFields(input: {
+  has_balance_limit?: boolean;
+  remaining_balance?: number | null;
+  initial_balance?: number | null;
+}) {
+  const hasBalanceLimit = Boolean(input.has_balance_limit);
+  if (!hasBalanceLimit) {
+    return {
+      has_balance_limit: false,
+      remaining_balance: null as number | null,
+    };
+  }
+
+  const remaining =
+    input.remaining_balance != null
+      ? Number(input.remaining_balance)
+      : input.initial_balance != null
+        ? Number(input.initial_balance)
+        : 0;
+
+  return {
+    has_balance_limit: true,
+    remaining_balance: Number.isFinite(remaining) ? remaining : 0,
+  };
+}
