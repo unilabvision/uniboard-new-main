@@ -3,6 +3,7 @@ import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
 import { requireEventFormsWriteUser } from '@/app/api/site-applications/access/_helpers';
 import type { SiteApplicationFormFieldInput } from '@/app/types/siteApplicationForms';
 import { normalizeFieldOptions } from '@/app/lib/siteApplications/forms';
+import { normalizeResourceOptions } from '@/app/lib/siteApplications/files';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -21,6 +22,7 @@ const ALLOWED_TYPES = new Set([
   'linear_scale',
   'rating',
   'file',
+  'resource',
 ]);
 
 type FieldBackupRow = {
@@ -63,7 +65,10 @@ function toInsertRow(
     placeholder_en: field.placeholder_en?.trim?.() || field.placeholder_en || null,
     required: field.required ?? false,
     order_index: field.order_index ?? index,
-    options: normalizeFieldOptions(field.options),
+    options:
+      field.field_type === 'resource'
+        ? normalizeResourceOptions(field.options)
+        : normalizeFieldOptions(field.options),
     is_contact: field.is_contact ?? false,
   };
 }

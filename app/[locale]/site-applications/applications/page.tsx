@@ -14,6 +14,9 @@ import {
   FileText,
   Award,
   CalendarDays,
+  Trash2,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 import { inferFormType } from '@/app/lib/siteApplications/formTypes';
 import {
@@ -83,6 +86,18 @@ const texts = {
     },
     page: 'Sayfa',
     of: '/',
+    selectAll: 'Tümünü seç',
+    deselectAll: 'Seçimi kaldır',
+    selectedCount: 'seçili',
+    deleteSelected: 'Seçilenleri sil',
+    deleting: 'Siliniyor...',
+    deleteConfirmTitle: 'Başvuruları sil',
+    deleteConfirmMessage:
+      '{count} başvuruyu silmek istediğinize emin misiniz? Bu işlem geri alınamaz.',
+    deleteConfirmButton: 'Sil',
+    cancelButton: 'İptal',
+    deleteSuccess: 'Başvurular silindi',
+    deleteFail: 'Silme işlemi başarısız',
   },
   en: {
     title: 'All Applications',
@@ -135,6 +150,18 @@ const texts = {
     },
     page: 'Page',
     of: 'of',
+    selectAll: 'Select all',
+    deselectAll: 'Deselect all',
+    selectedCount: 'selected',
+    deleteSelected: 'Delete selected',
+    deleting: 'Deleting...',
+    deleteConfirmTitle: 'Delete applications',
+    deleteConfirmMessage:
+      'Are you sure you want to delete {count} application(s)? This cannot be undone.',
+    deleteConfirmButton: 'Delete',
+    cancelButton: 'Cancel',
+    deleteSuccess: 'Applications deleted',
+    deleteFail: 'Failed to delete applications',
   },
 };
 
@@ -172,6 +199,62 @@ function readSubmission(app: SiteApplication) {
     : {};
 }
 
+function BulkDeleteConfirmationModal({
+  isOpen,
+  onClose,
+  onConfirm,
+  count,
+  isDeleting,
+  t,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  count: number;
+  isDeleting: boolean;
+  t: (typeof texts)['tr'];
+}) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-neutral-800 rounded-lg max-w-md w-full">
+        <div className="p-6">
+          <div className="flex items-center mb-4">
+            <div className="w-12 h-12 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center mr-4">
+              <Trash2 className="w-6 h-6 text-red-600 dark:text-red-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">
+              {t.deleteConfirmTitle}
+            </h3>
+          </div>
+          <p className="text-neutral-600 dark:text-neutral-400 mb-6">
+            {t.deleteConfirmMessage.replace('{count}', String(count))}
+          </p>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isDeleting}
+              className="flex-1 px-4 py-2 text-neutral-700 dark:text-neutral-300 bg-neutral-200 dark:bg-neutral-700 hover:bg-neutral-300 dark:hover:bg-neutral-600 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {t.cancelButton}
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={isDeleting}
+              className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50"
+            >
+              {isDeleting ? t.deleting : t.deleteConfirmButton}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SiteApplicationsListPage({
   params,
 }: {
@@ -188,6 +271,10 @@ export default function SiteApplicationsListPage({
   const [total, setTotal] = useState(0);
   const [remindingId, setRemindingId] = useState<string | null>(null);
   const [remindFlash, setRemindFlash] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteFlash, setDeleteFlash] = useState<string | null>(null);
   const perPage = 20;
   const searchParams = useSearchParams();
   const pathname = usePathname() || '';
@@ -262,6 +349,7 @@ export default function SiteApplicationsListPage({
 
   useEffect(() => {
     setPage(1);
+    setSelectedIds(new Set());
   }, [
     statusFilter,
     formFilter,
@@ -395,6 +483,63 @@ export default function SiteApplicationsListPage({
     }
   };
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const allPageSelected = apps.length > 0 && apps.every((app) => selectedIds.has(app.id));
+
+  const toggleSelectAll = () => {
+    if (allPageSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const app of apps) next.delete(app.id);
+        return next;
+      });
+    } else {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const app of apps) next.add(app.id);
+        return next;
+      });
+    }
+  };
+
+  const confirmBulkDelete = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+
+    setDeleting(true);
+    setDeleteFlash(null);
+    try {
+      const res = await fetch('/api/site-applications/applications', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed');
+
+      setSelectedIds(new Set());
+      setDeleteModalOpen(false);
+      setDeleteFlash(
+        data.deletedCount
+          ? `${t.deleteSuccess} (${data.deletedCount})`
+          : t.deleteFail
+      );
+      await load();
+    } catch {
+      setDeleteFlash(t.deleteFail);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const filteredForms = useMemo(() => {
     return forms.filter((form) => {
       const type = form.form_type ?? inferFormType(form);
@@ -403,7 +548,7 @@ export default function SiteApplicationsListPage({
   }, [forms, categoryFilter]);
 
   const totalPages = Math.max(1, Math.ceil(total / perPage));
-  const colCount = showEventColumns ? 7 : 5;
+  const colCount = (showEventColumns ? 7 : 5) + 1;
 
   const activeEventLabel =
     eventNameParam ||
@@ -434,6 +579,9 @@ export default function SiteApplicationsListPage({
         </p>
         {remindFlash && (
           <p className="mt-2 text-sm text-[#990000]">{remindFlash}</p>
+        )}
+        {deleteFlash && (
+          <p className="mt-2 text-sm text-[#990000]">{deleteFlash}</p>
         )}
         {(statusFilter || hasEventScope || registrationTierParam || paymentStatusParam) && (
           <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -618,11 +766,52 @@ export default function SiteApplicationsListPage({
         </div>
       )}
 
+      {selectedIds.size > 0 && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-900/10 px-4 py-3">
+          <span className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
+            {selectedIds.size} {t.selectedCount}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedIds(new Set())}
+              className="px-3 py-1.5 text-sm rounded-lg border border-neutral-300 dark:border-neutral-600 hover:bg-white dark:hover:bg-neutral-800"
+            >
+              {t.deselectAll}
+            </button>
+            <button
+              type="button"
+              onClick={() => setDeleteModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-red-600 hover:bg-red-700 text-white"
+            >
+              <Trash2 className="w-4 h-4" />
+              {t.deleteSelected} ({selectedIds.size})
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-neutral-50 dark:bg-neutral-900/50 border-b border-neutral-200 dark:border-neutral-700">
               <tr>
+                <th className="px-3 py-3 w-10">
+                  <button
+                    type="button"
+                    onClick={toggleSelectAll}
+                    disabled={apps.length === 0 || loading}
+                    className="p-1 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 disabled:opacity-40"
+                    title={allPageSelected ? t.deselectAll : t.selectAll}
+                    aria-label={allPageSelected ? t.deselectAll : t.selectAll}
+                  >
+                    {allPageSelected ? (
+                      <CheckSquare className="w-5 h-5 text-[#990000]" />
+                    ) : (
+                      <Square className="w-5 h-5 text-neutral-400" />
+                    )}
+                  </button>
+                </th>
                 <th className="text-left px-4 py-3 font-medium">{t.applicant}</th>
                 <th className="text-left px-4 py-3 font-medium">{t.form}</th>
                 {showEventColumns && (
@@ -656,9 +845,29 @@ export default function SiteApplicationsListPage({
                   const pay = String(submission.payment_status || 'none');
                   const price = Number(submission.package_price);
                   const currency = String(submission.package_currency || 'TRY');
+                  const isSelected = selectedIds.has(app.id);
 
                   return (
-                    <tr key={app.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-700/30">
+                    <tr
+                      key={app.id}
+                      className={`hover:bg-neutral-50 dark:hover:bg-neutral-700/30 ${
+                        isSelected ? 'bg-red-50/50 dark:bg-red-900/10' : ''
+                      }`}
+                    >
+                      <td className="px-3 py-3">
+                        <button
+                          type="button"
+                          onClick={() => toggleSelect(app.id)}
+                          className="p-1 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700"
+                          aria-label={isSelected ? t.deselectAll : t.selectAll}
+                        >
+                          {isSelected ? (
+                            <CheckSquare className="w-5 h-5 text-[#990000]" />
+                          ) : (
+                            <Square className="w-5 h-5 text-neutral-400" />
+                          )}
+                        </button>
+                      </td>
                       <td className="px-4 py-3">
                         <div className="font-medium text-neutral-900 dark:text-neutral-100">
                           {app.first_name} {app.last_name}
@@ -781,6 +990,15 @@ export default function SiteApplicationsListPage({
           </div>
         )}
       </div>
+
+      <BulkDeleteConfirmationModal
+        isOpen={deleteModalOpen}
+        onClose={() => !deleting && setDeleteModalOpen(false)}
+        onConfirm={confirmBulkDelete}
+        count={selectedIds.size}
+        isDeleting={deleting}
+        t={t}
+      />
     </div>
   );
 }

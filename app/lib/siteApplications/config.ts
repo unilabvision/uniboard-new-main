@@ -26,22 +26,21 @@ export function isEventSiteApplication(app: {
   event_name?: string | null;
   submission_data?: Record<string, unknown> | null;
 }): boolean {
-  if (app.source === 'event_website') return true;
+  // Event linkage is the source of truth — not source/registration_tier alone
+  // (team submits can be mis-tagged as event_website or carry package keys).
   if (app.event_id) return true;
   if (typeof app.event_name === 'string' && app.event_name.trim()) return true;
-  const tier = app.submission_data?.registration_tier;
-  if (tier === 'free' || tier === 'certificate') return true;
   return false;
 }
 
 /** PostgREST filter fragments for list/stats queries */
 export const eventApplicationOrFilter =
-  'source.eq.event_website,event_id.not.is.null,event_name.not.is.null';
+  'event_id.not.is.null,event_name.not.is.null';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function applyTeamApplicationsFilter(query: any) {
-  // Ekip = website kaynağı + etkinlik bağlı değil + isim alanı boş
-  return query.eq('source', 'website').is('event_id', null).is('event_name', null);
+  // Ekip = etkinliğe bağlı değil (source hatalı olsa bile panelde görünsün)
+  return query.is('event_id', null).is('event_name', null);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

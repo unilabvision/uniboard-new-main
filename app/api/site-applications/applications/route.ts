@@ -7,6 +7,10 @@ import {
 import { requireSiteApplicationsOrEventsUser } from '@/app/api/site-applications/access/_helpers';
 import { backfillPendingEventApplications } from '@/app/lib/siteApplications/eventAutoAccept';
 import { syncCertificatePaymentsFromOrders } from '@/app/lib/siteApplications/syncPayments';
+import {
+  deleteSiteApplicationsBulk,
+  getMaxBulkDelete,
+} from '@/app/lib/siteApplications/deleteApplication';
 
 export async function GET(request: NextRequest) {
   const authResult = await requireSiteApplicationsOrEventsUser('registrations');
@@ -84,5 +88,42 @@ export async function GET(request: NextRequest) {
     total: count ?? 0,
     page,
     perPage,
+  });
+}
+
+export async function DELETE(request: NextRequest) {
+  const authResult = await requireSiteApplicationsOrEventsUser('registrations');
+  if (authResult.error || !authResult.supabase) {
+    return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+  }
+
+  let body: { ids?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  const rawIds = Array.isArray(body.ids) ? body.ids : [];
+  const ids = rawIds.map((id) => String(id).trim()).filter(Boolean);
+
+  if (ids.length === 0) {
+    return NextResponse.json({ error: 'No application ids provided' }, { status: 400 });
+  }
+
+  if (ids.length > getMaxBulkDelete()) {
+    return NextResponse.json(
+      { error: `At most ${getMaxBulkDelete()} applications can be deleted at once` },
+      { status: 400 }
+    );
+  }
+
+  const { deleted, failed } = await deleteSiteApplicationsBulk(authResult.supabase, ids);
+
+  return NextResponse.json({
+    success: failed.length === 0,
+    deleted,
+    failed,
+    deletedCount: deleted.length,
   });
 }

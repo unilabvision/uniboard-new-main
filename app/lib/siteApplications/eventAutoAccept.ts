@@ -90,7 +90,7 @@ export async function backfillPendingEventApplications(
       updated_at: new Date().toISOString(),
     })
     .in('status', ['pending', 'under_review'])
-    .or('source.eq.event_website,event_id.not.is.null,event_name.not.is.null')
+    .or('event_id.not.is.null,event_name.not.is.null')
     .select('id');
 
   if (error) {

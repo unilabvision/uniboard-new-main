@@ -4,5 +4,6 @@ export * from './files';
 export * from './forms';
 export * from './validation';
 export * from './attachmentDownload';
+export * from './deleteApplication';
 export * from './events';
 export * from './resolveForm';

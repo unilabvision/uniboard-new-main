@@ -108,7 +108,7 @@ async function fetchEventCertificateApps(
     let query = supabase
       .from(siteApplicationsDb.applications)
       .select('id, email, event_name, event_id, submission_data, source')
-      .or('source.eq.event_website,event_id.not.is.null,event_name.not.is.null')
+      .or('event_id.not.is.null,event_name.not.is.null')
       .order('created_at', { ascending: false })
       .range(from, from + pageSize - 1);
 

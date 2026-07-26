@@ -10,6 +10,7 @@ import { parseSubmissionFileMeta } from '@/app/lib/siteApplications/files';
 import { sendSiteApplicationApprovalEmail } from '@/app/_services/siteApplicationApprovalEmail';
 import { ensureEventApplicationAccepted } from '@/app/lib/siteApplications/eventAutoAccept';
 import { syncSingleApplicationPayment } from '@/app/lib/siteApplications/syncPayments';
+import { deleteSiteApplication } from '@/app/lib/siteApplications/deleteApplication';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -201,4 +202,19 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     history: history ?? [],
     approval_email: approvalEmail,
   });
+}
+
+export async function DELETE(_request: NextRequest, context: RouteContext) {
+  const { id } = await context.params;
+  const authResult = await requireSiteApplicationsOrEventsUser('registrations');
+  if (authResult.error || !authResult.supabase) {
+    return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+  }
+
+  const result = await deleteSiteApplication(authResult.supabase, id);
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: result.status });
+  }
+
+  return NextResponse.json({ success: true, id });
 }

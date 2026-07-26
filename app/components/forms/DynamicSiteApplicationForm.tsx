@@ -24,6 +24,7 @@ import {
   CheckSquare,
   Circle,
   CloudUpload,
+  Download,
   Star,
   TextCursorInput,
 } from 'lucide-react';
@@ -131,6 +132,7 @@ const fieldIcon: Record<SiteApplicationFieldType, React.ElementType> = {
   linear_scale: Hash,
   rating: Star,
   file: CloudUpload,
+  resource: Download,
 };
 
 const inputClass =
@@ -281,6 +283,8 @@ export default function DynamicSiteApplicationForm({
     const nextErrors: Record<string, string> = {};
 
     for (const field of formConfig.fields) {
+      if (field.field_type === 'resource') continue;
+
       const raw = values[field.field_key]?.trim() || '';
 
       if (field.field_type === 'checkbox') {
@@ -752,17 +756,33 @@ export default function DynamicSiteApplicationForm({
                 return (
                   <div key={field.field_key} className="group" data-field-key={field.field_key}>
                     <label
-                      htmlFor={inputId}
+                      htmlFor={field.field_type === 'resource' ? undefined : inputId}
                       className="flex items-center gap-2 text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2"
                     >
                       <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#990000]/8 text-[#990000] group-focus-within:bg-[#990000]/15 transition-colors">
                         <Icon className="w-3.5 h-3.5" />
                       </span>
                       {field.label}
-                      {field.required && <span className="text-[#990000]">*</span>}
+                      {field.required && field.field_type !== 'resource' && (
+                        <span className="text-[#990000]">*</span>
+                      )}
                     </label>
 
-                    {field.field_type === 'textarea' ? (
+                    {field.field_type === 'resource' ? (
+                      <div className="rounded-2xl border border-[#990000]/25 bg-[#990000]/[0.04] px-4 py-5 space-y-2">
+                        <p className="text-sm text-neutral-700 dark:text-neutral-200">
+                          {field.resource_file_name ||
+                            field.options?.[0]?.label ||
+                            (locale === 'en' ? 'No file uploaded' : 'Dosya yok')}
+                        </p>
+                        <p className="text-xs text-neutral-500 inline-flex items-center gap-1.5">
+                          <Download className="w-3.5 h-3.5" />
+                          {locale === 'en'
+                            ? 'Applicants can download this file on the live form'
+                            : 'Canlı formda başvuran bu dosyayı indirebilir'}
+                        </p>
+                      </div>
+                    ) : field.field_type === 'textarea' ? (
                       <textarea
                         id={inputId}
                         rows={4}

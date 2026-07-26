@@ -147,3 +147,86 @@ export function parseSubmissionFileMeta(raw: unknown): SubmissionFileMeta | null
     fileSize: Number.isFinite(fileSize) ? fileSize : undefined,
   };
 }
+
+/** Admin-uploaded downloadable case/resource file stored in field.options[0]. */
+export type ResourceFileMeta = {
+  storageRef: string;
+  fileName: string;
+  mimeType?: string;
+  fileSize?: number;
+};
+
+export function buildResourceStoragePath(
+  formId: string,
+  fieldKey: string,
+  fileName: string
+): { bucket: string; objectPath: string; storageRef: string } {
+  const safeName = sanitizeFileName(fileName);
+  const safeForm = formId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40) || 'form';
+  const safeKey = fieldKey.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60) || 'resource';
+  const objectPath = `${SITE_APPLICATION_STORAGE_FOLDER}/resources/${safeForm}/${safeKey}/${Date.now()}_${safeName}`;
+  return {
+    bucket: SITE_APPLICATION_STORAGE_BUCKET,
+    objectPath,
+    storageRef: `${SITE_APPLICATION_STORAGE_BUCKET}::${objectPath}`,
+  };
+}
+
+export function parseResourceOptions(options: unknown): ResourceFileMeta | null {
+  if (!options) return null;
+  let list: unknown = options;
+  if (typeof options === 'string') {
+    try {
+      list = JSON.parse(options);
+    } catch {
+      return null;
+    }
+  }
+  if (!Array.isArray(list) || list.length === 0) return null;
+  const row = list[0];
+  if (!row || typeof row !== 'object') return null;
+  const obj = row as Record<string, unknown>;
+  const storageRef = String(obj.value ?? obj.storageRef ?? obj.storage_path ?? '').trim();
+  const fileName = String(obj.label_tr ?? obj.label_en ?? obj.label ?? obj.fileName ?? '').trim();
+  if (!storageRef || !fileName) return null;
+  if (storageRef.startsWith('http://') || storageRef.startsWith('https://')) return null;
+  const fileSizeRaw = obj.fileSize ?? obj.file_size;
+  const fileSize =
+    typeof fileSizeRaw === 'number'
+      ? fileSizeRaw
+      : fileSizeRaw != null
+        ? Number(fileSizeRaw)
+        : undefined;
+  return {
+    storageRef,
+    fileName,
+    mimeType: obj.mimeType || obj.mime_type ? String(obj.mimeType || obj.mime_type) : undefined,
+    fileSize: Number.isFinite(fileSize) ? fileSize : undefined,
+  };
+}
+
+export function toResourceOptions(meta: ResourceFileMeta): SiteApplicationFormFieldOptionLike[] {
+  return [
+    {
+      value: meta.storageRef,
+      label_tr: meta.fileName,
+      label_en: meta.fileName,
+      ...(meta.mimeType ? { mimeType: meta.mimeType } : {}),
+      ...(meta.fileSize != null ? { fileSize: meta.fileSize } : {}),
+    },
+  ];
+}
+
+type SiteApplicationFormFieldOptionLike = {
+  value: string;
+  label_tr: string;
+  label_en: string;
+  mimeType?: string;
+  fileSize?: number;
+};
+
+export function normalizeResourceOptions(options: unknown): SiteApplicationFormFieldOptionLike[] {
+  const meta = parseResourceOptions(options);
+  if (!meta) return [];
+  return toResourceOptions(meta);
+}

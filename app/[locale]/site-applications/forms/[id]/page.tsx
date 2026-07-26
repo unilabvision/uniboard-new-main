@@ -793,6 +793,7 @@ export default function EditSiteApplicationFormPage({
             fields={fields}
             setFields={setFields}
             formType={formType === 'event' ? 'event' : 'team'}
+            formId={form?.id}
           />
           <button
             onClick={saveFields}

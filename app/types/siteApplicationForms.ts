@@ -17,7 +17,8 @@ export type SiteApplicationFieldType =
   | 'dropdown'
   | 'linear_scale'
   | 'rating'
-  | 'file';
+  | 'file'
+  | 'resource';
 
 export interface SiteApplicationFormFieldOption {
   value: string;
@@ -116,5 +117,7 @@ export interface PublicSiteApplicationForm {
     required: boolean;
     order_index: number;
     options: Array<{ value: string; label: string }>;
+    resource_file_name?: string | null;
+    has_resource?: boolean;
   }>;
 }

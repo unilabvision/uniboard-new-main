@@ -43,7 +43,7 @@ export const FIELD_TYPE_GROUPS: Array<{
     id: 'media',
     tr: 'Dosya',
     en: 'File',
-    types: ['file'],
+    types: ['file', 'resource'],
   },
 ];
 

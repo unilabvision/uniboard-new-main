@@ -9,6 +9,7 @@ import type {
 import { normalizeFieldOptions } from '@/app/lib/siteApplications/forms';
 import {
   getMaxFileBytesForFormType,
+  parseResourceOptions,
 } from '@/app/lib/siteApplications/files';
 import {
   toPublicPackages,
@@ -53,19 +54,35 @@ export function buildPreviewPublicForm(opts: {
     max_file_bytes: getMaxFileBytesForFormType(formType),
     packages: publicPackages,
     fields: [...opts.fields]
-      .map((field, index) => ({
-        field_key: field.field_key?.trim() || `field_${index + 1}`,
-        field_type: field.field_type,
-        label: (isEn ? field.label_en : field.label_tr)?.trim() || '',
-        placeholder:
-          (isEn ? field.placeholder_en : field.placeholder_tr)?.trim() || null,
-        required: Boolean(field.required),
-        order_index: field.order_index ?? index,
-        options: normalizeFieldOptions(field.options).map((opt) => ({
-          value: opt.value,
-          label: isEn ? opt.label_en : opt.label_tr,
-        })),
-      }))
+      .map((field, index) => {
+        const base = {
+          field_key: field.field_key?.trim() || `field_${index + 1}`,
+          field_type: field.field_type,
+          label: (isEn ? field.label_en : field.label_tr)?.trim() || '',
+          placeholder:
+            (isEn ? field.placeholder_en : field.placeholder_tr)?.trim() || null,
+          required: field.field_type === 'resource' ? false : Boolean(field.required),
+          order_index: field.order_index ?? index,
+        };
+
+        if (field.field_type === 'resource') {
+          const meta = parseResourceOptions(field.options);
+          return {
+            ...base,
+            options: meta ? [{ value: 'resource', label: meta.fileName }] : [],
+            resource_file_name: meta?.fileName ?? null,
+            has_resource: Boolean(meta),
+          };
+        }
+
+        return {
+          ...base,
+          options: normalizeFieldOptions(field.options).map((opt) => ({
+            value: opt.value,
+            label: isEn ? opt.label_en : opt.label_tr,
+          })),
+        };
+      })
       .sort((a, b) => a.order_index - b.order_index),
   };
 }

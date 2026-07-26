@@ -54,6 +54,11 @@ export function validateSubmissionFields(
   const normalized: Record<string, unknown> = {};
 
   for (const field of fields) {
+    // Admin resource files are download-only on the public form — never answered.
+    if (field.field_type === 'resource') {
+      continue;
+    }
+
     const value = normalizeFieldValue(field, values[field.field_key]);
 
     if (field.required && (value === null || value === '' || (Array.isArray(value) && value.length === 0))) {

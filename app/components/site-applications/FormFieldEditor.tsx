@@ -10,6 +10,7 @@ import {
   Circle,
   Clock,
   CloudUpload,
+  Download,
   Hash,
   Link2,
   List,
@@ -29,6 +30,9 @@ import {
 import {
   formatFileSize,
   getMaxFileBytesForFormType,
+  parseResourceOptions,
+  toResourceOptions,
+  validateAttachmentFile,
 } from '@/app/lib/siteApplications/files';
 import { SITE_APPLICATION_FILE_RETENTION_DAYS } from '@/app/lib/siteApplications/config';
 import type {
@@ -55,6 +59,7 @@ const FIELD_TYPE_META: Record<
   linear_scale: { tr: 'Doğrusal ölçek', en: 'Linear scale', icon: Hash },
   rating: { tr: 'Derecelendirme', en: 'Rating', icon: Star },
   file: { tr: 'Dosya yükleme', en: 'File upload', icon: CloudUpload },
+  resource: { tr: 'İndirilebilir dosya', en: 'Downloadable file', icon: Download },
 };
 
 const texts = {
@@ -87,6 +92,14 @@ const texts = {
     fileLimitTeam: 'Ekip formu dosya limiti (depolama)',
     fileLimitEvent: 'Dosya boyutu limiti',
     fileRetention: 'Dosyalar {days} gün sonra otomatik silinir',
+    resourceHint:
+      'Başvuran bu dosyayı indirir. Cevabı için ayrıca “Dosya yükleme” alanı ekleyin.',
+    resourceUpload: 'Case / ekip dosyası yükle',
+    resourceReplace: 'Dosyayı değiştir',
+    resourceRemove: 'Dosyayı kaldır',
+    resourceUploading: 'Yükleniyor…',
+    resourceEmpty: 'Henüz dosya yok',
+    resourceNeedSave: 'Dosya yüklemek için formu önce kaydedin',
     localeHint:
       'Soru metnini TR/EN satırlarına yazın. Kesik çizgili kutu yalnızca yanıt önizlemesidir. Canlı sitede görmek için “Kaydet ve yayınla” şart.',
     badgeTr: 'TR',
@@ -121,6 +134,14 @@ const texts = {
     fileLimitTeam: 'Team form file limit (storage)',
     fileLimitEvent: 'File size limit',
     fileRetention: 'Files are auto-deleted after {days} days',
+    resourceHint:
+      'Applicants download this file. Add a separate “File upload” field for their answer.',
+    resourceUpload: 'Upload case / team file',
+    resourceReplace: 'Replace file',
+    resourceRemove: 'Remove file',
+    resourceUploading: 'Uploading…',
+    resourceEmpty: 'No file yet',
+    resourceNeedSave: 'Save the form first to upload a file',
     localeHint:
       'Type the question in the TR/EN rows. The dashed box is answer preview only. Use Save & publish for the live site.',
     badgeTr: 'TR',
@@ -476,6 +497,135 @@ interface FormFieldEditorProps {
   onAddField?: () => void;
   /** team | event — controls file size hint for team forms */
   formType?: 'team' | 'event';
+  /** Required to upload resource files */
+  formId?: string;
+}
+
+function ResourceFileEditor({
+  formId,
+  field,
+  index,
+  setFields,
+  maxFileBytes,
+  t,
+}: {
+  formId?: string;
+  field: SiteApplicationFormFieldInput;
+  index: number;
+  setFields: React.Dispatch<React.SetStateAction<SiteApplicationFormFieldInput[]>>;
+  maxFileBytes: number;
+  t: (typeof texts)['tr'];
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const meta = parseResourceOptions(field.options);
+
+  const onPick = async (file: File | null) => {
+    if (!file) return;
+    setError(null);
+    if (!formId) {
+      setError(t.resourceNeedSave);
+      return;
+    }
+    const validation = validateAttachmentFile(
+      { name: file.name, size: file.size },
+      { maxBytes: maxFileBytes, locale: 'tr' }
+    );
+    if (validation) {
+      setError(validation);
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const res = await fetch(`/api/site-applications/forms/${formId}/resource-upload-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fieldKey: field.field_key || `resource_${index}`,
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type || 'application/octet-stream',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Upload failed');
+
+      const putRes = await fetch(data.signedUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': data.mimeType || file.type || 'application/octet-stream' },
+        body: file,
+      });
+      if (!putRes.ok) throw new Error('Upload failed');
+
+      updateField(
+        index,
+        {
+          options: toResourceOptions({
+            storageRef: data.storageRef,
+            fileName: file.name,
+            mimeType: file.type || undefined,
+            fileSize: file.size,
+          }) as SiteApplicationFormFieldOption[],
+          required: false,
+        },
+        setFields
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-dashed border-[#990000]/40 bg-[#990000]/5 px-4 py-5 space-y-3">
+      <div className="flex items-start gap-3">
+        <Download className="w-5 h-5 text-[#990000] shrink-0 mt-0.5" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-neutral-800 dark:text-neutral-100">
+            {meta ? meta.fileName : t.resourceEmpty}
+          </p>
+          <p className="text-xs text-neutral-500 mt-1">{t.resourceHint}</p>
+          {meta?.fileSize != null && (
+            <p className="text-xs text-neutral-400 mt-0.5">{formatFileSize(meta.fileSize)}</p>
+          )}
+        </div>
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        className="hidden"
+        onChange={(e) => onPick(e.target.files?.[0] || null)}
+      />
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={uploading || !formId}
+          onClick={() => inputRef.current?.click()}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-[#990000] text-white disabled:opacity-50"
+        >
+          <CloudUpload className="w-4 h-4" />
+          {uploading ? t.resourceUploading : meta ? t.resourceReplace : t.resourceUpload}
+        </button>
+        {meta && (
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => updateField(index, { options: [] }, setFields)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-neutral-300 dark:border-neutral-600"
+          >
+            <Trash2 className="w-4 h-4" />
+            {t.resourceRemove}
+          </button>
+        )}
+      </div>
+      {!formId && <p className="text-xs text-amber-700 dark:text-amber-300">{t.resourceNeedSave}</p>}
+      {error && <p className="text-xs text-red-600">{error}</p>}
+    </div>
+  );
 }
 
 export default function FormFieldEditor({
@@ -484,6 +634,7 @@ export default function FormFieldEditor({
   setFields,
   onAddField,
   formType = 'team',
+  formId,
 }: FormFieldEditorProps) {
   const t = texts[locale as keyof typeof texts] || texts.tr;
   const isEn = locale === 'en';
@@ -684,7 +835,19 @@ export default function FormFieldEditor({
                   </p>
                 </div>
               )}
-              {!isOptionFieldType(field.field_type) && field.field_type !== 'file' && (
+              {field.field_type === 'resource' && (
+                <ResourceFileEditor
+                  formId={formId}
+                  field={field}
+                  index={index}
+                  setFields={setFields}
+                  maxFileBytes={maxFileBytes}
+                  t={t}
+                />
+              )}
+              {!isOptionFieldType(field.field_type) &&
+                field.field_type !== 'file' &&
+                field.field_type !== 'resource' && (
                 <div
                   aria-hidden
                   className="w-full rounded-lg border border-dashed border-neutral-200 dark:border-neutral-600 px-3 py-2.5 text-sm text-neutral-400 bg-neutral-50/50 dark:bg-neutral-900/30 select-none pointer-events-none"
@@ -703,6 +866,7 @@ export default function FormFieldEditor({
               )}
 
               {field.field_type !== 'file' &&
+                field.field_type !== 'resource' &&
                 field.field_type !== 'linear_scale' &&
                 field.field_type !== 'rating' && (
                   <div className="grid sm:grid-cols-2 gap-3">
@@ -741,15 +905,19 @@ export default function FormFieldEditor({
             </div>
 
             <div className="flex items-center justify-between px-5 py-3 bg-neutral-50/80 dark:bg-neutral-900/40 border-t border-neutral-100 dark:border-neutral-700">
-              <label className="inline-flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300">
-                <input
-                  type="checkbox"
-                  checked={!!field.required}
-                  onChange={(e) => updateField(index, { required: e.target.checked }, setFields)}
-                  className="rounded border-neutral-300 text-[#990000] focus:ring-[#990000]"
-                />
-                {t.required}
-              </label>
+              {field.field_type === 'resource' ? (
+                <span className="text-xs text-neutral-500">{t.resourceHint}</span>
+              ) : (
+                <label className="inline-flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300">
+                  <input
+                    type="checkbox"
+                    checked={!!field.required}
+                    onChange={(e) => updateField(index, { required: e.target.checked }, setFields)}
+                    className="rounded border-neutral-300 text-[#990000] focus:ring-[#990000]"
+                  />
+                  {t.required}
+                </label>
+              )}
               <div className="flex items-center gap-1">
                 <button
                   type="button"
