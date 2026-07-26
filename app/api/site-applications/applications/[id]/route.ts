@@ -6,6 +6,7 @@ import {
 } from '@/app/lib/siteApplications/config';
 import { requireSiteApplicationsOrEventsUser } from '@/app/api/site-applications/access/_helpers';
 import { getSiteApplicationAttachmentUrl } from '@/app/lib/siteApplications/attachmentDownload';
+import { parseSubmissionFileMeta } from '@/app/lib/siteApplications/files';
 import { sendSiteApplicationApprovalEmail } from '@/app/_services/siteApplicationApprovalEmail';
 import { ensureEventApplicationAccepted } from '@/app/lib/siteApplications/eventAutoAccept';
 import { syncSingleApplicationPayment } from '@/app/lib/siteApplications/syncPayments';
@@ -51,10 +52,44 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     }
   }
 
+  const submission =
+    application.submission_data && typeof application.submission_data === 'object'
+      ? (application.submission_data as Record<string, unknown>)
+      : {};
+
+  const field_attachments: Array<{
+    field_key: string;
+    file_name: string;
+    file_size?: number;
+    mime_type?: string;
+    storage_path: string;
+    url: string | null;
+  }> = [];
+
+  for (const [fieldKey, raw] of Object.entries(submission)) {
+    const meta = parseSubmissionFileMeta(raw);
+    if (!meta) continue;
+    let url: string | null = null;
+    try {
+      url = await getSiteApplicationAttachmentUrl(authResult.supabase, meta.storagePath);
+    } catch {
+      url = null;
+    }
+    field_attachments.push({
+      field_key: fieldKey,
+      file_name: meta.fileName,
+      file_size: meta.fileSize,
+      mime_type: meta.mimeType,
+      storage_path: meta.storagePath,
+      url,
+    });
+  }
+
   return NextResponse.json({
     application,
     history: history ?? [],
     attachment_url,
+    field_attachments,
   });
 }
 

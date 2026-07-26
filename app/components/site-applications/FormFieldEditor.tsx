@@ -30,6 +30,7 @@ import {
   formatFileSize,
   getMaxFileBytesForFormType,
 } from '@/app/lib/siteApplications/files';
+import { SITE_APPLICATION_FILE_RETENTION_DAYS } from '@/app/lib/siteApplications/config';
 import type {
   SiteApplicationFieldType,
   SiteApplicationFormFieldInput,
@@ -85,6 +86,7 @@ const texts = {
     answerPreview: 'Yanıt alanı (önizleme — buraya yazılmaz)',
     fileLimitTeam: 'Ekip formu dosya limiti (depolama)',
     fileLimitEvent: 'Dosya boyutu limiti',
+    fileRetention: 'Dosyalar {days} gün sonra otomatik silinir',
     localeHint:
       'Soru metnini TR/EN satırlarına yazın. Kesik çizgili kutu yalnızca yanıt önizlemesidir. Canlı sitede görmek için “Kaydet ve yayınla” şart.',
     badgeTr: 'TR',
@@ -118,6 +120,7 @@ const texts = {
     answerPreview: 'Answer field (preview — not editable here)',
     fileLimitTeam: 'Team form file limit (storage)',
     fileLimitEvent: 'File size limit',
+    fileRetention: 'Files are auto-deleted after {days} days',
     localeHint:
       'Type the question in the TR/EN rows. The dashed box is answer preview only. Use Save & publish for the live site.',
     badgeTr: 'TR',
@@ -672,6 +675,12 @@ export default function FormFieldEditor({
                   <p>{t.previewFile}</p>
                   <p className="text-xs text-amber-700 dark:text-amber-300">
                     {fileLimitLabel}: {formatFileSize(maxFileBytes)}
+                  </p>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                    {t.fileRetention.replace(
+                      '{days}',
+                      String(SITE_APPLICATION_FILE_RETENTION_DAYS)
+                    )}
                   </p>
                 </div>
               )}

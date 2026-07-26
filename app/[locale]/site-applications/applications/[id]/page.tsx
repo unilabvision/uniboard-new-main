@@ -17,8 +17,22 @@ import {
   Loader2,
 } from 'lucide-react';
 import type { SiteApplication, SiteApplicationStatusHistory } from '@/app/types/siteApplications';
-import { formatFileSize, getAllowedStatusesForApplication, isEventSiteApplication } from '@/app/lib/siteApplications';
+import {
+  formatFileSize,
+  getAllowedStatusesForApplication,
+  isEventSiteApplication,
+  parseSubmissionFileMeta,
+} from '@/app/lib/siteApplications';
 import { formatPackagePrice } from '@/app/lib/siteApplications/packages';
+
+type FieldAttachment = {
+  field_key: string;
+  file_name: string;
+  file_size?: number;
+  mime_type?: string;
+  storage_path: string;
+  url: string | null;
+};
 
 const INTERNAL_SUBMISSION_KEYS = new Set([
   'registration_tier',
@@ -84,9 +98,12 @@ const texts = {
     paymentSuperseded: 'Mükerrer (başka kayıt ödenmiş)',
     attachment: 'Ek Dosya',
     download: 'Dosyayı İndir',
+    openFile: 'Dosyayı Aç',
     expires: 'Silinme tarihi',
     noAttachment: 'Ek dosya yok',
     attachmentExpired: 'Dosya süresi doldu veya silindi',
+    fieldFiles: 'Formdaki dosya alanları',
+    storageHint: 'Dosyalar güvenli depolamada tutulur; admin imzalı link ile açar/indirir.',
   },
   en: {
     back: 'Back to List',
@@ -138,9 +155,12 @@ const texts = {
     paymentSuperseded: 'Duplicate (paid on another registration)',
     attachment: 'Attachment',
     download: 'Download File',
+    openFile: 'Open File',
     expires: 'Expires on',
     noAttachment: 'No attachment',
     attachmentExpired: 'File expired or was removed',
+    fieldFiles: 'File fields from the form',
+    storageHint: 'Files are stored securely; admins open/download via signed links.',
   },
 };
 
@@ -165,8 +185,10 @@ export default function SiteApplicationDetailPage({
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [downloadingField, setDownloadingField] = useState<string | null>(null);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null);
+  const [fieldAttachments, setFieldAttachments] = useState<FieldAttachment[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
@@ -187,6 +209,9 @@ export default function SiteApplicationDetailPage({
         setNotes(data.application.admin_notes || '');
         setHistory((data.history as SiteApplicationStatusHistory[]) || []);
         setAttachmentUrl(data.attachment_url || null);
+        setFieldAttachments(
+          Array.isArray(data.field_attachments) ? (data.field_attachments as FieldAttachment[]) : []
+        );
       } catch {
         setApp(null);
         setLoadError(t.notFound);
@@ -261,6 +286,9 @@ export default function SiteApplicationDetailPage({
         const data = await res.json();
         url = data.attachment_url || null;
         setAttachmentUrl(url);
+        if (Array.isArray(data.field_attachments)) {
+          setFieldAttachments(data.field_attachments as FieldAttachment[]);
+        }
       }
       if (!url) throw new Error('URL missing');
       window.open(url, '_blank', 'noopener');
@@ -268,6 +296,31 @@ export default function SiteApplicationDetailPage({
       setAttachmentError(t.attachmentExpired);
     } finally {
       setDownloading(false);
+    }
+  };
+
+  const handleDownloadFieldFile = async (fieldKey: string) => {
+    setDownloadingField(fieldKey);
+    setAttachmentError(null);
+    try {
+      let item = fieldAttachments.find((f) => f.field_key === fieldKey);
+      let url = item?.url || null;
+      if (!url) {
+        const res = await fetch(`/api/site-applications/applications/${id}`);
+        const data = await res.json();
+        const list = Array.isArray(data.field_attachments)
+          ? (data.field_attachments as FieldAttachment[])
+          : [];
+        setFieldAttachments(list);
+        item = list.find((f) => f.field_key === fieldKey);
+        url = item?.url || null;
+      }
+      if (!url) throw new Error('URL missing');
+      window.open(url, '_blank', 'noopener');
+    } catch {
+      setAttachmentError(t.attachmentExpired);
+    } finally {
+      setDownloadingField(null);
     }
   };
 
@@ -295,9 +348,16 @@ export default function SiteApplicationDetailPage({
   const paymentStatus = app.submission_data?.payment_status as string | undefined;
   const orderId = app.submission_data?.order_id as string | undefined;
 
+  const fieldFileKeys = new Set(fieldAttachments.map((f) => f.field_key));
+
   const detailFields =
     app.submission_data && Object.keys(app.submission_data).length > 0
-      ? Object.entries(app.submission_data).filter(([key]) => !INTERNAL_SUBMISSION_KEYS.has(key))
+      ? Object.entries(app.submission_data).filter(
+          ([key, value]) =>
+            !INTERNAL_SUBMISSION_KEYS.has(key) &&
+            !fieldFileKeys.has(key) &&
+            !parseSubmissionFileMeta(value)
+        )
       : isEvent
         ? [
             ['event_name', app.event_name],
@@ -436,8 +496,10 @@ export default function SiteApplicationDetailPage({
             <Paperclip className="w-4 h-4" />
             {t.attachment}
           </h2>
+          <p className="text-xs text-neutral-500 mb-4">{t.storageHint}</p>
+
           {app.attachment_storage_path && app.attachment_file_name ? (
-            <div className="space-y-3">
+            <div className="space-y-3 mb-6 pb-6 border-b border-neutral-200 dark:border-neutral-700">
               <div className="text-sm">
                 <p className="font-medium text-neutral-900 dark:text-neutral-100">
                   {app.attachment_file_name}
@@ -469,12 +531,61 @@ export default function SiteApplicationDetailPage({
                 )}
                 {t.download}
               </button>
-              {attachmentError && (
-                <p className="text-sm text-red-600 dark:text-red-400">{attachmentError}</p>
-              )}
             </div>
-          ) : (
+          ) : null}
+
+          {fieldAttachments.length > 0 ? (
+            <div className="space-y-4">
+              <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                {t.fieldFiles}
+              </h3>
+              {fieldAttachments.map((file) => {
+                const label =
+                  t.fields[file.field_key as keyof typeof t.fields] ||
+                  file.field_key.replace(/_/g, ' ');
+                return (
+                  <div
+                    key={file.field_key}
+                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-lg border border-neutral-200 dark:border-neutral-700 px-4 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-xs uppercase tracking-wide text-neutral-500 mb-1">
+                        {label}
+                      </p>
+                      <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100 truncate">
+                        {file.file_name}
+                      </p>
+                      {file.file_size != null && (
+                        <p className="text-xs text-neutral-500 mt-0.5">
+                          {formatFileSize(file.file_size)}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadFieldFile(file.field_key)}
+                      disabled={downloadingField === file.field_key}
+                      className="inline-flex items-center justify-center gap-2 px-3 py-2 bg-[#990000] text-white rounded-lg text-sm disabled:opacity-50 shrink-0"
+                    >
+                      {downloadingField === file.field_key ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Download className="w-4 h-4" />
+                      )}
+                      {t.openFile}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+
+          {!app.attachment_storage_path && fieldAttachments.length === 0 ? (
             <p className="text-sm text-neutral-500">{t.noAttachment}</p>
+          ) : null}
+
+          {attachmentError && (
+            <p className="text-sm text-red-600 dark:text-red-400 mt-3">{attachmentError}</p>
           )}
         </section>
 

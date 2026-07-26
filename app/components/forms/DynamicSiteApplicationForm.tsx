@@ -65,7 +65,7 @@ const ui = {
     invalidNumber: 'Geçerli bir sayı giriniz',
     select: 'Seçiniz',
     attachment: 'Ek Dosya (isteğe bağlı)',
-    attachmentHint: 'PDF, Word, görsel vb. Dosyalar 20 gün sonra otomatik silinir.',
+    attachmentHint: 'PDF, Word, görsel vb. Dosyalar 30 gün sonra otomatik silinir.',
     attachmentDrop: 'Dosyayı buraya bırakın veya tıklayın',
     uploadFailed: 'Dosya yüklenemedi.',
     validationError: 'Lütfen zorunlu alanları doldurun.',
@@ -97,7 +97,7 @@ const ui = {
     invalidNumber: 'Please enter a valid number',
     select: 'Select',
     attachment: 'Attachment (optional)',
-    attachmentHint: 'PDF, Word, images, etc. Files are automatically deleted after 20 days.',
+    attachmentHint: 'PDF, Word, images, etc. Files are automatically deleted after 30 days.',
     attachmentDrop: 'Drop a file here or click to browse',
     uploadFailed: 'File upload failed.',
     validationError: 'Please fill in the required fields.',
@@ -187,8 +187,8 @@ export default function DynamicSiteApplicationForm({
 
   const attachmentHint =
     locale === 'en'
-      ? `PDF, Word, images, etc. — max ${formatFileSize(maxFileBytes)}. Files are automatically deleted after 20 days.`
-      : `PDF, Word, görsel vb. — en fazla ${formatFileSize(maxFileBytes)}. Dosyalar 20 gün sonra otomatik silinir.`;
+      ? `PDF, Word, images, etc. — max ${formatFileSize(maxFileBytes)}. Files are automatically deleted after 30 days.`
+      : `PDF, Word, görsel vb. — en fazla ${formatFileSize(maxFileBytes)}. Dosyalar 30 gün sonra otomatik silinir.`;
 
   const validateFile = (file: File) =>
     validateAttachmentFile(file, {

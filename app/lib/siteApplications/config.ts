@@ -58,17 +58,17 @@ export function getAllowedStatusesForApplication(app: {
   return SITE_APPLICATION_STATUSES;
 }
 
-/** Maksimum ek dosya boyutu — etkinlik formları (50 MB) */
-export const SITE_APPLICATION_MAX_FILE_BYTES = 50 * 1024 * 1024;
+/** Maksimum ek dosya boyutu — etkinlik formları (100 MB) */
+export const SITE_APPLICATION_MAX_FILE_BYTES = 100 * 1024 * 1024;
 
 /**
- * Ekip başvuru formları için daha düşük limit (DB / storage).
+ * Ekip başvuru formları için dosya limiti (DB / storage).
  * Field-level `file` + form attachment için geçerlidir.
  */
-export const TEAM_APPLICATION_MAX_FILE_BYTES = 10 * 1024 * 1024;
+export const TEAM_APPLICATION_MAX_FILE_BYTES = 100 * 1024 * 1024;
 
-/** Dosyaların saklama süresi (gün) */
-export const SITE_APPLICATION_FILE_RETENTION_DAYS = 20;
+/** Dosyaların saklama süresi (gün) — cron cleanup ile silinir */
+export const SITE_APPLICATION_FILE_RETENTION_DAYS = 30;
 
 export const SITE_APPLICATION_STORAGE_BUCKET =
   process.env.NEXT_PUBLIC_SITE_APPLICATIONS_BUCKET ||

@@ -96,3 +96,54 @@ export function parseAttachmentStorageRef(storageRef: string): {
   }
   return { bucket: SITE_APPLICATION_STORAGE_BUCKET, path: trimmed.replace(/^\/+/, '') };
 }
+
+/** Field-level file uploads are stored as JSON in submission_data. */
+export type SubmissionFileMeta = {
+  storagePath: string;
+  fileName: string;
+  mimeType?: string;
+  fileSize?: number;
+};
+
+export function parseSubmissionFileMeta(raw: unknown): SubmissionFileMeta | null {
+  if (raw == null) return null;
+
+  let parsed: unknown = raw;
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    if (trimmed.startsWith('{')) {
+      try {
+        parsed = JSON.parse(trimmed);
+      } catch {
+        return null;
+      }
+    } else if (trimmed.includes('::') || trimmed.startsWith('site-applications/')) {
+      const name = trimmed.split('/').pop() || 'attachment';
+      return { storagePath: trimmed, fileName: name };
+    } else {
+      return null;
+    }
+  }
+
+  if (!parsed || typeof parsed !== 'object') return null;
+  const obj = parsed as Record<string, unknown>;
+  const storagePath = String(obj.storagePath || obj.storage_path || obj.path || '').trim();
+  const fileName = String(obj.fileName || obj.file_name || obj.name || '').trim();
+  if (!storagePath || !fileName) return null;
+
+  const fileSizeRaw = obj.fileSize ?? obj.file_size;
+  const fileSize =
+    typeof fileSizeRaw === 'number'
+      ? fileSizeRaw
+      : fileSizeRaw != null
+        ? Number(fileSizeRaw)
+        : undefined;
+
+  return {
+    storagePath,
+    fileName,
+    mimeType: obj.mimeType || obj.mime_type ? String(obj.mimeType || obj.mime_type) : undefined,
+    fileSize: Number.isFinite(fileSize) ? fileSize : undefined,
+  };
+}
