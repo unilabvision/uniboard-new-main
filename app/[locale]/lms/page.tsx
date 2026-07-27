@@ -569,9 +569,9 @@ const CourseCard = ({
   };
 
   return (
-    <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden hover:shadow-lg transition-all duration-300">
+    <div className="relative bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:shadow-lg transition-all duration-300">
       {/* Course Thumbnail */}
-      <div className="relative h-48 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-900/20 dark:to-indigo-900/20">
+      <div className="relative h-48 overflow-hidden rounded-t-lg bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-900/20 dark:to-indigo-900/20">
         {course.thumbnail_url ? (
           <Image 
             src={course.thumbnail_url} 
@@ -603,84 +603,84 @@ const CourseCard = ({
             {course.is_active ? t.courseStatus.active : t.courseStatus.inactive}
           </div>
         </div>
-        
-        {/* Action Menu */}
-        <div className="absolute bottom-3 right-3 menu-container">
-          <button
-            onClick={() => setShowMenu(!showMenu)}
-            className="p-2 bg-white/90 dark:bg-black/90 rounded-full hover:bg-white dark:hover:bg-black transition-colors"
-          >
-            <MoreVertical className="w-4 h-4" />
-          </button>
-          
-          {showMenu && (
-            <div className="absolute right-0 bottom-full mb-2 w-48 bg-white dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700 shadow-lg z-10">
-              <Link
-                href={`/${locale}/lms/courses/${course.slug}`}
-                className="w-full px-3 py-2 text-left text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md flex items-center text-sm"
-                onClick={() => setShowMenu(false)}
-              >
-                <Eye className="w-3 h-3 mr-2" />
-                {t.viewCourse}
-              </Link>
-              <button
-                onClick={() => {
-                  onEdit(course);
-                  setShowMenu(false);
-                }}
-                className="w-full px-3 py-2 text-left text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-md flex items-center text-sm"
-              >
-                <Edit2 className="w-3 h-3 mr-2" />
-                {t.editCourse}
-              </button>
-              <button
-                onClick={startPriceEdit}
-                className="w-full px-3 py-2 text-left text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-md flex items-center text-sm"
-              >
-                <Tag className="w-3 h-3 mr-2" />
-                {t.editPrice}
-              </button>
-              <button
-                onClick={() => {
-                  void startPackagePriceEdit();
-                }}
-                className="w-full px-3 py-2 text-left text-violet-700 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 rounded-md flex items-center text-sm"
-              >
-                <Layers className="w-3 h-3 mr-2" />
-                {t.editPackagePrices}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  void toggleRegistration();
-                }}
-                disabled={savingRegistration}
-                className={`w-full px-3 py-2 text-left rounded-md flex items-center text-sm disabled:opacity-50 ${
-                  registrationOpen
-                    ? 'text-orange-700 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20'
-                    : 'text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
-                }`}
-              >
-                <Calendar className="w-3 h-3 mr-2" />
-                {savingRegistration
-                  ? '...'
-                  : registrationOpen
-                    ? t.toggleRegistrationClose
-                    : t.toggleRegistrationOpen}
-              </button>
-              <button
-                onClick={() => {
-                  onDelete(course);
-                  setShowMenu(false);
-                }}
-                className="w-full px-3 py-2 text-left text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md flex items-center text-sm"
-              >
-                <Trash2 className="w-3 h-3 mr-2" />
-                {t.deleteCourse}
-              </button>
-            </div>
-          )}
-        </div>
+      </div>
+
+      {/* Action Menu — outside thumbnail so dropdown is not clipped */}
+      <div className="absolute right-3 top-[9.25rem] z-20 menu-container">
+        <button
+          onClick={() => setShowMenu(!showMenu)}
+          className="p-2 bg-white/90 dark:bg-black/90 rounded-full hover:bg-white dark:hover:bg-black transition-colors shadow-sm"
+        >
+          <MoreVertical className="w-4 h-4" />
+        </button>
+
+        {showMenu && (
+          <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-neutral-800 rounded-md border border-neutral-200 dark:border-neutral-700 shadow-lg z-30">
+            <Link
+              href={`/${locale}/lms/courses/${course.slug}`}
+              className="w-full px-3 py-2 text-left text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md flex items-center text-sm"
+              onClick={() => setShowMenu(false)}
+            >
+              <Eye className="w-3 h-3 mr-2" />
+              {t.viewCourse}
+            </Link>
+            <button
+              onClick={() => {
+                onEdit(course);
+                setShowMenu(false);
+              }}
+              className="w-full px-3 py-2 text-left text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-md flex items-center text-sm"
+            >
+              <Edit2 className="w-3 h-3 mr-2" />
+              {t.editCourse}
+            </button>
+            <button
+              onClick={startPriceEdit}
+              className="w-full px-3 py-2 text-left text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-md flex items-center text-sm"
+            >
+              <Tag className="w-3 h-3 mr-2" />
+              {t.editPrice}
+            </button>
+            <button
+              onClick={() => {
+                void startPackagePriceEdit();
+              }}
+              className="w-full px-3 py-2 text-left text-violet-700 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-900/20 rounded-md flex items-center text-sm"
+            >
+              <Layers className="w-3 h-3 mr-2" />
+              {t.editPackagePrices}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void toggleRegistration();
+              }}
+              disabled={savingRegistration}
+              className={`w-full px-3 py-2 text-left rounded-md flex items-center text-sm disabled:opacity-50 ${
+                registrationOpen
+                  ? 'text-orange-700 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20'
+                  : 'text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
+              }`}
+            >
+              <Calendar className="w-3 h-3 mr-2" />
+              {savingRegistration
+                ? '...'
+                : registrationOpen
+                  ? t.toggleRegistrationClose
+                  : t.toggleRegistrationOpen}
+            </button>
+            <button
+              onClick={() => {
+                onDelete(course);
+                setShowMenu(false);
+              }}
+              className="w-full px-3 py-2 text-left text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md flex items-center text-sm"
+            >
+              <Trash2 className="w-3 h-3 mr-2" />
+              {t.deleteCourse}
+            </button>
+          </div>
+        )}
       </div>
       
       {/* Course Content */}
