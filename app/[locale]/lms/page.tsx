@@ -20,6 +20,7 @@ import {
   getCoursePackagePrices,
   updateCoursePrices,
   updateCoursePackagePricesBatch,
+  updateCourseRegistration,
   type CoursePackagePrice,
 } from '@/app/lib/lms/enrollmentOverviewService';
 
@@ -29,6 +30,17 @@ function parsePriceInput(value: string): number | null | 'invalid' {
   const normalized = trimmed.replace(/\s/g, '').replace(',', '.');
   const num = Number(normalized);
   return Number.isFinite(num) ? num : 'invalid';
+}
+
+function isCourseRegistrationOpen(course: {
+  is_registration_open?: boolean;
+  registration_deadline?: string | null;
+}): boolean {
+  if (course.is_registration_open === false) return false;
+  if (course.registration_deadline) {
+    return new Date(course.registration_deadline).getTime() > Date.now();
+  }
+  return true;
 }
 
 // Utility function to sanitize HTML content
@@ -151,6 +163,11 @@ const texts = {
     noPackages: "Bu kursa bağlı aktif paket yok",
     packagePricesSaved: "Paket fiyatları güncellendi",
     packagePricesSaveError: "Paket fiyatları kaydedilemedi",
+    toggleRegistrationOpen: "Kaydı Aç",
+    toggleRegistrationClose: "Kaydı Kapat",
+    registrationUpdated: "Kayıt durumu güncellendi",
+    registrationUpdateError: "Kayıt durumu güncellenemedi",
+    registrationDeadlineExpired: "Kayıt son tarihi geçmiş — açınca tarih temizlenir",
   },
   en: {
     title: "Course Management",
@@ -224,6 +241,11 @@ const texts = {
     noPackages: "No active packages for this course",
     packagePricesSaved: "Package prices updated",
     packagePricesSaveError: "Could not save package prices",
+    toggleRegistrationOpen: "Open Registration",
+    toggleRegistrationClose: "Close Registration",
+    registrationUpdated: "Registration status updated",
+    registrationUpdateError: "Could not update registration status",
+    registrationDeadlineExpired: "Deadline has passed — opening will clear the deadline",
   }
 };
 
@@ -350,7 +372,8 @@ const CourseCard = ({
   t,
   onEdit,
   onDelete,
-  onPriceUpdate
+  onPriceUpdate,
+  onRegistrationUpdate,
 }: { 
   course: Course;
   locale: string;
@@ -358,6 +381,10 @@ const CourseCard = ({
   onEdit: (course: Course) => void;
   onDelete: (course: Course) => void;
   onPriceUpdate: (courseId: string, price: number | null, originalPrice: number | null) => Promise<void>;
+  onRegistrationUpdate: (
+    courseId: string,
+    patch: { is_registration_open: boolean; registration_deadline?: string | null }
+  ) => void;
 }) => {
   const [showMenu, setShowMenu] = useState(false);
   const [editingPrice, setEditingPrice] = useState(false);
@@ -372,6 +399,12 @@ const CourseCard = ({
     Record<string, { price: string; original: string }>
   >({});
   const [savingPackages, setSavingPackages] = useState(false);
+  const [savingRegistration, setSavingRegistration] = useState(false);
+
+  const registrationOpen = isCourseRegistrationOpen(course);
+  const deadlineExpired =
+    Boolean(course.registration_deadline) &&
+    new Date(course.registration_deadline!).getTime() <= Date.now();
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -496,6 +529,45 @@ const CourseCard = ({
     }
   };
 
+  const toggleRegistration = async () => {
+    setShowMenu(false);
+    const nextOpen = !registrationOpen;
+    if (
+      nextOpen &&
+      deadlineExpired &&
+      !window.confirm(
+        `${t.registrationDeadlineExpired}\n\n${
+          locale === 'tr'
+            ? 'Kaydı açmak istiyor musunuz?'
+            : 'Open registration anyway?'
+        }`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setSavingRegistration(true);
+      const updated = await updateCourseRegistration(course.id, {
+        is_registration_open: nextOpen,
+      });
+      onRegistrationUpdate(course.id, {
+        is_registration_open: updated.is_registration_open,
+        registration_deadline: updated.registration_deadline,
+      });
+      alert(t.registrationUpdated);
+    } catch (error) {
+      console.error('Registration toggle failed:', error);
+      alert(
+        error instanceof Error && error.message
+          ? error.message
+          : t.registrationUpdateError
+      );
+    } finally {
+      setSavingRegistration(false);
+    }
+  };
+
   return (
     <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden hover:shadow-lg transition-all duration-300">
       {/* Course Thumbnail */}
@@ -576,6 +648,25 @@ const CourseCard = ({
               >
                 <Layers className="w-3 h-3 mr-2" />
                 {t.editPackagePrices}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void toggleRegistration();
+                }}
+                disabled={savingRegistration}
+                className={`w-full px-3 py-2 text-left rounded-md flex items-center text-sm disabled:opacity-50 ${
+                  registrationOpen
+                    ? 'text-orange-700 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20'
+                    : 'text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
+                }`}
+              >
+                <Calendar className="w-3 h-3 mr-2" />
+                {savingRegistration
+                  ? '...'
+                  : registrationOpen
+                    ? t.toggleRegistrationClose
+                    : t.toggleRegistrationOpen}
               </button>
               <button
                 onClick={() => {
@@ -826,14 +917,30 @@ const CourseCard = ({
             </div>
           )}
           
-          {course.course_type === 'live' && !editingPrice && !editingPackages && (
-            <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-              course.is_registration_open 
-                ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
-                : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
-            }`}>
-              {course.is_registration_open ? t.courseStatus.registrationOpen : t.courseStatus.registrationClosed}
-            </div>
+          {!editingPrice && !editingPackages && (
+            <button
+              type="button"
+              onClick={() => {
+                void toggleRegistration();
+              }}
+              disabled={savingRegistration}
+              title={
+                deadlineExpired && !registrationOpen
+                  ? t.registrationDeadlineExpired
+                  : undefined
+              }
+              className={`px-2 py-1 rounded-full text-xs font-medium disabled:opacity-50 ${
+                registrationOpen
+                  ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+                  : 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-400'
+              }`}
+            >
+              {savingRegistration
+                ? '...'
+                : registrationOpen
+                  ? t.courseStatus.registrationOpen
+                  : t.courseStatus.registrationClosed}
+            </button>
           )}
         </div>
       </div>
@@ -1236,6 +1343,26 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
     );
   };
 
+  const handleRegistrationUpdate = (
+    courseId: string,
+    patch: { is_registration_open: boolean; registration_deadline?: string | null }
+  ) => {
+    setCourses((prev) =>
+      prev.map((course) =>
+        course.id === courseId
+          ? {
+              ...course,
+              is_registration_open: patch.is_registration_open,
+              registration_deadline:
+                patch.registration_deadline === undefined
+                  ? course.registration_deadline
+                  : patch.registration_deadline || undefined,
+            }
+          : course
+      )
+    );
+  };
+
   // Auth check
   if (!isLoaded) {
     return null;
@@ -1469,6 +1596,7 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
                   onEdit={handleEditCourse}
                   onDelete={handleDeleteCourse}
                   onPriceUpdate={handlePriceUpdate}
+                  onRegistrationUpdate={handleRegistrationUpdate}
                 />
               ))}
             </div>

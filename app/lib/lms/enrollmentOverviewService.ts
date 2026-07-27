@@ -939,3 +939,29 @@ export async function updateCoursePackagePricesBatch(
     throw new Error(data.error || 'Paket fiyatları güncellenemedi');
   }
 }
+
+export async function updateCourseRegistration(
+  courseId: string,
+  options: {
+    is_registration_open: boolean;
+    registration_deadline?: string | null;
+  }
+) {
+  const res = await fetch(
+    `/api/lms/courses/${encodeURIComponent(courseId)}/registration`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options),
+    }
+  );
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || 'Kayıt durumu güncellenemedi');
+  }
+  return data.course as {
+    id: string;
+    is_registration_open: boolean;
+    registration_deadline: string | null;
+  };
+}

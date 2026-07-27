@@ -465,8 +465,9 @@ export default function EditCoursePage() {
             />
           )}
 
-          {activeTab === 'settings' && course.course_type === 'live' && (
+          {activeTab === 'settings' && (
             <div className="space-y-6">
+              {course.course_type === 'live' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
@@ -530,30 +531,51 @@ export default function EditCoursePage() {
                     onChange={(e) => setCourse({ ...course, registration_deadline: e.target.value })}
                     className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 focus:ring-2 focus:ring-[#990000] focus:border-transparent"
                   />
-                </div>
-                
-                <div className="md:col-span-2">
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="is_registration_open"
-                      checked={course.is_registration_open}
-                      onChange={(e) => setCourse({ ...course, is_registration_open: e.target.checked })}
-                      className="w-4 h-4 text-[#990000] bg-white dark:bg-neutral-800 border-neutral-300 dark:border-neutral-600 rounded focus:ring-[#990000] focus:ring-2"
-                    />
-                    <label htmlFor="is_registration_open" className="ml-3 text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                      {t.registrationOpen}
-                    </label>
-                  </div>
+                  {course.registration_deadline &&
+                    new Date(course.registration_deadline).getTime() <= Date.now() && (
+                      <p className="mt-1 text-xs text-orange-600 dark:text-orange-400">
+                        {locale === 'tr'
+                          ? 'Bu tarih geçmiş — sitede “Kayıt Kapalı” görünür. Kaydı açmak için tarihi ilerletin veya temizleyin.'
+                          : 'This deadline has passed — the site shows “Registration Closed”. Extend or clear the date to reopen.'}
+                      </p>
+                    )}
                 </div>
               </div>
-            </div>
-          )}
+              )}
 
-          {activeTab === 'settings' && course.course_type !== 'live' && (
-            <div className="text-center py-12 text-neutral-500 dark:text-neutral-400">
-              <PlayCircle className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>Bu kurs türü için özel ayar bulunmamaktadır.</p>
+              <div className="rounded-lg border border-neutral-200 dark:border-neutral-700 p-4">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="is_registration_open"
+                    checked={course.is_registration_open}
+                    onChange={(e) => {
+                      const open = e.target.checked;
+                      setCourse((prev) => {
+                        if (!prev) return prev;
+                        const next = { ...prev, is_registration_open: open };
+                        if (
+                          open &&
+                          prev.registration_deadline &&
+                          new Date(prev.registration_deadline).getTime() <= Date.now()
+                        ) {
+                          next.registration_deadline = undefined;
+                        }
+                        return next;
+                      });
+                    }}
+                    className="w-4 h-4 text-[#990000] bg-white dark:bg-neutral-800 border-neutral-300 dark:border-neutral-600 rounded focus:ring-[#990000] focus:ring-2"
+                  />
+                  <label htmlFor="is_registration_open" className="ml-3 text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                    {t.registrationOpen}
+                  </label>
+                </div>
+                <p className="mt-2 text-xs text-neutral-500">
+                  {locale === 'tr'
+                    ? 'Kapalıysa web sitesinde “Kayıt Kapalı” etiketi görünür. Açarken süresi dolmuş son tarih otomatik temizlenir.'
+                    : 'When off, the website shows “Registration Closed”. Opening clears an expired deadline automatically.'}
+                </p>
+              </div>
             </div>
           )}
         </div>
