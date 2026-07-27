@@ -32,6 +32,12 @@ import {
   type AccessLevel,
 } from '@/app/lib/moduleAccess/rbac';
 
+function supabaseErrorMessage(error: unknown): string {
+  if (!error || typeof error !== 'object') return 'Grant failed';
+  const e = error as { message?: string; details?: string; code?: string };
+  return e.message || e.details || e.code || 'Grant failed';
+}
+
 async function grantModuleAccess(
   supabase: SupabaseClient,
   clerkUserId: string,
@@ -44,19 +50,25 @@ async function grantModuleAccess(
 ) {
   const { capabilities, accessLevel, panelOrganizationId } = options;
 
-  let query = supabase
+  // Unique constraint is (clerk_user_id, module_key) — ignore org when looking up,
+  // otherwise re-grant with a different/selected org tries INSERT and fails.
+  const { data: existingRows, error: lookupError } = await supabase
     .from('user_module_access')
-    .select('id')
+    .select('id, panel_organization_id')
     .eq('clerk_user_id', clerkUserId)
-    .eq('module_key', primaryModuleKey);
+    .eq('module_key', primaryModuleKey)
+    .order('id', { ascending: true })
+    .limit(5);
 
-  if (panelOrganizationId) {
-    query = query.eq('panel_organization_id', panelOrganizationId);
-  } else {
-    query = query.is('panel_organization_id', null);
+  if (lookupError) {
+    throw new Error(supabaseErrorMessage(lookupError));
   }
 
-  const { data: existing } = await query.maybeSingle();
+  const rows = existingRows ?? [];
+  const existing =
+    (panelOrganizationId
+      ? rows.find((r) => r.panel_organization_id === panelOrganizationId)
+      : rows.find((r) => r.panel_organization_id == null)) || rows[0] || null;
 
   const payload: Record<string, unknown> = {
     is_enabled: true,
@@ -90,7 +102,7 @@ async function grantModuleAccess(
           .from('user_module_access')
           .update(payload)
           .eq('id', existing.id);
-        if (retryErr) throw retryErr;
+        if (retryErr) throw new Error(supabaseErrorMessage(retryErr));
       } else if (
         error.message?.includes('panel_organization_id') ||
         error.message?.includes('access_level')
@@ -107,9 +119,9 @@ async function grantModuleAccess(
           .from('user_module_access')
           .update(legacy)
           .eq('id', existing.id);
-        if (legacyErr) throw legacyErr;
+        if (legacyErr) throw new Error(supabaseErrorMessage(legacyErr));
       } else {
-        throw error;
+        throw new Error(supabaseErrorMessage(error));
       }
     }
   } else {
@@ -155,9 +167,34 @@ async function grantModuleAccess(
         const { error: legacyErr } = await supabase
           .from('user_module_access')
           .insert(legacyInsert);
-        if (legacyErr) throw legacyErr;
+        if (legacyErr) throw new Error(supabaseErrorMessage(legacyErr));
       } else {
-        throw error;
+        // Race: row appeared between lookup and insert — update instead
+        const msg = supabaseErrorMessage(error).toLowerCase();
+        if (
+          msg.includes('duplicate') ||
+          msg.includes('unique') ||
+          (error as { code?: string }).code === '23505'
+        ) {
+          const { data: raced } = await supabase
+            .from('user_module_access')
+            .select('id')
+            .eq('clerk_user_id', clerkUserId)
+            .eq('module_key', primaryModuleKey)
+            .limit(1)
+            .maybeSingle();
+          if (raced?.id) {
+            const { error: raceUpdateErr } = await supabase
+              .from('user_module_access')
+              .update(payload)
+              .eq('id', raced.id);
+            if (raceUpdateErr) {
+              throw new Error(supabaseErrorMessage(raceUpdateErr));
+            }
+            return;
+          }
+        }
+        throw new Error(supabaseErrorMessage(error));
       }
     }
   }

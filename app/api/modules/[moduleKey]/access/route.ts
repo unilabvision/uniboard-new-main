@@ -32,15 +32,22 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return await grantModuleAccessMember(def, request);
   } catch (err) {
     console.error(`Module access grant error (${moduleKey}):`, err);
-    const message =
-      err && typeof err === 'object' && 'errors' in err
-        ? // Clerk API error
-          (err as { errors?: Array<{ longMessage?: string; message?: string }> })
-            .errors?.[0]?.longMessage ||
-          (err as { errors?: Array<{ message?: string }> }).errors?.[0]?.message
-        : err instanceof Error
-          ? err.message
-          : null;
+    let message: string | null = null;
+    if (err instanceof Error && err.message) {
+      message = err.message;
+    } else if (err && typeof err === 'object') {
+      const e = err as {
+        message?: string;
+        details?: string;
+        errors?: Array<{ longMessage?: string; message?: string }>;
+      };
+      message =
+        e.errors?.[0]?.longMessage ||
+        e.errors?.[0]?.message ||
+        e.message ||
+        e.details ||
+        null;
+    }
     return Response.json(
       { error: message || 'Grant failed' },
       { status: 500 }
