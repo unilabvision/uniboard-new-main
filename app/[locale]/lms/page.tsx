@@ -19,9 +19,17 @@ import { sanitizeHtml } from '@/app/lib/lms/htmlContent';
 import {
   getCoursePackagePrices,
   updateCoursePrices,
-  updateCourseTierPrices,
+  updateCoursePackagePricesBatch,
   type CoursePackagePrice,
 } from '@/app/lib/lms/enrollmentOverviewService';
+
+function parsePriceInput(value: string): number | null | 'invalid' {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const normalized = trimmed.replace(/\s/g, '').replace(',', '.');
+  const num = Number(normalized);
+  return Number.isFinite(num) ? num : 'invalid';
+}
 
 // Utility function to sanitize HTML content
 const sanitizeHtmlForCard = sanitizeHtml;
@@ -399,20 +407,20 @@ const CourseCard = ({
   const savePriceEdit = async () => {
     try {
       setSavingPrice(true);
-      const nextPrice = priceDraft === '' ? 0 : Number(priceDraft);
-      const nextOriginal =
-        originalPriceDraft === '' ? null : Number(originalPriceDraft);
+      const nextPrice = parsePriceInput(priceDraft);
+      const nextOriginal = parsePriceInput(originalPriceDraft);
 
-      if (Number.isNaN(nextPrice) || (nextOriginal !== null && Number.isNaN(nextOriginal))) {
+      if (nextPrice === 'invalid' || nextOriginal === 'invalid') {
         throw new Error(t.priceSaveError);
       }
 
       await onPriceUpdate(
         course.id,
-        nextPrice,
+        nextPrice ?? 0,
         nextOriginal
       );
       setEditingPrice(false);
+      alert(t.priceSaved);
     } catch (error) {
       console.error('Price update failed:', error);
       alert(t.priceSaveError);
@@ -428,6 +436,11 @@ const CourseCard = ({
     setPackagesLoading(true);
     try {
       const rows = await getCoursePackagePrices(course.id);
+      if (rows.length === 0) {
+        alert(locale === 'en' ? 'No active packages for this course.' : 'Bu kurs için aktif paket bulunamadı.');
+        setEditingPackages(false);
+        return;
+      }
       setPackages(rows);
       const drafts: Record<string, { price: string; original: string }> = {};
       rows.forEach((pkg) => {
@@ -459,22 +472,25 @@ const CourseCard = ({
       setSavingPackages(true);
       const updates = packages.map((pkg) => {
         const draft = packageDrafts[pkg.id] || { price: '0', original: '' };
-        const nextPrice = draft.price === '' ? 0 : Number(draft.price);
-        const nextOriginal = draft.original === '' ? null : Number(draft.original);
-        if (Number.isNaN(nextPrice) || (nextOriginal !== null && Number.isNaN(nextOriginal))) {
+        const nextPrice = parsePriceInput(draft.price);
+        const nextOriginal = parsePriceInput(draft.original);
+        if (nextPrice === 'invalid' || nextOriginal === 'invalid') {
           throw new Error(t.packagePricesSaveError);
         }
-        return { id: pkg.id, price: nextPrice, original: nextOriginal };
+        return { id: pkg.id, price: nextPrice ?? 0, original_price: nextOriginal };
       });
 
-      await Promise.all(
-        updates.map((u) => updateCourseTierPrices(u.id, u.price, u.original))
-      );
+      await updateCoursePackagePricesBatch(course.id, updates);
 
       setEditingPackages(false);
+      alert(t.packagePricesSaved);
     } catch (error) {
       console.error('Package price update failed:', error);
-      alert(t.packagePricesSaveError);
+      alert(
+        error instanceof Error && error.message
+          ? error.message
+          : t.packagePricesSaveError
+      );
     } finally {
       setSavingPackages(false);
     }

@@ -858,16 +858,18 @@ export async function updateCoursePrices(
   price: number | null,
   originalPrice: number | null
 ) {
-  const { error } = await supabase
-    .from('myuni_courses')
-    .update({
-      price,
+  const res = await fetch(`/api/lms/courses/${encodeURIComponent(courseId)}/prices`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      price: price ?? 0,
       original_price: originalPrice,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', courseId);
-
-  if (error) throw error;
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || 'Fiyat güncellenemedi');
+  }
 }
 
 export type CoursePackagePrice = {
@@ -886,31 +888,14 @@ export type CoursePackagePrice = {
 export async function getCoursePackagePrices(
   courseId: string
 ): Promise<CoursePackagePrice[]> {
-  const { data, error } = await supabase
-    .from('myuni_course_tiers')
-    .select(
-      'id, course_id, title, slug, price, original_price, is_full_course, order_index, is_active'
-    )
-    .eq('course_id', courseId)
-    .eq('is_active', true)
-    .order('order_index', { ascending: true });
-
-  if (error) throw error;
-
-  return ((data || []) as Array<Record<string, unknown>>).map((row) => ({
-    id: String(row.id),
-    course_id: String(row.course_id),
-    title: String(row.title || 'Paket'),
-    slug: row.slug != null ? String(row.slug) : null,
-    price: Number(row.price) || 0,
-    original_price:
-      row.original_price != null && row.original_price !== ''
-        ? Number(row.original_price)
-        : null,
-    is_full_course: row.is_full_course === true,
-    order_index: Number(row.order_index) || 0,
-    is_active: row.is_active !== false,
-  }));
+  const res = await fetch(
+    `/api/lms/courses/${encodeURIComponent(courseId)}/package-prices`
+  );
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || 'Paket fiyatları alınamadı');
+  }
+  return (data.packages || []) as CoursePackagePrice[];
 }
 
 export async function updateCourseTierPrices(
@@ -918,13 +903,39 @@ export async function updateCourseTierPrices(
   price: number | null,
   originalPrice: number | null
 ) {
-  const { error } = await supabase
-    .from('myuni_course_tiers')
-    .update({
-      price,
-      original_price: originalPrice,
-    })
-    .eq('id', tierId);
+  // Kept for backwards compatibility — prefer updateCoursePackagePricesBatch.
+  const courseId = await resolveCourseIdForTier(tierId);
+  await updateCoursePackagePricesBatch(courseId, [
+    { id: tierId, price, original_price: originalPrice },
+  ]);
+}
 
-  if (error) throw error;
+async function resolveCourseIdForTier(tierId: string): Promise<string> {
+  const { data, error } = await supabase
+    .from('myuni_course_tiers')
+    .select('course_id')
+    .eq('id', tierId)
+    .maybeSingle();
+  if (error || !data?.course_id) {
+    throw new Error('Paket bulunamadı');
+  }
+  return String(data.course_id);
+}
+
+export async function updateCoursePackagePricesBatch(
+  courseId: string,
+  updates: Array<{ id: string; price: number | null; original_price: number | null }>
+) {
+  const res = await fetch(
+    `/api/lms/courses/${encodeURIComponent(courseId)}/package-prices`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updates }),
+    }
+  );
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || 'Paket fiyatları güncellenemedi');
+  }
 }
