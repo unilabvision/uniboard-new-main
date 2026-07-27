@@ -142,9 +142,9 @@ function GlobalDashboardSidebarInner({
         modules.some((m) =>
           ['internship', 'staj', 'career', 'kariyer', 'careers'].includes(m.key)
         )) ||
-      (['events', 'etkinlik', 'etkinlikler'].includes(currentModule) &&
+      (['events', 'event', 'etkinlik', 'etkinlikler'].includes(currentModule) &&
         modules.some((m) =>
-          ['events', 'etkinlik', 'etkinlikler'].includes(m.key)
+          ['events', 'event', 'etkinlik', 'etkinlikler'].includes(m.key)
         )) ||
       (['students', 'student'].includes(currentModule) &&
         modules.some((m) =>
@@ -285,6 +285,7 @@ function GlobalDashboardSidebarInner({
               break;
 
             case 'events':
+            case 'event':
             case 'etkinlik':
             case 'etkinlikler':
               try {
@@ -373,7 +374,7 @@ function GlobalDashboardSidebarInner({
     const content = moduleContent[locale as keyof typeof moduleContent] || moduleContent.tr;
 
     const moduleAliases: Record<string, string[]> = {
-      events: ['events', 'etkinlik', 'etkinlikler'],
+      events: ['events', 'event', 'etkinlik', 'etkinlikler'],
       'site-applications': [
         'site-applications',
         'site_basvurular',

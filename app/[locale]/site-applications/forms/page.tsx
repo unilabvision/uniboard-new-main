@@ -265,7 +265,7 @@ function FormsListContent({ locale }: { locale: string }) {
                         {t.preview}
                       </a>
                     )}
-                    {isSuperAdmin && (
+                    {(isSuperAdmin || isEventsHub) && (
                       <Link
                         href={`${formsBase}/${form.id}`}
                         className="inline-flex items-center gap-1.5 px-3 py-2 text-sm bg-[#990000] text-white rounded-lg hover:bg-[#800000]"

@@ -87,7 +87,7 @@ export const MODULE_ACCESS_REGISTRY: Record<string, ModuleAccessDefinition> = {
   },
   events: {
     primaryModuleKey: 'events',
-    moduleKeys: ['events', 'etkinlik', 'etkinlikler'],
+    moduleKeys: ['events', 'event', 'etkinlik', 'etkinlikler'],
     dashboardPath: 'events',
     nameTr: 'Etkinlik Yönetimi',
     nameEn: 'Event Management',
@@ -96,7 +96,14 @@ export const MODULE_ACCESS_REGISTRY: Record<string, ModuleAccessDefinition> = {
 };
 
 export function getModuleAccessDefinition(moduleKey: string): ModuleAccessDefinition | null {
-  return MODULE_ACCESS_REGISTRY[moduleKey] ?? null;
+  if (MODULE_ACCESS_REGISTRY[moduleKey]) {
+    return MODULE_ACCESS_REGISTRY[moduleKey];
+  }
+  return (
+    Object.values(MODULE_ACCESS_REGISTRY).find((def) =>
+      def.moduleKeys.includes(moduleKey)
+    ) ?? null
+  );
 }
 
 export const MODULE_ACCESS_SLUGS = Object.keys(MODULE_ACCESS_REGISTRY);

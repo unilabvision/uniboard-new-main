@@ -1,6 +1,6 @@
 export const EVENTS_MODULE_KEY = 'events';
 
-const LEGACY_KEYS = ['etkinlik', 'etkinlikler'] as const;
+const LEGACY_KEYS = ['event', 'etkinlik', 'etkinlikler'] as const;
 
 /** Etkinlik paneli seçilebilir yetenekleri */
 export const EVENTS_CAPABILITIES = [

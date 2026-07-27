@@ -75,30 +75,108 @@ export function withGrantToken(url: string, token: string) {
 export async function upsertModuleAccessByClerkId(
   supabase: SupabaseClient,
   clerkUserId: string,
-  moduleKey: string
+  moduleKey: string,
+  options?: {
+    accessLevel?: string | null;
+    capabilities?: string[] | null;
+    panelOrganizationId?: string | null;
+  }
 ) {
-  const { data: existing } = await supabase
+  const { data: existingRows } = await supabase
     .from('user_module_access')
     .select('id')
     .eq('clerk_user_id', clerkUserId)
     .eq('module_key', moduleKey)
-    .maybeSingle();
+    .order('id', { ascending: true })
+    .limit(1);
+
+  const existing = existingRows?.[0] ?? null;
+
+  const payload: Record<string, unknown> = {
+    is_enabled: true,
+    granted_at: new Date().toISOString(),
+  };
+
+  if (options?.accessLevel !== undefined) {
+    payload.access_level = options.accessLevel;
+  }
+  if (options?.panelOrganizationId !== undefined) {
+    payload.panel_organization_id = options.panelOrganizationId;
+  }
+  if (options?.capabilities !== undefined) {
+    payload.capabilities = options.capabilities;
+    payload.notes =
+      options.capabilities == null
+        ? null
+        : `uba_caps:${JSON.stringify(options.capabilities)}`;
+  }
 
   if (existing?.id) {
     const { error } = await supabase
       .from('user_module_access')
-      .update({ is_enabled: true, granted_at: new Date().toISOString() })
+      .update(payload)
       .eq('id', existing.id);
-    if (error) throw error;
+    if (error) {
+      // Fallback if newer columns missing
+      if (
+        error.message?.includes('capabilities') ||
+        error.message?.includes('panel_organization_id') ||
+        error.message?.includes('access_level')
+      ) {
+        const legacy: Record<string, unknown> = {
+          is_enabled: true,
+          granted_at: payload.granted_at,
+        };
+        if (options?.capabilities !== undefined) {
+          legacy.notes =
+            options.capabilities == null
+              ? null
+              : `uba_caps:${JSON.stringify(options.capabilities)}`;
+        }
+        const { error: legacyErr } = await supabase
+          .from('user_module_access')
+          .update(legacy)
+          .eq('id', existing.id);
+        if (legacyErr) throw legacyErr;
+      } else {
+        throw error;
+      }
+    }
   } else {
-    const { error } = await supabase.from('user_module_access').insert({
+    const insertRow: Record<string, unknown> = {
       clerk_user_id: clerkUserId,
       module_key: moduleKey,
-      is_enabled: true,
       is_super_admin: false,
-      granted_at: new Date().toISOString(),
-    });
-    if (error) throw error;
+      ...payload,
+    };
+
+    const { error } = await supabase.from('user_module_access').insert(insertRow);
+    if (error) {
+      if (
+        error.message?.includes('capabilities') ||
+        error.message?.includes('panel_organization_id') ||
+        error.message?.includes('access_level')
+      ) {
+        const { error: legacyErr } = await supabase
+          .from('user_module_access')
+          .insert({
+            clerk_user_id: clerkUserId,
+            module_key: moduleKey,
+            is_enabled: true,
+            is_super_admin: false,
+            granted_at: new Date().toISOString(),
+            notes:
+              options?.capabilities == null
+                ? null
+                : options?.capabilities
+                  ? `uba_caps:${JSON.stringify(options.capabilities)}`
+                  : null,
+          });
+        if (legacyErr) throw legacyErr;
+      } else {
+        throw error;
+      }
+    }
   }
 }
 
@@ -117,13 +195,36 @@ export async function claimPendingModuleFromClerkMetadata(
   );
   if (!known) return null;
 
-  await upsertModuleAccessByClerkId(supabase, clerkUserId, moduleKey);
+  const pendingAccessLevel =
+    typeof publicMetadata?.pendingAccessLevel === 'string'
+      ? publicMetadata.pendingAccessLevel
+      : null;
+  const pendingCapabilities = Array.isArray(publicMetadata?.pendingCapabilities)
+    ? publicMetadata.pendingCapabilities.filter(
+        (c): c is string => typeof c === 'string'
+      )
+    : null;
+  const pendingOrgId =
+    typeof publicMetadata?.pendingPanelOrganizationId === 'string'
+      ? publicMetadata.pendingPanelOrganizationId
+      : publicMetadata?.pendingPanelOrganizationId === null
+        ? null
+        : undefined;
+
+  await upsertModuleAccessByClerkId(supabase, clerkUserId, moduleKey, {
+    accessLevel: pendingAccessLevel,
+    capabilities: pendingCapabilities,
+    panelOrganizationId: pendingOrgId,
+  });
 
   try {
     const { clerkClient } = await import('@clerk/nextjs/server');
     const clerk = await clerkClient();
     const nextMeta = { ...(publicMetadata || {}) };
     delete nextMeta.pendingModule;
+    delete nextMeta.pendingAccessLevel;
+    delete nextMeta.pendingCapabilities;
+    delete nextMeta.pendingPanelOrganizationId;
     await clerk.users.updateUser(clerkUserId, { publicMetadata: nextMeta });
   } catch (err) {
     console.warn('Could not clear pendingModule metadata:', err);

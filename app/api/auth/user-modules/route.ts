@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { claimPendingModuleFromClerkMetadata } from '@/app/lib/moduleAccess/grantToken';
 
 const DUPLICATE_EVENT_MODULE_KEYS = new Set([
+  'event',
   'etkinlik',
   'etkinlikler',
   'etkinlik-yonetimi',
