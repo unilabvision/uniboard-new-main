@@ -552,83 +552,42 @@ export default function CreateTemplatePage() {
     setSaving(true);
     
     try {
-      // Remove auto-generated fields to avoid constraint violations
-      const { ...formDataWithoutAutoFields } = formData as TemplateFormData;
-      
-      // Always check for existing default templates in the organization
-      const { data: existingDefaults, error: checkError } = await supabase
-        .from('certificate_templates')
-        .select('id, name, is_default')
-        .eq('organization_slug', formData.organization_slug)
-        .eq('is_default', true);
-      
-      if (checkError) {
-        console.error('Error checking existing default templates:', checkError);
-        throw checkError;
-      }
-      
-      console.log('Existing default templates found:', existingDefaults);
-      
-      // If there are existing default templates, remove their default status
-      if (existingDefaults && existingDefaults.length > 0) {
-        console.log('Removing default status from existing templates...');
-        
-        const { error: updateError } = await supabase
-          .from('certificate_templates')
-          .update({ is_default: false })
-          .eq('organization_slug', formData.organization_slug)
-          .eq('is_default', true);
-        
-        if (updateError) {
-          console.error('Error updating existing default templates:', updateError);
-          throw updateError;
-        }
-        
-        console.log('Successfully removed default status from existing templates');
-      }
-      
-      // Prepare form data - only include is_default if it's true
-      const finalFormData = {
-        ...formDataWithoutAutoFields
-      };
-      
-      // Only set is_default if checkbox is checked (to avoid constraint issues)
-      if (formData.is_default) {
-        finalFormData.is_default = true;
-      }
-      // If not checked, don't include is_default field at all (defaults to false in DB)
-      
-      // Debug logging
-      console.log('Creating template with data:', {
-        organization_slug: finalFormData.organization_slug,
-        is_default: finalFormData.is_default,
-        checkbox_checked: formData.is_default,
-        has_is_default_field: 'is_default' in finalFormData,
-        finalFormDataKeys: Object.keys(finalFormData)
+      const res = await fetch('/api/certificates/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name,
+          description: formData.description,
+          organization_slug: formData.organization_slug,
+          background_image: formData.background_image,
+          design_settings: formData.design_settings,
+          is_default: formData.is_default,
+        }),
       });
-      
-      // Insert the new template
-      const { error } = await supabase
-        .from('certificate_templates')
-        .insert([finalFormData])
-        .select()
-        .single();
-      
-      if (error) {
-        // Handle specific constraint violation errors
-        if (error.code === '23505' && error.message.includes('unique_default_per_org')) {
-          throw new Error('Bu kuruluş için zaten bir varsayılan şablon bulunmaktadır. Lütfen önce mevcut varsayılan şablonu kaldırın veya bu şablonu varsayılan olarak işaretlemeyin.');
-        }
-        throw error;
+
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          (payload as { error?: string }).error ||
+            `Create failed (${res.status})`
+        );
       }
       
-      // Success - redirect to templates page
       alert(t.templateCreated);
       window.location.href = `/${locale}/certificates/templates`;
       
     } catch (error: unknown) {
       console.error('Error creating template:', error);
-      alert(t.templateCreateError + ': ' + (error instanceof Error ? error.message : 'An error occurred'));
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === 'object' &&
+              error &&
+              'message' in error &&
+              typeof (error as { message: unknown }).message === 'string'
+            ? (error as { message: string }).message
+            : 'An error occurred';
+      alert(t.templateCreateError + ': ' + message);
     } finally {
       setSaving(false);
     }

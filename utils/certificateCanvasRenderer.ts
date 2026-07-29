@@ -12,6 +12,12 @@ export interface TemplateDesignSettings {
     body: string;
     name: string;
     title: string;
+    description?: string;
+    institution?: string;
+    certificate_no?: string;
+    date?: string;
+    signature?: string;
+    course_name?: string;
   };
   colors: {
     name: string;
@@ -197,7 +203,16 @@ export const renderCertificateFields = (
   const nameFont = getFontFamily(fonts.name);
   const titleFont = getFontFamily(fonts.title);
   const bodyFont = getFontFamily(fonts.body);
+  const descriptionFont = getFontFamily(fonts.description || fonts.body);
+  const institutionFont = getFontFamily(fonts.institution || fonts.body);
+  const certNoFont = getFontFamily(fonts.certificate_no || fonts.body);
+  const dateFont = getFontFamily(fonts.date || fonts.body);
+  const signatureFont = getFontFamily(fonts.signature || fonts.body);
+  const courseNameFont = getFontFamily(fonts.course_name || fonts.title);
   const institutionName = data.organization || '';
+
+  // Sağdaki banner / kenar boşluğu için açıklama metnini dar tut
+  const descriptionMaxWidth = canvasWidth * 0.55;
 
   const namePos = calculatePosition(layout.name_position, canvasWidth, canvasHeight);
   if (namePos) {
@@ -211,7 +226,7 @@ export const renderCertificateFields = (
   const datePos = calculatePosition(layout.date_position, canvasWidth, canvasHeight);
   if (datePos) {
     ctx.fillStyle = colors.date || colors.secondary;
-    ctx.font = `500 ${Math.round((fontSizes.date || 14) * fontScale)}px ${bodyFont}`;
+    ctx.font = `500 ${Math.round((fontSizes.date || 14) * fontScale)}px ${dateFont}`;
     ctx.textAlign = datePos.align as CanvasTextAlign;
     ctx.textBaseline = 'middle';
     ctx.fillText(formatCertificateDate(data.issuedate, data.language), datePos.x, datePos.y);
@@ -229,7 +244,7 @@ export const renderCertificateFields = (
   const institutionPos = calculatePosition(layout.institution_position, canvasWidth, canvasHeight);
   if (institutionPos && institutionName) {
     ctx.fillStyle = colors.institution || colors.text;
-    ctx.font = `500 ${Math.round((fontSizes.institution || 14) * fontScale)}px ${bodyFont}`;
+    ctx.font = `500 ${Math.round((fontSizes.institution || 14) * fontScale)}px ${institutionFont}`;
     ctx.textAlign = institutionPos.align as CanvasTextAlign;
     ctx.textBaseline = 'middle';
     ctx.fillText(institutionName, institutionPos.x, institutionPos.y);
@@ -240,9 +255,10 @@ export const renderCertificateFields = (
     const label =
       (data.certificate_number_label || '').trim() ||
       (data.language === 'en' || data.language === 'global' ? 'Certificate No' : 'Sertifika No');
-    const certNoText = `${label}: ${data.certificatenumber}`;
+    // Arka planda zaten "Sertifika No" varsa sadece numarayı yaz
+    const certNoText = label ? `${label}: ${data.certificatenumber}` : data.certificatenumber;
     ctx.fillStyle = colors.certificate_no || colors.secondary;
-    ctx.font = `500 ${Math.round((fontSizes.certificate_no || 14) * fontScale)}px ${bodyFont}`;
+    ctx.font = `500 ${Math.round((fontSizes.certificate_no || 14) * fontScale)}px ${certNoFont}`;
     ctx.textAlign = certNoPos.align as CanvasTextAlign;
     ctx.textBaseline = 'middle';
     ctx.fillText(certNoText, certNoPos.x, certNoPos.y);
@@ -257,7 +273,7 @@ export const renderCertificateFields = (
     );
 
     ctx.fillStyle = colors.description || colors.text;
-    ctx.font = `400 ${descriptionFontSize}px ${bodyFont}`;
+    ctx.font = `400 ${descriptionFontSize}px ${descriptionFont}`;
     ctx.textAlign = descriptionPos.align as CanvasTextAlign;
     ctx.textBaseline = 'middle';
     drawMultilineText(
@@ -265,7 +281,7 @@ export const renderCertificateFields = (
       descriptionText,
       descriptionPos.x,
       descriptionPos.y,
-      canvasWidth * 0.78,
+      descriptionMaxWidth,
       descriptionFontSize
     );
   }
@@ -275,7 +291,7 @@ export const renderCertificateFields = (
     const courseNameFontSize = Math.round((fontSizes.course_name || fontSizes.title || 18) * fontScale);
 
     ctx.fillStyle = colors.course_name || colors.text;
-    ctx.font = `600 ${courseNameFontSize}px ${titleFont}`;
+    ctx.font = `600 ${courseNameFontSize}px ${courseNameFont}`;
     ctx.textAlign = courseNamePos.align as CanvasTextAlign;
     ctx.textBaseline = 'middle';
     drawMultilineText(
@@ -283,7 +299,7 @@ export const renderCertificateFields = (
       data.coursename,
       courseNamePos.x,
       courseNamePos.y,
-      canvasWidth * 0.6,
+      canvasWidth * 0.55,
       courseNameFontSize
     );
   }
@@ -291,7 +307,7 @@ export const renderCertificateFields = (
   const signaturePos = calculatePosition(layout.signature_position, canvasWidth, canvasHeight);
   if (signaturePos && data.instructor) {
     ctx.fillStyle = colors.signature || colors.text;
-    ctx.font = `500 ${Math.round((fontSizes.signature || 14) * fontScale)}px ${bodyFont}`;
+    ctx.font = `500 ${Math.round((fontSizes.signature || 14) * fontScale)}px ${signatureFont}`;
     ctx.textAlign = signaturePos.align as CanvasTextAlign;
     ctx.textBaseline = 'middle';
     ctx.fillText(data.instructor, signaturePos.x, signaturePos.y);

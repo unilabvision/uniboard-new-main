@@ -853,26 +853,26 @@ export default function CertificateTemplatesPage() {
   // Handle duplicate template
   const handleDuplicateTemplate = async (template: CertificateTemplate) => {
     try {
-      const newTemplate = {
-        ...template,
-        id: undefined,
-        name: `${template.name} - Kopya`,
-        is_default: false,
-        created_at: undefined,
-        updated_at: undefined
-      };
-
-      const { data, error } = await supabase
-        .from('certificate_templates')
-        .insert([newTemplate])
-        .select()
-        .single();
-
-      if (error) {
-        throw error;
+      const res = await fetch('/api/certificates/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `${template.name} - Kopya`,
+          description: template.description || '',
+          organization_slug: template.organization_slug,
+          background_image: template.background_image,
+          design_settings: template.design_settings,
+          is_default: false,
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((payload as { error?: string }).error || 'Duplicate failed');
       }
-
-      setTemplates(prev => [data, ...prev]);
+      const data = (payload as { template?: CertificateTemplate }).template;
+      if (data) {
+        setTemplates((prev) => [data, ...prev]);
+      }
       alert(t.duplicateSuccess);
     } catch (error: unknown) {
       console.error('Error duplicating template:', error);
@@ -883,30 +883,27 @@ export default function CertificateTemplatesPage() {
   // Handle set default template
   const handleSetDefaultTemplate = async (template: CertificateTemplate) => {
     try {
-      // First, remove default from all templates in the same organization
-      await supabase
-        .from('certificate_templates')
-        .update({ is_default: false })
-        .eq('organization_slug', template.organization_slug);
-
-      // Then set this template as default (or remove if it was already default)
-      const { error } = await supabase
-        .from('certificate_templates')
-        .update({ is_default: !template.is_default })
-        .eq('id', template.id);
-
-      if (error) {
-        throw error;
+      const res = await fetch(`/api/certificates/templates/${template.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_default: !template.is_default }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((payload as { error?: string }).error || 'Update failed');
       }
 
-      // Update local state
-      setTemplates(prev => prev.map(t => ({
-        ...t,
-        is_default: t.organization_slug === template.organization_slug ? 
-          (t.id === template.id ? !template.is_default : false) : 
-          t.is_default
-      })));
-
+      setTemplates((prev) =>
+        prev.map((t) => ({
+          ...t,
+          is_default:
+            t.organization_slug === template.organization_slug
+              ? t.id === template.id
+                ? !template.is_default
+                : false
+              : t.is_default,
+        }))
+      );
     } catch (error: unknown) {
       console.error('Error setting default template:', error);
       alert(t.error + ': ' + (error instanceof Error ? error.message : 'An error occurred'));
@@ -926,23 +923,19 @@ export default function CertificateTemplatesPage() {
     setIsDeleting(true);
     
     try {
-      const { error } = await supabase
-        .from('certificate_templates')
-        .delete()
-        .eq('id', templateToDelete.id);
-      
-      if (error) {
-        throw error;
+      const res = await fetch(`/api/certificates/templates/${templateToDelete.id}`, {
+        method: 'DELETE',
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((payload as { error?: string }).error || 'Delete failed');
       }
       
-      // Remove template from local state
       setTemplates(prev => prev.filter(template => template.id !== templateToDelete.id));
       
-      // Close modal
       setShowDeleteModal(false);
       setTemplateToDelete(null);
       
-      // Show success message
       alert(t.deleteSuccess);
       
     } catch (error: unknown) {

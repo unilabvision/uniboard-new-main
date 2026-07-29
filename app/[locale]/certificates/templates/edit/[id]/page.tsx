@@ -756,54 +756,47 @@ export default function EditTemplatePage() {
     setSaving(true);
     
     try {
-      // If setting as default, first remove default from other templates in the same org
-      if (formData.is_default && !template.is_default) {
-        await supabase
-          .from('certificate_templates')
-          .update({ is_default: false })
-          .eq('organization_slug', formData.organization_slug)
-          .neq('id', template.id);
+      const res = await fetch(`/api/certificates/templates/${template.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formData.name,
+          description: formData.description,
+          organization_slug: formData.organization_slug,
+          background_image: formData.background_image,
+          design_settings: formData.design_settings,
+          is_default: formData.is_default,
+        }),
+      });
+
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(
+          (payload as { error?: string }).error ||
+            `Update failed (${res.status})`
+        );
+      }
+
+      const updated = (payload as { template?: CertificateTemplate }).template;
+      if (updated) {
+        setTemplate(updated);
       }
       
-      // Prepare update data - only include is_default if it's true
-      const updateData: Record<string, unknown> = {
-        name: formData.name,
-        description: formData.description,
-        organization_slug: formData.organization_slug,
-        background_image: formData.background_image,
-        design_settings: formData.design_settings,
-        updated_at: new Date().toISOString()
-      };
-      
-      // Only set is_default if checkbox is checked (to avoid constraint issues)
-      if (formData.is_default) {
-        updateData.is_default = true;
-      } else {
-        // Explicitly set to false if unchecked
-        updateData.is_default = false;
-      }
-      
-      const { data, error } = await supabase
-        .from('certificate_templates')
-        .update(updateData)
-        .eq('id', template.id)
-        .select()
-        .single();
-      
-      if (error) {
-        throw error;
-      }
-      
-      // Update local template state
-      setTemplate(data);
-      
-      // Success - redirect to templates page
       alert(t.templateUpdated);
       window.location.href = `/${locale}/certificates/templates`;
       
     } catch (error: unknown) {
       console.error('Error updating template:', error);
-      alert(t.templateUpdateError + ': ' + (error instanceof Error ? error.message : 'An error occurred'));
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === 'object' &&
+              error &&
+              'message' in error &&
+              typeof (error as { message: unknown }).message === 'string'
+            ? (error as { message: string }).message
+            : 'An error occurred';
+      alert(t.templateUpdateError + ': ' + message);
     } finally {
       setSaving(false);
     }
