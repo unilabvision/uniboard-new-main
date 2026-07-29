@@ -21,6 +21,7 @@ export async function getCertificateOrganizationSlugs(
   isSuperAdmin = false
 ): Promise<string[]> {
   try {
+    // Super admin → all orgs
     if (isSuperAdmin) {
       const { data, error } = await supabase
         .from('organizations')
@@ -35,14 +36,10 @@ export async function getCertificateOrganizationSlugs(
       return (data ?? []).map((org) => org.slug).filter(Boolean);
     }
 
+    // Normal user → check user_module_access for certificates
     const { data, error } = await supabase
       .from('user_module_access')
-      .select(`
-        organization_id,
-        organizations:organization_id (
-          slug
-        )
-      `)
+      .select('organization_id, capabilities, notes')
       .eq('clerk_user_id', clerkUserId)
       .eq('module_key', 'certificates')
       .eq('is_enabled', true);
@@ -52,35 +49,40 @@ export async function getCertificateOrganizationSlugs(
       return [];
     }
 
-    const slugsFromJoin =
-      data
-        ?.map((row) => organizationSlugFromJoin(row.organizations))
-        .filter((slug): slug is string => Boolean(slug)) ?? [];
-
-    if (slugsFromJoin.length > 0) {
-      return slugsFromJoin;
+    if (!data || data.length === 0) {
+      return [];
     }
 
+    // Try legacy organization_id join first
     const organizationIds =
       data
-        ?.map((row) => row.organization_id)
-        .filter((id): id is number => id != null) ?? [];
+        .map((row) => row.organization_id)
+        .filter((id): id is number => id != null);
 
-    if (organizationIds.length === 0) {
-      return [];
+    if (organizationIds.length > 0) {
+      const { data: orgs, error: orgsError } = await supabase
+        .from('organizations')
+        .select('slug')
+        .in('id', organizationIds);
+
+      if (!orgsError && orgs && orgs.length > 0) {
+        return orgs.map((org) => org.slug).filter(Boolean);
+      }
     }
 
-    const { data: orgs, error: orgsError } = await supabase
+    // No legacy org link → user has module access but no specific org binding.
+    // Grant access to all certificate organizations so they can use templates/issuance.
+    const { data: allOrgs, error: allOrgsError } = await supabase
       .from('organizations')
       .select('slug')
-      .in('id', organizationIds);
+      .order('name', { ascending: true });
 
-    if (orgsError) {
-      console.error('Error resolving organization slugs:', orgsError);
+    if (allOrgsError) {
+      console.error('Error fetching all organizations:', allOrgsError);
       return [];
     }
 
-    return (orgs ?? []).map((org) => org.slug).filter(Boolean);
+    return (allOrgs ?? []).map((org) => org.slug).filter(Boolean);
   } catch (error) {
     console.error('getCertificateOrganizationSlugs error:', error);
     return [];
