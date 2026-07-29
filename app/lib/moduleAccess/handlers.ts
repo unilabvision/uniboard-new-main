@@ -28,6 +28,7 @@ import {
   clampCapabilitiesToLevel,
   decodeCapabilitiesFromRow,
   encodeCapabilitiesNotes,
+  mergeNotesWithCertOrgs,
   parseAccessLevelInput,
   type AccessLevel,
 } from '@/app/lib/moduleAccess/rbac';
@@ -46,9 +47,10 @@ async function grantModuleAccess(
     capabilities?: string[] | null;
     accessLevel?: AccessLevel | null;
     panelOrganizationId?: string | null;
+    certOrgSlugs?: string[] | null;
   }
 ) {
-  const { capabilities, accessLevel, panelOrganizationId } = options;
+  const { capabilities, accessLevel, panelOrganizationId, certOrgSlugs } = options;
 
   // Unique constraint is (clerk_user_id, module_key) — ignore org when looking up,
   // otherwise re-grant with a different/selected org tries INSERT and fails.
@@ -83,10 +85,12 @@ async function grantModuleAccess(
   }
 
   if (capabilities !== undefined) {
-    payload.notes =
+    const capsNotes =
       capabilities == null ? null : encodeCapabilitiesNotes(capabilities);
-    // Prefer jsonb column when present; ignore error via dual-write attempt
+    payload.notes = mergeNotesWithCertOrgs(capsNotes, certOrgSlugs ?? null);
     payload.capabilities = capabilities ?? null;
+  } else if (certOrgSlugs && certOrgSlugs.length > 0) {
+    payload.notes = mergeNotesWithCertOrgs(null, certOrgSlugs);
   }
 
   if (existing?.id) {
@@ -377,6 +381,7 @@ export async function grantModuleAccessMember(
     capabilities: rawCapabilities,
     accessLevel: rawAccessLevel,
     panelOrganizationId: rawOrgId,
+    certOrgSlugs: rawCertOrgSlugs,
   } = body as {
     clerkUserId?: string;
     email?: string;
@@ -386,6 +391,7 @@ export async function grantModuleAccessMember(
     capabilities?: string[];
     accessLevel?: string;
     panelOrganizationId?: string | null;
+    certOrgSlugs?: string[];
   };
 
   const accessLevel = parseAccessLevelInput(rawAccessLevel);
@@ -564,6 +570,7 @@ export async function grantModuleAccessMember(
     capabilities: moduleCapabilities,
     accessLevel,
     panelOrganizationId,
+    certOrgSlugs: rawCertOrgSlugs ?? null,
   });
 
   if (def.primaryModuleKey === 'internship' && addAsReviewer) {

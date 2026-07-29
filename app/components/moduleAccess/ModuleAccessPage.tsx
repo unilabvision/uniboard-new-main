@@ -40,6 +40,12 @@ type PanelOrg = {
   is_active: boolean;
 };
 
+type CertOrg = {
+  id: number;
+  slug: string;
+  name: string;
+};
+
 type AccessMember = {
   id: string;
   clerk_user_id: string;
@@ -93,6 +99,8 @@ export default function ModuleAccessPage({
   } | null>(null);
   const [members, setMembers] = useState<AccessMember[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
+  const [certOrgs, setCertOrgs] = useState<CertOrg[]>([]);
+  const [selectedCertOrgSlugs, setSelectedCertOrgSlugs] = useState<string[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -135,6 +143,11 @@ export default function ModuleAccessPage({
         needCapability: 'En az bir özellik seçin.',
         needOrg: 'Kurum seçin.',
         noOrg: 'Kurum yok',
+        certOrgsTitle: 'Sertifika Organizasyonları',
+        certOrgsHint: 'Bu kullanıcının erişebileceği sertifika organizasyonlarını seçin. Hiçbiri seçilmezse kullanıcı kendi organizasyonunu oluşturabilir.',
+        certOrgsNone: 'Organizasyon bulunamadı',
+        certOrgsSelectAll: 'Tümünü Seç',
+        certOrgsClearAll: 'Temizle',
       }
     : {
         title: 'Access Control',
@@ -167,6 +180,11 @@ export default function ModuleAccessPage({
         needCapability: 'Select at least one feature.',
         needOrg: 'Select an organization.',
         noOrg: 'No organization',
+        certOrgsTitle: 'Certificate Organizations',
+        certOrgsHint: 'Select which certificate organizations this user can access. If none selected, user can create their own organization.',
+        certOrgsNone: 'No organizations found',
+        certOrgsSelectAll: 'Select All',
+        certOrgsClearAll: 'Clear',
       };
 
   useEffect(() => {
@@ -211,10 +229,22 @@ export default function ModuleAccessPage({
     }
   }, [apiBase]);
 
+  const loadCertOrgs = useCallback(async () => {
+    if (moduleKey !== 'certificates') return;
+    try {
+      const res = await fetch('/api/certificates/organizations');
+      if (res.ok) {
+        const data = await res.json();
+        setCertOrgs(data.organizations || []);
+      }
+    } catch { /* ignore */ }
+  }, [moduleKey]);
+
   useEffect(() => {
     loadOrgs();
     loadMembers();
-  }, [loadOrgs, loadMembers]);
+    loadCertOrgs();
+  }, [loadOrgs, loadMembers, loadCertOrgs]);
 
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
@@ -328,6 +358,9 @@ export default function ModuleAccessPage({
         capabilities
       );
 
+      const certOrgsPayload =
+        moduleKey === 'certificates' ? { certOrgSlugs: selectedCertOrgSlugs } : {};
+
       const payload = selected
         ? {
             clerkUserId: selected.clerkUserId,
@@ -338,6 +371,7 @@ export default function ModuleAccessPage({
             capabilities: clamped,
             panelOrganizationId: selectedOrgId || null,
             ...(showReviewerOption ? { addAsReviewer } : {}),
+            ...certOrgsPayload,
           }
         : {
             email: query.trim(),
@@ -347,6 +381,7 @@ export default function ModuleAccessPage({
             capabilities: clamped,
             panelOrganizationId: selectedOrgId || null,
             ...(showReviewerOption ? { addAsReviewer } : {}),
+            ...certOrgsPayload,
           };
 
       if (!selected && !isValidAccessSearchQuery(query.trim())) {
@@ -676,6 +711,61 @@ export default function ModuleAccessPage({
                       <span className="leading-snug font-medium">
                         {tr ? cap.labelTr : cap.labelEn}
                       </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Certificate organizations multi-select */}
+          {moduleKey === 'certificates' && certOrgs.length > 0 && (
+            <div className="rounded-xl border border-neutral-200 dark:border-neutral-600 p-4">
+              <div className="flex items-start justify-between gap-3 mb-1">
+                <p className="text-sm font-semibold">{t.certOrgsTitle}</p>
+                <div className="flex gap-2 shrink-0 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCertOrgSlugs(certOrgs.map((o) => o.slug))}
+                    className="text-[#990000] font-medium hover:underline"
+                  >
+                    {t.certOrgsSelectAll}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCertOrgSlugs([])}
+                    className="text-neutral-500 hover:underline"
+                  >
+                    {t.certOrgsClearAll}
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs text-neutral-500 mb-3">{t.certOrgsHint}</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {certOrgs.map((org) => {
+                  const checked = selectedCertOrgSlugs.includes(org.slug);
+                  return (
+                    <label
+                      key={org.id}
+                      className={`flex items-start gap-2.5 text-sm rounded-lg border-2 px-3 py-2.5 cursor-pointer ${
+                        checked
+                          ? 'border-[#990000] bg-white dark:bg-neutral-900'
+                          : 'border-neutral-300 dark:border-neutral-600'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() =>
+                          setSelectedCertOrgSlugs((prev) =>
+                            prev.includes(org.slug)
+                              ? prev.filter((s) => s !== org.slug)
+                              : [...prev, org.slug]
+                          )
+                        }
+                        className="mt-0.5 h-4 w-4 rounded accent-[#990000]"
+                      />
+                      <span className="leading-snug font-medium">{org.name}</span>
                     </label>
                   );
                 })}

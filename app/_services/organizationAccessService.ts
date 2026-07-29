@@ -1,6 +1,7 @@
 'use client';
 
 import { certificatesSupabase as supabase } from '@/app/_services/certificatesSupabaseClient';
+import { decodeCertOrgsFromNotes } from '@/app/lib/moduleAccess/rbac';
 
 export function organizationSlugFromJoin(
   organizations: { slug?: string } | { slug?: string }[] | null | undefined
@@ -14,14 +15,15 @@ export function organizationSlugFromJoin(
 
 /**
  * Sertifika modülünde kullanılacak kuruluş slug listesi.
- * Süper admin: tüm kuruluşlar. Normal kullanıcı: user_module_access kaydı.
+ * Süper admin: tüm kuruluşlar.
+ * Normal kullanıcı: notes alanındaki uba_cert_orgs listesi veya legacy organization_id.
+ * Hiçbir organizasyon atanmamışsa boş liste döner (kullanıcı kendi organizasyonunu oluşturabilir).
  */
 export async function getCertificateOrganizationSlugs(
   clerkUserId: string,
   isSuperAdmin = false
 ): Promise<string[]> {
   try {
-    // Super admin → all orgs
     if (isSuperAdmin) {
       const { data, error } = await supabase
         .from('organizations')
@@ -36,10 +38,9 @@ export async function getCertificateOrganizationSlugs(
       return (data ?? []).map((org) => org.slug).filter(Boolean);
     }
 
-    // Normal user → check user_module_access for certificates
     const { data, error } = await supabase
       .from('user_module_access')
-      .select('organization_id, capabilities, notes')
+      .select('organization_id, notes')
       .eq('clerk_user_id', clerkUserId)
       .eq('module_key', 'certificates')
       .eq('is_enabled', true);
@@ -53,7 +54,15 @@ export async function getCertificateOrganizationSlugs(
       return [];
     }
 
-    // Try legacy organization_id join first
+    // 1) Check notes for uba_cert_orgs
+    for (const row of data) {
+      const certOrgs = decodeCertOrgsFromNotes(row.notes);
+      if (certOrgs && certOrgs.length > 0) {
+        return certOrgs;
+      }
+    }
+
+    // 2) Legacy: organization_id join
     const organizationIds =
       data
         .map((row) => row.organization_id)
@@ -70,19 +79,8 @@ export async function getCertificateOrganizationSlugs(
       }
     }
 
-    // No legacy org link → user has module access but no specific org binding.
-    // Grant access to all certificate organizations so they can use templates/issuance.
-    const { data: allOrgs, error: allOrgsError } = await supabase
-      .from('organizations')
-      .select('slug')
-      .order('name', { ascending: true });
-
-    if (allOrgsError) {
-      console.error('Error fetching all organizations:', allOrgsError);
-      return [];
-    }
-
-    return (allOrgs ?? []).map((org) => org.slug).filter(Boolean);
+    // 3) No org binding at all → empty (user can create own org)
+    return [];
   } catch (error) {
     console.error('getCertificateOrganizationSlugs error:', error);
     return [];

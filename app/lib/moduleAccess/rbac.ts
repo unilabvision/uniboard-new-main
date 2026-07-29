@@ -134,6 +134,50 @@ export function encodeCapabilitiesNotes(capabilities: string[]): string {
   return `${CAPABILITIES_NOTES_PREFIX}${JSON.stringify(capabilities)}`;
 }
 
+const CERT_ORGS_NOTES_PREFIX = 'uba_cert_orgs:';
+
+export function decodeCertOrgsFromNotes(notes: unknown): string[] | null {
+  if (typeof notes !== 'string') return null;
+  for (const line of notes.split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith(CERT_ORGS_NOTES_PREFIX)) {
+      try {
+        const parsed = JSON.parse(trimmed.slice(CERT_ORGS_NOTES_PREFIX.length));
+        if (Array.isArray(parsed)) {
+          return parsed.filter((s): s is string => typeof s === 'string');
+        }
+      } catch { /* ignore */ }
+    }
+  }
+  return null;
+}
+
+export function encodeCertOrgsNotes(slugs: string[]): string {
+  return `${CERT_ORGS_NOTES_PREFIX}${JSON.stringify(slugs)}`;
+}
+
+export function mergeNotesWithCertOrgs(
+  existingNotes: string | null | undefined,
+  certOrgSlugs: string[] | null
+): string {
+  const lines: string[] = [];
+
+  if (typeof existingNotes === 'string') {
+    for (const line of existingNotes.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith(CERT_ORGS_NOTES_PREFIX)) {
+        lines.push(trimmed);
+      }
+    }
+  }
+
+  if (certOrgSlugs && certOrgSlugs.length > 0) {
+    lines.push(encodeCertOrgsNotes(certOrgSlugs));
+  }
+
+  return lines.filter(Boolean).join('\n');
+}
+
 function rowToMembership(row: {
   id?: string;
   module_key: string;
