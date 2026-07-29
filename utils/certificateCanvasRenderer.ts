@@ -88,11 +88,18 @@ export const getFontFamily = (fontType: string): string => {
     sans_serif: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     serif: 'Georgia, "Times New Roman", serif',
     monospace: 'ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace',
-    cursive: 'cursive',
-    fantasy: 'fantasy',
+    // Daha tutarlı bir script görünümü için birkaç yaygın yazı tipi ekliyoruz.
+    // (Canvas'ta custom font dosyası yüklenmediği için gerçek "font file" yerine sistem font fallback kullanılır.)
+    cursive:
+      '"Brush Script MT", "Segoe Script", "Apple Chancery", "Snell Roundhand", cursive',
+    fantasy: '"Copperplate", "Papyrus", "Impact", fantasy',
   };
 
-  return fontMap[fontType] || fontMap.sans_serif;
+  if (fontType === 'custom') return fontMap.sans_serif;
+
+  // Template tasarımında `fonts.title/body/name` için doğrudan bir CSS font-family
+  // değeri saklanıyorsa (haritada yoksa) onu aynen kullanalım.
+  return fontMap[fontType] || fontType || fontMap.sans_serif;
 };
 
 export const calculatePosition = (
@@ -104,9 +111,23 @@ export const calculatePosition = (
     return null;
   }
 
+  const manualX =
+    typeof config.x_manual === 'number' && Number.isFinite(config.x_manual)
+      ? config.x_manual
+      : undefined;
+  const manualY =
+    typeof config.y_manual === 'number' && Number.isFinite(config.y_manual)
+      ? config.y_manual
+      : undefined;
+
+  // UI tarafında hem x/y hem de x_manual/y_manual değerleri yüzde (0-100) olarak saklanıyor.
+  // Bu yüzden aynı ölçekle canvas üstüne yerleştiriyoruz.
+  const x = manualX ?? config.x;
+  const y = manualY ?? config.y;
+
   return {
-    x: Math.round((config.x / 100) * canvasWidth),
-    y: Math.round((config.y / 100) * canvasHeight),
+    x: Math.round((x / 100) * canvasWidth),
+    y: Math.round((y / 100) * canvasHeight),
     align: config.align || 'center',
   };
 };
