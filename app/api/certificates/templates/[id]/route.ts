@@ -51,14 +51,6 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         ? organization_slug.trim()
         : existing.organization_slug;
 
-    if (is_default === true) {
-      await authResult.supabase
-        .from('certificate_templates')
-        .update({ is_default: false })
-        .eq('organization_slug', nextOrgSlug)
-        .neq('id', templateId);
-    }
-
     const updateData: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     };
@@ -74,9 +66,35 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     if (design_settings !== undefined) {
       updateData.design_settings = design_settings;
     }
-    if (typeof is_default === 'boolean') {
-      updateData.is_default = is_default;
+
+    let nextIsDefault =
+      typeof is_default === 'boolean' ? is_default : Boolean(existing.is_default);
+
+    // Kurumda hiç varsayılan yoksa bu şablonu varsayılan yap (öğrenci sertifikaları buradan okur)
+    if (!nextIsDefault) {
+      const { data: existingDefault } = await authResult.supabase
+        .from('certificate_templates')
+        .select('id')
+        .eq('organization_slug', nextOrgSlug)
+        .eq('is_default', true)
+        .neq('id', templateId)
+        .limit(1)
+        .maybeSingle();
+
+      if (!existingDefault) {
+        nextIsDefault = true;
+      }
     }
+
+    if (nextIsDefault) {
+      await authResult.supabase
+        .from('certificate_templates')
+        .update({ is_default: false })
+        .eq('organization_slug', nextOrgSlug)
+        .neq('id', templateId);
+    }
+
+    updateData.is_default = nextIsDefault;
 
     const { data, error } = await authResult.supabase
       .from('certificate_templates')

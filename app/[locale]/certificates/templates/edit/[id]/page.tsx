@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Palette, Image, Eye, Save, 
   ArrowLeft, HelpCircle, RefreshCw
@@ -9,12 +9,12 @@ import Link from 'next/link';
 import NextImage from 'next/image';
 import { useUser } from '@clerk/nextjs';
 import { useParams } from 'next/navigation';
-import { generateDashboardCertificatePreview } from '@/utils/dashboardCertificateGenerator';
 import FileUpload from '@/app/components/ui/FileUpload';
 import { uploadFileToSupabase, validateFile } from '@/app/_services/fileUploadService';
 import { certificatesSupabase as supabase } from '@/app/_services/certificatesSupabaseClient';
 import { getCertificateOrganizationSlugs } from '@/app/_services/organizationAccessService';
 import { useUserModules } from '@/app/hooks/useUserModules';
+import { useLiveCertificatePreview } from '@/app/hooks/useLiveCertificatePreview';
 
 // Types
 interface Organization {
@@ -333,9 +333,6 @@ export default function EditTemplatePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [previewCanvas, setPreviewCanvas] = useState<HTMLCanvasElement | null>(null);
-  const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [imageAspectRatio, setImageAspectRatio] = useState<number>(4/3); // Default 4:3 ratio
   
   // File upload states
@@ -406,6 +403,16 @@ export default function EditTemplatePage() {
   const { isSuperAdmin, loading: modulesLoading } = useUserModules();
   const locale = 'tr'; // You can get this from params or context
   const t = texts[locale] || texts.tr;
+
+  const {
+    canvasRef,
+    previewCanvas,
+    isGeneratingPreview,
+    generatePreview,
+  } = useLiveCertificatePreview(formData, {
+    locale,
+    aspectRatio: imageAspectRatio,
+  });
   
   // File upload handlers
   const handleFileSelect = useCallback(async (file: File) => {
@@ -454,53 +461,7 @@ export default function EditTemplatePage() {
     setImageAspectRatio(4/3); // Reset to default ratio
   }, []);
   
-  // Generate preview function
-  const generatePreview = useCallback(async () => {
-    if (!formData.background_image || isGeneratingPreview) {
-      return;
-    }
-    
-    setIsGeneratingPreview(true);
-    try {
-      // Calculate preview size based on container aspect ratio
-      const containerWidth = 600; // Fixed container width
-      const previewHeight = Math.round(containerWidth / imageAspectRatio);
-      
-      const canvas = await generateDashboardCertificatePreview(
-        formData,
-        containerWidth,
-        previewHeight,
-        locale
-      );
-      
-      setPreviewCanvas(canvas);
-      
-      // Update canvas in the DOM if ref exists
-      if (canvasRef.current && canvas) {
-        const ctx = canvasRef.current.getContext('2d');
-        if (ctx) {
-          canvasRef.current.width = canvas.width;
-          canvasRef.current.height = canvas.height;
-          ctx.drawImage(canvas, 0, 0);
-        }
-      }
-    } catch (error) {
-      console.error('Preview generation error:', error);
-    } finally {
-      setIsGeneratingPreview(false);
-    }
-  }, [formData, isGeneratingPreview, locale, imageAspectRatio]);
-  
-  // Update preview when form data changes
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      generatePreview();
-    }, 500); // Debounce to avoid too many updates
-    
-    return () => clearTimeout(timeoutId);
-  }, [formData.background_image, formData.design_settings, formData.name, formData.organization_slug, generatePreview]);
-
-  // Update aspect ratio when background image URL changes
+  // Aspect ratio when background image URL changes
   useEffect(() => {
     if (formData.background_image && !selectedFile) {
       const img = document.createElement('img');
@@ -509,11 +470,11 @@ export default function EditTemplatePage() {
         setImageAspectRatio(aspectRatio);
       };
       img.onerror = () => {
-        setImageAspectRatio(4/3); // Fallback to default ratio on error
+        setImageAspectRatio(4/3);
       };
       img.src = formData.background_image;
     } else if (!formData.background_image) {
-      setImageAspectRatio(4/3); // Reset to default when no image
+      setImageAspectRatio(4/3);
     }
   }, [formData.background_image, selectedFile]);
 
@@ -3225,25 +3186,22 @@ export default function EditTemplatePage() {
                 }}
               >
                 {formData.background_image ? (
-                  <div className="w-full h-full relative">
-                    {/* Canvas Preview */}
+                  <div className="w-full h-full relative flex items-center justify-center">
                     <canvas
                       ref={canvasRef}
-                      className="w-full h-full"
+                      className="max-w-full max-h-full object-contain"
                       style={{ display: previewCanvas ? 'block' : 'none' }}
                     />
                     
-                    {/* Loading state */}
                     {isGeneratingPreview && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/40">
                         <div className="text-white text-center">
                           <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                          <p className="text-sm">Önizleme oluşturuluyor...</p>
+                          <p className="text-sm">Önizleme güncelleniyor...</p>
                         </div>
                       </div>
                     )}
                     
-                    {/* Fallback image if canvas fails */}
                     {!previewCanvas && !isGeneratingPreview && (
                       <NextImage 
                         src={formData.background_image} 

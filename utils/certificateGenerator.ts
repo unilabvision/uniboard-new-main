@@ -149,6 +149,7 @@ export const generateCertificateWithTemplate = async (
     canvas.height = backgroundImg.height;
     ctx.drawImage(backgroundImg, 0, 0, canvas.width, canvas.height);
 
+    // parseDesignSettings artık eksik alanları normalize eder; katılımın enabled:false değerleri korunur
     const designSettings = parseDesignSettings(template.design_settings);
     const renderData: CertificateRenderData = {
       ...data,

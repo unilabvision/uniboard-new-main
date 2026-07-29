@@ -95,8 +95,8 @@ export const getCertificateTemplate = async (
 export const generateDashboardPreviewCanvas = async (
   data: Certificate,
   template: CertificateTemplate,
-  previewWidth: number = 600,
-  previewHeight: number = 450
+  previewWidth: number = 1200,
+  previewHeight: number = 850
 ): Promise<HTMLCanvasElement> => {
   if (typeof window === 'undefined') {
     throw new Error('Browser environment gerekli');
@@ -162,8 +162,8 @@ export const generateSampleCertificateData = (language: string = 'tr'): Certific
 
 export const generateDashboardCertificatePreview = async (
   templateData: any,
-  previewWidth: number = 600,
-  previewHeight: number = 450,
+  previewWidth: number = 1200,
+  previewHeight: number = 850,
   language: string = 'tr'
 ): Promise<HTMLCanvasElement> => {
   try {
