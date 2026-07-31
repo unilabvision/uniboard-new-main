@@ -9,6 +9,8 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  Loader2,
+  Plus,
   Search,
   Users,
 } from 'lucide-react';
@@ -46,6 +48,16 @@ const texts = {
     viewCourse: 'Kursa git',
     noModules: 'Bu paket için eşleşen modül yok',
     peopleCount: 'kişi',
+    addTitle: 'Katılımcı ekle',
+    addHint: 'E-posta ile kursa kayıt oluşturun. MyUNI hesabı yoksa kayıt daveti gönderilir; hesap açılınca eğitim otomatik görünür.',
+    addEmailPlaceholder: 'ornek@email.com',
+    addButton: 'Katılımcı ekle',
+    adding: 'Ekleniyor...',
+    addSuccess: 'Katılımcı eklendi ve bilgilendirme maili gönderildi.',
+    addSuccessNoEmail: 'Katılımcı eklendi ancak bilgilendirme maili gönderilemedi.',
+    alreadyEnrolled: 'Bu e-posta zaten bu kursa kayıtlı.',
+    inviteSuccess: 'MyUNI hesabı bulunamadı; kayıt daveti e-postası gönderildi.',
+    inviteSuccessNoEmail: 'Kayıt daveti oluşturuldu ancak e-posta gönderilemedi.',
   },
   en: {
     title: 'Participants & Course Enrollments',
@@ -74,6 +86,16 @@ const texts = {
     viewCourse: 'Open course',
     noModules: 'No modules matched this package',
     peopleCount: 'people',
+    addTitle: 'Add participant',
+    addHint: 'Enroll by email. If no MyUNI account exists, an invitation is sent and the course appears automatically after sign-up.',
+    addEmailPlaceholder: 'example@email.com',
+    addButton: 'Add participant',
+    adding: 'Adding...',
+    addSuccess: 'Participant enrolled and notification email sent.',
+    addSuccessNoEmail: 'Participant enrolled but the notification email could not be sent.',
+    alreadyEnrolled: 'This email is already enrolled in this course.',
+    inviteSuccess: 'No MyUNI account was found; a sign-up invitation was sent.',
+    inviteSuccessNoEmail: 'The invitation was created but its email could not be sent.',
   },
 };
 
@@ -303,6 +325,10 @@ export default function CourseEnrollmentPanel({
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
+  const [addEmail, setAddEmail] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+  const [addMessage, setAddMessage] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -349,12 +375,110 @@ export default function CourseEnrollmentPanel({
     });
   };
 
+  const handleAddParticipant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!courseId || adding) return;
+
+    const email = addEmail.trim();
+    if (!email || !email.includes('@')) {
+      setAddError(locale === 'en' ? 'Enter a valid email address.' : 'Geçerli bir e-posta girin.');
+      setAddMessage(null);
+      return;
+    }
+
+    setAdding(true);
+    setAddError(null);
+    setAddMessage(null);
+
+    try {
+      const res = await fetch('/api/lms/admin-enrollments', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courseId, email, locale }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setAddError(typeof data.error === 'string' ? data.error : t.error);
+        return;
+      }
+
+      if (data.invited) {
+        setAddMessage(
+          data.emailSent
+            ? t.inviteSuccess
+            : data.emailWarning
+              ? `${t.inviteSuccessNoEmail} (${data.emailWarning})`
+              : t.inviteSuccessNoEmail
+        );
+        setAddEmail('');
+      } else if (data.alreadyEnrolled) {
+        setAddMessage(t.alreadyEnrolled);
+      } else if (data.emailSent) {
+        setAddMessage(t.addSuccess);
+        setAddEmail('');
+      } else {
+        setAddMessage(
+          data.emailWarning
+            ? `${t.addSuccessNoEmail} (${data.emailWarning})`
+            : t.addSuccessNoEmail
+        );
+        setAddEmail('');
+      }
+
+      await loadData();
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : t.error);
+    } finally {
+      setAdding(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {showHeader && (
         <div>
           <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">{t.title}</h2>
           <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">{t.subtitle}</p>
+        </div>
+      )}
+
+      {courseId && (
+        <div className="rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-4 space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+              {t.addTitle}
+            </h3>
+            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">{t.addHint}</p>
+          </div>
+          <form onSubmit={handleAddParticipant} className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="email"
+              value={addEmail}
+              onChange={(e) => setAddEmail(e.target.value)}
+              placeholder={t.addEmailPlaceholder}
+              disabled={adding}
+              className="flex-1 px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-900 text-sm text-neutral-900 dark:text-neutral-100 focus:ring-2 focus:ring-[#990000] focus:border-transparent disabled:opacity-60"
+            />
+            <button
+              type="submit"
+              disabled={adding || !addEmail.trim()}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[#990000] text-white text-sm font-medium hover:bg-[#7a0000] disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {adding ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Plus className="w-4 h-4" />
+              )}
+              {adding ? t.adding : t.addButton}
+            </button>
+          </form>
+          {addError && (
+            <p className="text-sm text-red-600 dark:text-red-400">{addError}</p>
+          )}
+          {addMessage && (
+            <p className="text-sm text-green-700 dark:text-green-400">{addMessage}</p>
+          )}
         </div>
       )}
 

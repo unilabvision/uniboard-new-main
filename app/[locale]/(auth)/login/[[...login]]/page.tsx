@@ -333,7 +333,7 @@ const translations: TranslationsType = useMemo(
     const SignUpFormComponent = () => {
       const { isLoaded, signUp, setActive } = useSignUp();
       const [formData, setFormData] = useState({
-        email: '',
+        email: emailFromUrl || '',
         password: '',
         firstName: '',
         lastName: '',
@@ -720,7 +720,7 @@ const translations: TranslationsType = useMemo(
     
     SignUpFormComponent.displayName = 'SignUpForm';
     return SignUpFormComponent;
-  }, [t, normalizedLocale, handleTabChange, searchParams]);
+  }, [t, normalizedLocale, handleTabChange, searchParams, emailFromUrl]);
 
   // SignIn Form
   const SignInForm = useMemo(() => {
