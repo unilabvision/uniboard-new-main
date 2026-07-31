@@ -14,7 +14,6 @@ import {
   Search,
   Trash2,
   Users,
-  X,
 } from 'lucide-react';
 import {
   getCoursePackagePrices,
@@ -62,15 +61,13 @@ const texts = {
     alreadyEnrolled: 'Bu e-posta zaten bu kursa kayıtlı.',
     inviteSuccess: 'MyUNI hesabı bulunamadı; kayıt daveti e-postası gönderildi.',
     inviteSuccessNoEmail: 'Kayıt daveti oluşturuldu ancak e-posta gönderilemedi.',
-    packageLabel: 'Tanımlanacak paketler',
+    packageLabel: 'Tanımlanacak paket',
     packageHint:
-      'Katılımcıya hangi paketlerin/modüllerin tanımlanacağını seçin. Sitedeki panelde yalnızca seçilen paketler görünür.',
-    packageRequired: 'En az bir paket seçin.',
-    selectAllPackages: 'Tümünü seç',
-    clearPackages: 'Temizle',
-    removePackage: 'Bu paketi kaldır',
-    removePackageConfirm: 'Bu paketi katılımcıdan kaldırmak istiyor musunuz?',
-    removePackageSuccess: 'Paket katılımcıdan kaldırıldı.',
+      'Katılımcıya hangi paketin/modülün tanımlanacağını seçin. Sitedeki panelde bu paket görünür. Kayıtlı bir katılımcıya farklı paket seçerseniz mevcut paketi bununla değişir.',
+    packageRequired: 'Bir paket seçin.',
+    packageChanged: 'Katılımcının paketi güncellendi.',
+    siteClerkMissing:
+      'Kayıt myunilab.net hesap sistemine yazılamıyor: sunucuda CLERK_SECRET_KEY_LIVE tanımlı değil. Bu ayar yapılmadan eklenen katılımcı sitede görünmez.',
     remove: 'Kurstan çıkar',
     removing: 'Çıkarılıyor...',
     removeConfirm: 'Bu katılımcıyı kurstan çıkarmak istediğinizden emin misiniz?',
@@ -113,15 +110,13 @@ const texts = {
     alreadyEnrolled: 'This email is already enrolled in this course.',
     inviteSuccess: 'No MyUNI account was found; a sign-up invitation was sent.',
     inviteSuccessNoEmail: 'The invitation was created but its email could not be sent.',
-    packageLabel: 'Packages to grant',
+    packageLabel: 'Package to grant',
     packageHint:
-      'Choose which packages/modules the participant receives. Only the selected packages appear on the site.',
-    packageRequired: 'Select at least one package.',
-    selectAllPackages: 'Select all',
-    clearPackages: 'Clear',
-    removePackage: 'Remove this package',
-    removePackageConfirm: 'Remove this package from the participant?',
-    removePackageSuccess: 'Package removed from the participant.',
+      'Choose which package/module the participant receives. Picking another package for an existing participant replaces their current one.',
+    packageRequired: 'Select a package.',
+    packageChanged: 'Participant package updated.',
+    siteClerkMissing:
+      'Enrollment cannot be written to the myunilab.net account system: CLERK_SECRET_KEY_LIVE is not configured on the server. Until then, added participants stay invisible on the site.',
     remove: 'Remove from course',
     removing: 'Removing...',
     removeConfirm: 'Are you sure you want to remove this participant from the course?',
@@ -217,15 +212,11 @@ function CourseBlock({
   locale,
   t,
   defaultOpen = false,
-  onRemovePackage,
-  removingPackageId,
 }: {
   course: CourseEnrollmentDetail;
   locale: string;
   t: typeof texts.tr;
   defaultOpen?: boolean;
-  onRemovePackage?: (tierId: string, packageTitle: string) => void;
-  removingPackageId?: string | null;
 }) {
   const [open, setOpen] = useState(defaultOpen);
 
@@ -277,25 +268,13 @@ function CourseBlock({
                 {course.purchased_packages.map((pkg) => (
                   <span
                     key={`${pkg.tier_id || 'full'}-${pkg.title}`}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium ${
+                    className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium ${
                       pkg.is_full_course
                         ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
                         : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
                     }`}
                   >
                     {pkg.title}
-                    {onRemovePackage && pkg.tier_id && (
-                      <button
-                        type="button"
-                        onClick={() => onRemovePackage(pkg.tier_id!, pkg.title)}
-                        disabled={removingPackageId === pkg.tier_id}
-                        title={t.removePackage}
-                        aria-label={`${t.removePackage}: ${pkg.title}`}
-                        className="text-current/70 hover:text-current disabled:opacity-50"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
                   </span>
                 ))}
               </div>
@@ -377,8 +356,7 @@ export default function CourseEnrollmentPanel({
   const [addMessage, setAddMessage] = useState<string | null>(null);
   const [removingUserId, setRemovingUserId] = useState<string | null>(null);
   const [packages, setPackages] = useState<CoursePackagePrice[]>([]);
-  const [selectedTierIds, setSelectedTierIds] = useState<string[]>([]);
-  const [removingPackageKey, setRemovingPackageKey] = useState<string | null>(null);
+  const [selectedTierId, setSelectedTierId] = useState('');
 
   const loadData = useCallback(async () => {
     try {
@@ -409,8 +387,7 @@ export default function CourseEnrollmentPanel({
         if (cancelled) return;
         setPackages(rows);
         const fullCourse = rows.find((row) => row.is_full_course);
-        const preselected = fullCourse?.id || rows[0]?.id;
-        setSelectedTierIds(preselected ? [preselected] : []);
+        setSelectedTierId(fullCourse?.id || rows[0]?.id || '');
       })
       .catch((err) => {
         console.error('Course packages load error:', err);
@@ -455,7 +432,7 @@ export default function CourseEnrollmentPanel({
       return;
     }
 
-    if (packages.length > 0 && selectedTierIds.length === 0) {
+    if (packages.length > 0 && !selectedTierId) {
       setAddError(t.packageRequired);
       setAddMessage(null);
       return;
@@ -473,17 +450,30 @@ export default function CourseEnrollmentPanel({
           courseId,
           email,
           locale,
-          tierIds: selectedTierIds,
+          tierId: selectedTierId || undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setAddError(typeof data.error === 'string' ? data.error : t.error);
+        const rawError = typeof data.error === 'string' ? data.error : '';
+        const duplicateEnrollment =
+          rawError.includes('unique_user_course_enrollment') ||
+          rawError.includes('duplicate key');
+        setAddError(
+          data.code === 'site_clerk_missing'
+            ? t.siteClerkMissing
+            : duplicateEnrollment
+              ? t.alreadyEnrolled
+              : rawError || t.error
+        );
         return;
       }
 
-      if (data.invited) {
+      if (data.packageChanged) {
+        setAddMessage(t.packageChanged);
+        setAddEmail('');
+      } else if (data.invited) {
         setAddMessage(
           data.emailSent
             ? t.inviteSuccess
@@ -544,38 +534,6 @@ export default function CourseEnrollmentPanel({
     }
   };
 
-  const handleRemovePackage = async (
-    userId: string,
-    tierId: string,
-    packageTitle: string
-  ) => {
-    if (!courseId || removingPackageKey) return;
-    if (!window.confirm(`${t.removePackageConfirm}\n\n${packageTitle}`)) return;
-
-    const key = `${userId}:${tierId}`;
-    setRemovingPackageKey(key);
-    setAddError(null);
-    setAddMessage(null);
-    try {
-      const res = await fetch('/api/lms/admin-enrollments', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ courseId, userId, tierId }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setAddError(typeof data.error === 'string' ? data.error : t.error);
-        return;
-      }
-      setAddMessage(t.removePackageSuccess);
-      await loadData();
-    } catch (err) {
-      setAddError(err instanceof Error ? err.message : t.error);
-    } finally {
-      setRemovingPackageKey(null);
-    }
-  };
-
   return (
     <div className="space-y-4">
       {showHeader && (
@@ -595,29 +553,9 @@ export default function CourseEnrollmentPanel({
           </div>
           {packages.length > 0 && (
             <div>
-              <div className="flex items-center justify-between gap-2 mb-1">
-                <span className="text-xs font-medium text-neutral-700 dark:text-neutral-300">
-                  {t.packageLabel}
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedTierIds(packages.map((pkg) => pkg.id))}
-                    disabled={adding}
-                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-60"
-                  >
-                    {t.selectAllPackages}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedTierIds([])}
-                    disabled={adding}
-                    className="text-xs text-neutral-500 dark:text-neutral-400 hover:underline disabled:opacity-60"
-                  >
-                    {t.clearPackages}
-                  </button>
-                </div>
-              </div>
+              <span className="block text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+                {t.packageLabel}
+              </span>
               <div className="grid gap-1.5 sm:grid-cols-2">
                 {packages.map((pkg) => (
                   <label
@@ -625,15 +563,10 @@ export default function CourseEnrollmentPanel({
                     className="flex items-start gap-2 rounded-md border border-neutral-200 dark:border-neutral-700 px-3 py-2 cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-700/40"
                   >
                     <input
-                      type="checkbox"
-                      checked={selectedTierIds.includes(pkg.id)}
-                      onChange={(e) =>
-                        setSelectedTierIds((prev) =>
-                          e.target.checked
-                            ? [...prev, pkg.id]
-                            : prev.filter((id) => id !== pkg.id)
-                        )
-                      }
+                      type="radio"
+                      name="enrollment-package"
+                      checked={selectedTierId === pkg.id}
+                      onChange={() => setSelectedTierId(pkg.id)}
                       disabled={adding}
                       className="mt-0.5 w-4 h-4 accent-[#990000]"
                     />
@@ -792,21 +725,6 @@ export default function CourseEnrollmentPanel({
                         locale={locale}
                         t={t}
                         defaultOpen={Boolean(courseId)}
-                        onRemovePackage={
-                          courseId && course.course_id === courseId
-                            ? (tierId, packageTitle) =>
-                                handleRemovePackage(
-                                  person.user_id,
-                                  tierId,
-                                  packageTitle
-                                )
-                            : undefined
-                        }
-                        removingPackageId={
-                          removingPackageKey?.startsWith(`${person.user_id}:`)
-                            ? removingPackageKey.split(':')[1]
-                            : null
-                        }
                       />
                     ))}
                   </div>

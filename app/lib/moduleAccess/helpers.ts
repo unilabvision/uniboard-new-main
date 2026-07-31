@@ -1,4 +1,5 @@
 import { auth, clerkClient } from '@clerk/nextjs/server';
+import { createClerkClient } from '@clerk/backend';
 import { createClient } from '@supabase/supabase-js';
 import type { ModuleAccessDefinition } from '@/app/lib/moduleAccess/registry';
 import { isEmailQuery } from '@/app/lib/internship/accessQuery';
@@ -153,8 +154,55 @@ export async function clerkUserToResult(user: {
   };
 }
 
-export async function findClerkUserByEmail(email: string) {
-  const clerk = await clerkClient();
+/**
+ * Secret key of the Clerk instance myunilab.net authenticates against.
+ * The dashboard itself may run on the development instance, whose user ids the
+ * public site cannot resolve.
+ */
+export function getSiteClerkSecretKey(): string {
+  const key = (
+    process.env.CLERK_SECRET_KEY_LIVE ||
+    process.env.CLERK_LOOKUP_SECRET_KEY ||
+    ''
+  ).trim();
+  if (!key || key === process.env.CLERK_SECRET_KEY) return '';
+  return key;
+}
+
+export function isSiteClerkPrimary(): boolean {
+  return (process.env.CLERK_SECRET_KEY || '').startsWith('sk_live_');
+}
+
+let cachedSiteClerk: ReturnType<typeof createClerkClient> | null = null;
+
+/** Clerk client for the instance the public site uses, or null when unavailable. */
+export function getSiteClerkClient() {
+  if (isSiteClerkPrimary()) return null;
+  const key = getSiteClerkSecretKey();
+  if (!key) return null;
+  if (!cachedSiteClerk) cachedSiteClerk = createClerkClient({ secretKey: key });
+  return cachedSiteClerk;
+}
+
+type ClerkUserLike = {
+  id: string;
+  emailAddresses: Array<{ emailAddress: string }>;
+};
+
+type ClerkUserListClient<U extends ClerkUserLike> = {
+  users: {
+    getUserList: (args: {
+      emailAddress?: string[];
+      query?: string;
+      limit?: number;
+    }) => Promise<{ data: U[] }>;
+  };
+};
+
+async function searchClerkUserByEmail<U extends ClerkUserLike>(
+  clerk: ClerkUserListClient<U>,
+  email: string
+): Promise<U | null> {
   const normalized = email.trim().toLowerCase();
   if (!normalized) return null;
 
@@ -186,6 +234,28 @@ export async function findClerkUserByEmail(email: string) {
   }
 
   return null;
+}
+
+export async function findClerkUserByEmail(email: string) {
+  const clerk = await clerkClient();
+  return searchClerkUserByEmail(clerk, email);
+}
+
+/**
+ * Resolves an email on the Clerk instance the public site uses, so stored user
+ * ids stay usable on myunilab.net.
+ */
+export async function findSiteClerkUserByEmail(email: string) {
+  const siteClerk = getSiteClerkClient();
+  if (siteClerk) {
+    const user = await searchClerkUserByEmail(siteClerk, email);
+    return { user, siteInstanceAvailable: true };
+  }
+  if (isSiteClerkPrimary()) {
+    const user = await findClerkUserByEmail(email);
+    return { user, siteInstanceAvailable: true };
+  }
+  return { user: null, siteInstanceAvailable: false };
 }
 
 function clerkErrorMessage(err: unknown): string {

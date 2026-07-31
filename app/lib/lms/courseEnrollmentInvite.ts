@@ -29,11 +29,10 @@ function decode(value: string) {
 export function createCourseEnrollmentToken(
   email: string,
   courseId: string,
-  tierIds: Array<string | null> = []
+  tierId: string | null = null
 ) {
   const expiresAt = Date.now() + INVITE_TTL_MS;
-  const tierSegment = tierIds.filter(Boolean).join(',');
-  const payload = `${email.trim().toLowerCase()}|${courseId}|${tierSegment}|${expiresAt}`;
+  const payload = `${email.trim().toLowerCase()}|${courseId}|${tierId || ''}|${expiresAt}`;
   const signature = createHmac('sha256', inviteSecret())
     .update(payload)
     .digest('hex');
@@ -43,7 +42,7 @@ export function createCourseEnrollmentToken(
 export function verifyCourseEnrollmentToken(token: string): {
   email: string;
   courseId: string;
-  tierIds: string[];
+  tierId: string | null;
 } | null {
   try {
     const parts = decode(token.trim()).split('|');
@@ -76,7 +75,7 @@ export function verifyCourseEnrollmentToken(token: string): {
     return {
       email: email.toLowerCase(),
       courseId,
-      tierIds: tierSegment ? tierSegment.split(',').filter(Boolean) : [],
+      tierId: tierSegment || null,
     };
   } catch {
     return null;

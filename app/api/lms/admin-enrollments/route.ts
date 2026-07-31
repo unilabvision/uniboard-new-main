@@ -3,10 +3,11 @@ import { auth, clerkClient } from '@clerk/nextjs/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendCourseEnrollmentEmail } from '@/app/_services/courseEnrollmentEmail';
 import { createCourseEnrollmentToken } from '@/app/lib/lms/courseEnrollmentInvite';
-import { resolveEnrollmentTierIds } from '@/app/lib/lms/enrollmentTiers';
+import { resolveEnrollmentTierId } from '@/app/lib/lms/enrollmentTiers';
 import {
-  findClerkUserByEmail,
+  findSiteClerkUserByEmail,
   getMailSafeAppBaseUrl,
+  getSiteClerkClient,
 } from '@/app/lib/moduleAccess/helpers';
 import { getMyuniPublicOrigin } from '@/app/lib/siteApplications/publicUrls';
 import { loadUserAccessRows } from '@/app/lib/moduleAccess/rbac';
@@ -33,6 +34,32 @@ function clerkDisplayName(user: {
   const name = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
   return name || user.emailAddresses[0]?.emailAddress || '';
 }
+
+function isUniqueEnrollmentConflict(error: {
+  code?: string;
+  message?: string;
+} | null | undefined) {
+  if (!error) return false;
+  if (error.code === '23505') return true;
+  const message = error.message || '';
+  return (
+    message.includes('unique_user_course_enrollment') ||
+    message.includes('duplicate key')
+  );
+}
+
+type EnrollmentRow = {
+  id: string;
+  course_id: string;
+  user_id: string;
+  enrolled_at: string | null;
+  progress_percentage: number | null;
+  is_active: boolean | null;
+  tier_id: string | null;
+};
+
+const ENROLLMENT_SELECT =
+  'id, course_id, user_id, enrolled_at, progress_percentage, is_active, tier_id';
 
 
 async function requireLmsOrStudentsAdmin() {
@@ -139,11 +166,10 @@ export async function PUT(request: NextRequest) {
     typeof body.courseId === 'string' ? body.courseId.trim() : '';
   const email =
     typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
-  const requestedTierIds: string[] = Array.isArray(body.tierIds)
-    ? body.tierIds.map(String).map((id: string) => id.trim()).filter(Boolean)
-    : typeof body.tierId === 'string' && body.tierId.trim()
-      ? [body.tierId.trim()]
-      : [];
+  const requestedTierId =
+    typeof body.tierId === 'string' && body.tierId.trim()
+      ? body.tierId.trim()
+      : null;
   const locale =
     typeof body.locale === 'string' && body.locale.trim()
       ? body.locale.trim()
@@ -169,33 +195,47 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Course not found' }, { status: 404 });
   }
 
-  const tierResult = await resolveEnrollmentTierIds(
+  const tierResult = await resolveEnrollmentTierId(
     authResult.supabase,
     courseId,
-    requestedTierIds
+    requestedTierId
   );
   if (tierResult.error) {
     return NextResponse.json({ error: tierResult.error }, { status: 400 });
   }
-  const tierIds = tierResult.tierIds;
+  const tierId = tierResult.tierId;
 
-  const clerkUser = await findClerkUserByEmail(email);
+  const { user: clerkUser, siteInstanceAvailable } =
+    await findSiteClerkUserByEmail(email);
+
+  // Writing a dashboard-instance user id would create a row myunilab.net can
+  // never match, so refuse instead of silently producing an invisible course.
+  if (!siteInstanceAvailable) {
+    return NextResponse.json(
+      {
+        error:
+          'Katılımcı kaydı myunilab.net Clerk hesabına yazılmalı. Sunucuda CLERK_SECRET_KEY_LIVE (sk_live_...) tanımlı değil, bu yüzden kayıt sitede görünmez.',
+        code: 'site_clerk_missing',
+      },
+      { status: 503 }
+    );
+  }
+
   if (!clerkUser) {
     const safeLocale = locale === 'en' ? 'en' : 'tr';
-    const token = createCourseEnrollmentToken(email, courseId, tierIds);
-    const claimPath = `/api/lms/claim-enrollment?token=${encodeURIComponent(
-      token
-    )}&locale=${safeLocale}`;
-    const signupUrl = new URL(`/${safeLocale}/login`, getMailSafeAppBaseUrl());
-    signupUrl.searchParams.set('tab', 'signup');
-    signupUrl.searchParams.set('email', email);
-    signupUrl.searchParams.set('redirect', claimPath);
+    const token = createCourseEnrollmentToken(email, courseId, tierId);
+    const claimUrl = new URL(
+      '/api/lms/claim-enrollment',
+      getMailSafeAppBaseUrl()
+    );
+    claimUrl.searchParams.set('token', token);
+    claimUrl.searchParams.set('locale', safeLocale);
 
     try {
-      const clerk = await clerkClient();
-      await clerk.invitations.createInvitation({
+      const siteClerk = getSiteClerkClient() || (await clerkClient());
+      await siteClerk.invitations.createInvitation({
         emailAddress: email,
-        redirectUrl: signupUrl.toString(),
+        redirectUrl: `${getMyuniPublicOrigin()}/${safeLocale}/sign-up`,
         publicMetadata: {
           pendingCourseId: courseId,
           pendingCourseLocale: safeLocale,
@@ -212,7 +252,7 @@ export async function PUT(request: NextRequest) {
       to: email,
       name: email,
       courseTitle: course.title || 'MyUNI',
-      courseUrl: signupUrl.toString(),
+      courseUrl: claimUrl.toString(),
       locale: safeLocale,
       invited: true,
     });
@@ -235,57 +275,138 @@ export async function PUT(request: NextRequest) {
     email;
   const userName = clerkDisplayName(clerkUser);
 
-  const { data: allRows, error: existingError } = await authResult.supabase
-    .from('myuni_enrollments')
-    .select('id, course_id, user_id, enrolled_at, progress_percentage, is_active, tier_id')
-    .eq('course_id', courseId)
-    .eq('user_id', userId)
-    .limit(50);
+  const loadEnrollmentRows = async () => {
+    const { data, error } = await authResult.supabase
+      .from('myuni_enrollments')
+      .select(ENROLLMENT_SELECT)
+      .eq('course_id', courseId)
+      .eq('user_id', userId)
+      .limit(50);
+    return {
+      rows: (data || []) as EnrollmentRow[],
+      error,
+    };
+  };
 
+  const { rows: courseRows, error: existingError } = await loadEnrollmentRows();
   if (existingError) {
     return NextResponse.json({ error: existingError.message }, { status: 500 });
   }
 
-  const courseRows = allRows || [];
-  const hadActiveCourseAccess = courseRows.some((row) => row.is_active !== false);
+  const userPayload = { id: userId, email: userEmail, name: userName };
 
-  const enrollments: unknown[] = [];
-  let createdCount = 0;
-
-  for (const tierId of tierIds) {
-    const tierRows = courseRows.filter((row) => (row.tier_id ?? null) === tierId);
-    const existingActive = tierRows.find((row) => row.is_active !== false);
-    if (existingActive) {
-      enrollments.push(existingActive);
-      continue;
+  const respondExisting = async (row: EnrollmentRow) => {
+    if ((row.tier_id ?? null) === tierId) {
+      return NextResponse.json({
+        success: true,
+        alreadyEnrolled: true,
+        emailSent: false,
+        enrollment: row,
+        user: userPayload,
+      });
     }
 
-    const existingInactive = tierRows.find((row) => row.is_active === false);
-    if (existingInactive) {
-      const { data: reactivated, error: reactivateError } = await authResult.supabase
-        .from('myuni_enrollments')
-        .update({
-          is_active: true,
-          enrolled_at: new Date().toISOString(),
-          progress_percentage: existingInactive.progress_percentage ?? 0,
-        })
-        .eq('id', existingInactive.id)
-        .select(
-          'id, course_id, user_id, enrolled_at, progress_percentage, is_active, tier_id'
-        )
-        .single();
+    // One active row per user and course, so a new package replaces the old one.
+    const { data: switched, error: switchError } = await authResult.supabase
+      .from('myuni_enrollments')
+      .update({ tier_id: tierId })
+      .eq('id', row.id)
+      .select(ENROLLMENT_SELECT)
+      .single();
 
-      if (reactivateError || !reactivated) {
+    if (switchError || !switched) {
+      return NextResponse.json(
+        { error: switchError?.message || 'Failed to update package' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      alreadyEnrolled: false,
+      packageChanged: true,
+      emailSent: false,
+      enrollment: switched,
+      user: userPayload,
+    });
+  };
+
+  /** After a unique_user_course_enrollment hit, reuse the row that already won. */
+  const recoverFromUniqueConflict = async (): Promise<
+    NextResponse | { enrollment: EnrollmentRow }
+  > => {
+    const { rows, error } = await loadEnrollmentRows();
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    const active = rows.find((row) => row.is_active !== false);
+    if (active) return respondExisting(active);
+
+    const inactive = rows.find((row) => row.is_active === false);
+    if (inactive) {
+      const { data: reactivated, error: reactivateError } =
+        await authResult.supabase
+          .from('myuni_enrollments')
+          .update({
+            is_active: true,
+            tier_id: tierId,
+            enrolled_at: new Date().toISOString(),
+            progress_percentage: inactive.progress_percentage ?? 0,
+          })
+          .eq('id', inactive.id)
+          .select(ENROLLMENT_SELECT)
+          .single();
+      if (!reactivateError && reactivated) {
+        return { enrollment: reactivated as EnrollmentRow };
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      alreadyEnrolled: true,
+      emailSent: false,
+      user: userPayload,
+    });
+  };
+
+  const activeRow = courseRows.find((row) => row.is_active !== false);
+  if (activeRow) {
+    return respondExisting(activeRow);
+  }
+
+  const inactiveRow = courseRows.find((row) => row.is_active === false);
+  let enrollment: EnrollmentRow | null = null;
+
+  if (inactiveRow) {
+    const { data: reactivated, error: reactivateError } = await authResult.supabase
+      .from('myuni_enrollments')
+      .update({
+        is_active: true,
+        tier_id: tierId,
+        enrolled_at: new Date().toISOString(),
+        progress_percentage: inactiveRow.progress_percentage ?? 0,
+      })
+      .eq('id', inactiveRow.id)
+      .select(ENROLLMENT_SELECT)
+      .single();
+
+    if (reactivateError || !reactivated) {
+      if (!isUniqueEnrollmentConflict(reactivateError)) {
         return NextResponse.json(
-          { error: reactivateError?.message || 'Failed to reactivate enrollment' },
+          {
+            error:
+              reactivateError?.message || 'Failed to reactivate enrollment',
+          },
           { status: 500 }
         );
       }
-      enrollments.push(reactivated);
-      createdCount += 1;
-      continue;
+      const recovered = await recoverFromUniqueConflict();
+      if (recovered instanceof NextResponse) return recovered;
+      enrollment = recovered.enrollment;
+    } else {
+      enrollment = reactivated as EnrollmentRow;
     }
-
+  } else {
     const { data: inserted, error: insertError } = await authResult.supabase
       .from('myuni_enrollments')
       .insert([
@@ -298,42 +419,39 @@ export async function PUT(request: NextRequest) {
           tier_id: tierId,
         },
       ])
-      .select(
-        'id, course_id, user_id, enrolled_at, progress_percentage, is_active, tier_id'
-      )
+      .select(ENROLLMENT_SELECT)
       .single();
 
     if (insertError || !inserted) {
-      // Race: another insert won the unique constraint for this package.
-      if (insertError?.code === '23505') continue;
-      return NextResponse.json(
-        { error: insertError?.message || 'Failed to create enrollment' },
-        { status: 500 }
-      );
+      if (!isUniqueEnrollmentConflict(insertError)) {
+        return NextResponse.json(
+          { error: insertError?.message || 'Failed to create enrollment' },
+          { status: 500 }
+        );
+      }
+      const recovered = await recoverFromUniqueConflict();
+      if (recovered instanceof NextResponse) return recovered;
+      enrollment = recovered.enrollment;
+    } else {
+      enrollment = inserted as EnrollmentRow;
     }
-    enrollments.push(inserted);
-    createdCount += 1;
   }
 
-  if (createdCount === 0) {
+  if (!enrollment) {
     return NextResponse.json({
       success: true,
       alreadyEnrolled: true,
       emailSent: false,
-      enrollments,
-      user: { id: userId, email: userEmail, name: userName },
+      user: userPayload,
     });
   }
 
-  // Multiple package rows belong to one participant, so only the first counts.
-  if (!hadActiveCourseAccess) {
-    await authResult.supabase
-      .from('myuni_courses')
-      .update({
-        current_participants: (course.current_participants || 0) + 1,
-      })
-      .eq('id', courseId);
-  }
+  await authResult.supabase
+    .from('myuni_courses')
+    .update({
+      current_participants: (course.current_participants || 0) + 1,
+    })
+    .eq('id', courseId);
 
   const courseUrl = publicCourseUrl(locale === 'en' ? 'en' : 'tr', course.slug || course.id);
   const mail = await sendCourseEnrollmentEmail({
@@ -347,17 +465,16 @@ export async function PUT(request: NextRequest) {
   return NextResponse.json({
     success: true,
     alreadyEnrolled: false,
-    createdCount,
     emailSent: Boolean(mail.success),
     emailWarning: mail.success ? undefined : mail.error || 'Email send failed',
-    enrollments,
-    user: { id: userId, email: userEmail, name: userName },
+    enrollment,
+    user: userPayload,
   });
 }
 
 /**
  * Remove a participant from one course without deleting progress/payment history.
- * DELETE { courseId, userId, tierId? } — tierId revokes a single package only.
+ * DELETE { courseId, userId }
  */
 export async function DELETE(request: NextRequest) {
   const authResult = await requireLmsOrStudentsAdmin();
@@ -372,10 +489,6 @@ export async function DELETE(request: NextRequest) {
   const courseId =
     typeof body.courseId === 'string' ? body.courseId.trim() : '';
   const userId = typeof body.userId === 'string' ? body.userId.trim() : '';
-  const tierId =
-    typeof body.tierId === 'string' && body.tierId.trim()
-      ? body.tierId.trim()
-      : null;
   if (!courseId || !userId) {
     return NextResponse.json(
       { error: 'courseId and userId required' },
@@ -393,12 +506,27 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: enrollmentError.message }, { status: 500 });
   }
 
-  const activeRows = allActiveRows || [];
-  const targetRows = tierId
-    ? activeRows.filter((row) => String(row.tier_id || '') === tierId)
-    : activeRows;
+  const targetRows = allActiveRows || [];
   if (!targetRows.length) {
     return NextResponse.json({ success: true, alreadyRemoved: true });
+  }
+
+  // A previously removed row already occupies the inactive slot of the unique
+  // (user, course, is_active) key, so clear it before deactivating this one.
+  const { data: inactiveRows } = await authResult.supabase
+    .from('myuni_enrollments')
+    .select('id')
+    .eq('course_id', courseId)
+    .eq('user_id', userId)
+    .eq('is_active', false);
+  if (inactiveRows?.length) {
+    await authResult.supabase
+      .from('myuni_enrollments')
+      .delete()
+      .in(
+        'id',
+        inactiveRows.map((row) => row.id)
+      );
   }
 
   const { error: removeError } = await authResult.supabase
@@ -412,15 +540,12 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: removeError.message }, { status: 500 });
   }
 
-  // The participant only leaves the course once every package is revoked.
-  const stillEnrolled = targetRows.length < activeRows.length;
-
   const { data: course } = await authResult.supabase
     .from('myuni_courses')
     .select('current_participants')
     .eq('id', courseId)
     .maybeSingle();
-  if (course && !stillEnrolled) {
+  if (course) {
     await authResult.supabase
       .from('myuni_courses')
       .update({
@@ -436,6 +561,5 @@ export async function DELETE(request: NextRequest) {
     success: true,
     alreadyRemoved: false,
     removedEnrollments: targetRows.length,
-    stillEnrolled,
   });
 }
