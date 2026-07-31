@@ -1,20 +1,22 @@
-# Gerekli repo Secrets:
-#   CRON_SECRET          → Vercel'deki CRON_SECRET (veya SITE_APPLICATIONS_CLEANUP_SECRET) ile aynı
-#   DASHBOARD_BASE_URL   → örn. https://dashboard.myunilab.net  (sonunda / olmasın)
+# Bu dosya Vercel'de ÇALIŞMAZ — sadece GitHub Actions'ta çalışır.
+#
+# Repo Secrets (Settings → Secrets and variables → Actions):
+#   CRON_SECRET        = Vercel env ile aynı (CRON_SECRET veya SITE_APPLICATIONS_CLEANUP_SECRET)
+#   DASHBOARD_BASE_URL = https://dashboard.myunilab.net  (sonda / yok)
 
 name: Scheduled dashboard jobs
 
 on:
   schedule:
-    # UTC saatleri — Türkiye (UTC+3) için: 03:00 UTC = 06:00 TR, 04:15 UTC = 07:15 TR
-    - cron: '0 3 * * *'   # site-applications cleanup
-    - cron: '15 4 * * *'  # certificate issuance sync
+    # UTC — TR: 03:00 UTC = 06:00, 04:15 UTC = 07:15
+    - cron: '0 3 * * *'
+    - cron: '15 4 * * *'
   workflow_dispatch:
     inputs:
       job:
-        description: 'Hangi iş çalışsın'
+        description: Which job to run
         required: true
-        default: 'all'
+        default: all
         type: choice
         options:
           - all
@@ -28,11 +30,11 @@ concurrency:
 jobs:
   cleanup:
     name: Site applications cleanup
-    if: >
-      github.event_name == 'schedule' && github.event.schedule == '0 3 * * *' ||
-      github.event_name == 'workflow_dispatch' && (inputs.job == 'all' || inputs.job == 'cleanup')
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 3 * * *') ||
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.job == 'all' || github.event.inputs.job == 'cleanup'))
     steps:
       - name: Call cleanup endpoint
         env:
@@ -40,10 +42,9 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set -euo pipefail
-          if [ -z "${BASE_URL:-}" ] || [ -z "${CRON_SECRET:-}" ]; then
-            echo "DASHBOARD_BASE_URL ve CRON_SECRET secrets tanımlı olmalı."
-            exit 1
-          fi
+          test -n "${BASE_URL:-}" || { echo "::error::Missing secret DASHBOARD_BASE_URL"; exit 1; }
+          test -n "${CRON_SECRET:-}" || { echo "::error::Missing secret CRON_SECRET"; exit 1; }
+          echo "GET ${BASE_URL%/}/api/site-applications/cleanup"
           curl -fsS -X GET \
             -H "Authorization: Bearer ${CRON_SECRET}" \
             -H "Accept: application/json" \
@@ -54,11 +55,11 @@ jobs:
 
   issuance_sync:
     name: Certificate issuance sync
-    if: >
-      github.event_name == 'schedule' && github.event.schedule == '15 4 * * *' ||
-      github.event_name == 'workflow_dispatch' && (inputs.job == 'all' || inputs.job == 'issuance-sync')
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '15 4 * * *') ||
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.job == 'all' || github.event.inputs.job == 'issuance-sync'))
     steps:
       - name: Call issuance sync endpoint
         env:
@@ -66,10 +67,9 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set -euo pipefail
-          if [ -z "${BASE_URL:-}" ] || [ -z "${CRON_SECRET:-}" ]; then
-            echo "DASHBOARD_BASE_URL ve CRON_SECRET secrets tanımlı olmalı."
-            exit 1
-          fi
+          test -n "${BASE_URL:-}" || { echo "::error::Missing secret DASHBOARD_BASE_URL"; exit 1; }
+          test -n "${CRON_SECRET:-}" || { echo "::error::Missing secret CRON_SECRET"; exit 1; }
+          echo "GET ${BASE_URL%/}/api/certificates/issuance/sync"
           curl -fsS -X GET \
             -H "Authorization: Bearer ${CRON_SECRET}" \
             -H "Accept: application/json" \
