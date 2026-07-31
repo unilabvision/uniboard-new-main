@@ -7,6 +7,11 @@
 name: Scheduled dashboard jobs
 
 on:
+  # Sadece bu workflow dosyası değişince çalışır — Actions listesinde görünür hale getirir.
+  # Her commit'te dashboard API çağrılmaz.
+  push:
+    paths:
+      - '.github/workflows/main.yml'
   schedule:
     # UTC — TR: 03:00 UTC = 06:00, 04:15 UTC = 07:15
     - cron: '0 3 * * *'
@@ -33,6 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: |
+      github.event_name == 'push' ||
       (github.event_name == 'schedule' && github.event.schedule == '0 3 * * *') ||
       (github.event_name == 'workflow_dispatch' && (github.event.inputs.job == 'all' || github.event.inputs.job == 'cleanup'))
     steps:
@@ -58,6 +64,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     if: |
+      github.event_name == 'push' ||
       (github.event_name == 'schedule' && github.event.schedule == '15 4 * * *') ||
       (github.event_name == 'workflow_dispatch' && (github.event.inputs.job == 'all' || github.event.inputs.job == 'issuance-sync'))
     steps:
