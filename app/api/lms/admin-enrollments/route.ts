@@ -20,7 +20,8 @@ function getServiceSupabase() {
 }
 
 function publicCourseUrl(locale: string, slug: string) {
-  return `${getMyuniPublicOrigin()}/${locale}/lms/courses/${encodeURIComponent(slug)}`;
+  const path = locale === 'en' ? 'course' : 'kurs';
+  return `${getMyuniPublicOrigin()}/${locale}/${path}/${encodeURIComponent(slug)}`;
 }
 
 function clerkDisplayName(user: {
@@ -332,5 +333,77 @@ export async function PUT(request: NextRequest) {
     emailWarning: mail.success ? undefined : mail.error || 'Email send failed',
     enrollment,
     user: { id: userId, email: userEmail, name: userName },
+  });
+}
+
+/**
+ * Remove a participant from one course without deleting progress/payment history.
+ * DELETE { courseId, userId }
+ */
+export async function DELETE(request: NextRequest) {
+  const authResult = await requireLmsOrStudentsAdmin();
+  if (authResult.error || !authResult.supabase) {
+    return NextResponse.json(
+      { error: authResult.error },
+      { status: authResult.status }
+    );
+  }
+
+  const body = await request.json().catch(() => ({}));
+  const courseId =
+    typeof body.courseId === 'string' ? body.courseId.trim() : '';
+  const userId = typeof body.userId === 'string' ? body.userId.trim() : '';
+  if (!courseId || !userId) {
+    return NextResponse.json(
+      { error: 'courseId and userId required' },
+      { status: 400 }
+    );
+  }
+
+  const { data: activeRows, error: enrollmentError } = await authResult.supabase
+    .from('myuni_enrollments')
+    .select('id')
+    .eq('course_id', courseId)
+    .eq('user_id', userId)
+    .or('is_active.eq.true,is_active.is.null');
+  if (enrollmentError) {
+    return NextResponse.json({ error: enrollmentError.message }, { status: 500 });
+  }
+  if (!activeRows?.length) {
+    return NextResponse.json({ success: true, alreadyRemoved: true });
+  }
+
+  const { error: removeError } = await authResult.supabase
+    .from('myuni_enrollments')
+    .update({ is_active: false })
+    .in(
+      'id',
+      activeRows.map((row) => row.id)
+    );
+  if (removeError) {
+    return NextResponse.json({ error: removeError.message }, { status: 500 });
+  }
+
+  const { data: course } = await authResult.supabase
+    .from('myuni_courses')
+    .select('current_participants')
+    .eq('id', courseId)
+    .maybeSingle();
+  if (course) {
+    await authResult.supabase
+      .from('myuni_courses')
+      .update({
+        current_participants: Math.max(
+          0,
+          (course.current_participants || 0) - 1
+        ),
+      })
+      .eq('id', courseId);
+  }
+
+  return NextResponse.json({
+    success: true,
+    alreadyRemoved: false,
+    removedEnrollments: activeRows.length,
   });
 }

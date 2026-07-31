@@ -12,6 +12,7 @@ import {
   Loader2,
   Plus,
   Search,
+  Trash2,
   Users,
 } from 'lucide-react';
 import {
@@ -58,6 +59,10 @@ const texts = {
     alreadyEnrolled: 'Bu e-posta zaten bu kursa kayıtlı.',
     inviteSuccess: 'MyUNI hesabı bulunamadı; kayıt daveti e-postası gönderildi.',
     inviteSuccessNoEmail: 'Kayıt daveti oluşturuldu ancak e-posta gönderilemedi.',
+    remove: 'Kurstan çıkar',
+    removing: 'Çıkarılıyor...',
+    removeConfirm: 'Bu katılımcıyı kurstan çıkarmak istediğinizden emin misiniz?',
+    removeSuccess: 'Katılımcı kurstan çıkarıldı.',
   },
   en: {
     title: 'Participants & Course Enrollments',
@@ -96,6 +101,10 @@ const texts = {
     alreadyEnrolled: 'This email is already enrolled in this course.',
     inviteSuccess: 'No MyUNI account was found; a sign-up invitation was sent.',
     inviteSuccessNoEmail: 'The invitation was created but its email could not be sent.',
+    remove: 'Remove from course',
+    removing: 'Removing...',
+    removeConfirm: 'Are you sure you want to remove this participant from the course?',
+    removeSuccess: 'Participant removed from the course.',
   },
 };
 
@@ -329,6 +338,7 @@ export default function CourseEnrollmentPanel({
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [addMessage, setAddMessage] = useState<string | null>(null);
+  const [removingUserId, setRemovingUserId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -434,6 +444,36 @@ export default function CourseEnrollmentPanel({
     }
   };
 
+  const handleRemoveParticipant = async (
+    userId: string,
+    participantName: string
+  ) => {
+    if (!courseId || removingUserId) return;
+    if (!window.confirm(`${t.removeConfirm}\n\n${participantName}`)) return;
+
+    setRemovingUserId(userId);
+    setAddError(null);
+    setAddMessage(null);
+    try {
+      const res = await fetch('/api/lms/admin-enrollments', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courseId, userId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setAddError(typeof data.error === 'string' ? data.error : t.error);
+        return;
+      }
+      setAddMessage(t.removeSuccess);
+      await loadData();
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : t.error);
+    } finally {
+      setRemovingUserId(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {showHeader && (
@@ -523,37 +563,61 @@ export default function CourseEnrollmentPanel({
                 key={person.user_id}
                 className="rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 overflow-hidden"
               >
-                <button
-                  type="button"
-                  onClick={() => toggleUser(person.user_id)}
-                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-neutral-50 dark:hover:bg-neutral-700/50 text-left"
-                >
-                  {expanded ? (
-                    <ChevronDown className="w-4 h-4 text-neutral-500 shrink-0" />
-                  ) : (
-                    <ChevronRight className="w-4 h-4 text-neutral-500 shrink-0" />
-                  )}
-                  <div className="relative w-9 h-9 rounded-full overflow-hidden bg-neutral-200 dark:bg-neutral-700 shrink-0">
-                    {person.user_image ? (
-                      <Image src={person.user_image} alt={person.user_name} fill className="object-cover" />
+                <div className="flex items-center">
+                  <button
+                    type="button"
+                    onClick={() => toggleUser(person.user_id)}
+                    className="min-w-0 flex-1 flex items-center gap-3 px-4 py-3 hover:bg-neutral-50 dark:hover:bg-neutral-700/50 text-left"
+                  >
+                    {expanded ? (
+                      <ChevronDown className="w-4 h-4 text-neutral-500 shrink-0" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-xs font-medium text-neutral-600 dark:text-neutral-300">
-                        {person.user_name.slice(0, 2).toUpperCase()}
-                      </div>
+                      <ChevronRight className="w-4 h-4 text-neutral-500 shrink-0" />
                     )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-medium text-neutral-900 dark:text-neutral-100 truncate">
-                      {person.user_name}
+                    <div className="relative w-9 h-9 rounded-full overflow-hidden bg-neutral-200 dark:bg-neutral-700 shrink-0">
+                      {person.user_image ? (
+                        <Image src={person.user_image} alt={person.user_name} fill className="object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-xs font-medium text-neutral-600 dark:text-neutral-300">
+                          {person.user_name.slice(0, 2).toUpperCase()}
+                        </div>
+                      )}
                     </div>
-                    <div className="text-sm text-neutral-600 dark:text-neutral-300 truncate">
-                      {t.email}: {person.user_email || '-'}
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium text-neutral-900 dark:text-neutral-100 truncate">
+                        {person.user_name}
+                      </div>
+                      <div className="text-sm text-neutral-600 dark:text-neutral-300 truncate">
+                        {t.email}: {person.user_email || '-'}
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-xs text-neutral-500 dark:text-neutral-400 shrink-0">
-                    {person.courses.length} {t.courses}
-                  </div>
-                </button>
+                    <div className="text-xs text-neutral-500 dark:text-neutral-400 shrink-0">
+                      {person.courses.length} {t.courses}
+                    </div>
+                  </button>
+                  {courseId && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleRemoveParticipant(person.user_id, person.user_name)
+                      }
+                      disabled={removingUserId === person.user_id}
+                      title={t.remove}
+                      className="m-2 inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 disabled:opacity-50"
+                    >
+                      {removingUserId === person.user_id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
+                      <span className="hidden sm:inline">
+                        {removingUserId === person.user_id
+                          ? t.removing
+                          : t.remove}
+                      </span>
+                    </button>
+                  )}
+                </div>
 
                 {expanded && (
                   <div className="px-4 pb-4 space-y-2 border-t border-neutral-200 dark:border-neutral-700 pt-3">

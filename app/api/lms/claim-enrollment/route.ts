@@ -14,7 +14,8 @@ function serviceSupabase() {
 }
 
 function publicCourseUrl(locale: string, slug: string) {
-  return `${getMyuniPublicOrigin()}/${locale}/lms/courses/${encodeURIComponent(slug)}`;
+  const path = locale === 'en' ? 'course' : 'kurs';
+  return `${getMyuniPublicOrigin()}/${locale}/${path}/${encodeURIComponent(slug)}`;
 }
 
 function errorResponse(message: string, status: number) {
