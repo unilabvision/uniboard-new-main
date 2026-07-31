@@ -26,9 +26,14 @@ function decode(value: string) {
   return Buffer.from(normalized + padding, 'base64').toString('utf8');
 }
 
-export function createCourseEnrollmentToken(email: string, courseId: string) {
+export function createCourseEnrollmentToken(
+  email: string,
+  courseId: string,
+  tierIds: Array<string | null> = []
+) {
   const expiresAt = Date.now() + INVITE_TTL_MS;
-  const payload = `${email.trim().toLowerCase()}|${courseId}|${expiresAt}`;
+  const tierSegment = tierIds.filter(Boolean).join(',');
+  const payload = `${email.trim().toLowerCase()}|${courseId}|${tierSegment}|${expiresAt}`;
   const signature = createHmac('sha256', inviteSecret())
     .update(payload)
     .digest('hex');
@@ -38,14 +43,21 @@ export function createCourseEnrollmentToken(email: string, courseId: string) {
 export function verifyCourseEnrollmentToken(token: string): {
   email: string;
   courseId: string;
+  tierIds: string[];
 } | null {
   try {
-    const [email, courseId, expiresAtRaw, signature, ...rest] = decode(
-      token.trim()
-    ).split('|');
-    if (rest.length > 0 || !email || !courseId || !signature) return null;
+    const parts = decode(token.trim()).split('|');
+    // Legacy invites were signed without a tier segment.
+    if (parts.length !== 4 && parts.length !== 5) return null;
 
-    const payload = `${email}|${courseId}|${expiresAtRaw}`;
+    const email = parts[0];
+    const courseId = parts[1];
+    const tierSegment = parts.length === 5 ? parts[2] : '';
+    const expiresAtRaw = parts[parts.length - 2];
+    const signature = parts[parts.length - 1];
+    if (!email || !courseId || !signature) return null;
+
+    const payload = parts.slice(0, -1).join('|');
     const expected = createHmac('sha256', inviteSecret())
       .update(payload)
       .digest('hex');
@@ -61,7 +73,11 @@ export function verifyCourseEnrollmentToken(token: string): {
     const expiresAt = Number(expiresAtRaw);
     if (!Number.isFinite(expiresAt) || Date.now() > expiresAt) return null;
 
-    return { email: email.toLowerCase(), courseId };
+    return {
+      email: email.toLowerCase(),
+      courseId,
+      tierIds: tierSegment ? tierSegment.split(',').filter(Boolean) : [],
+    };
   } catch {
     return null;
   }

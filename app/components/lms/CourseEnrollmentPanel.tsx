@@ -14,10 +14,13 @@ import {
   Search,
   Trash2,
   Users,
+  X,
 } from 'lucide-react';
 import {
+  getCoursePackagePrices,
   getEnrollmentOverview,
   type CourseEnrollmentDetail,
+  type CoursePackagePrice,
   type PersonEnrollmentOverview,
 } from '@/app/lib/lms/enrollmentOverviewService';
 
@@ -59,6 +62,15 @@ const texts = {
     alreadyEnrolled: 'Bu e-posta zaten bu kursa kayıtlı.',
     inviteSuccess: 'MyUNI hesabı bulunamadı; kayıt daveti e-postası gönderildi.',
     inviteSuccessNoEmail: 'Kayıt daveti oluşturuldu ancak e-posta gönderilemedi.',
+    packageLabel: 'Tanımlanacak paketler',
+    packageHint:
+      'Katılımcıya hangi paketlerin/modüllerin tanımlanacağını seçin. Sitedeki panelde yalnızca seçilen paketler görünür.',
+    packageRequired: 'En az bir paket seçin.',
+    selectAllPackages: 'Tümünü seç',
+    clearPackages: 'Temizle',
+    removePackage: 'Bu paketi kaldır',
+    removePackageConfirm: 'Bu paketi katılımcıdan kaldırmak istiyor musunuz?',
+    removePackageSuccess: 'Paket katılımcıdan kaldırıldı.',
     remove: 'Kurstan çıkar',
     removing: 'Çıkarılıyor...',
     removeConfirm: 'Bu katılımcıyı kurstan çıkarmak istediğinizden emin misiniz?',
@@ -101,6 +113,15 @@ const texts = {
     alreadyEnrolled: 'This email is already enrolled in this course.',
     inviteSuccess: 'No MyUNI account was found; a sign-up invitation was sent.',
     inviteSuccessNoEmail: 'The invitation was created but its email could not be sent.',
+    packageLabel: 'Packages to grant',
+    packageHint:
+      'Choose which packages/modules the participant receives. Only the selected packages appear on the site.',
+    packageRequired: 'Select at least one package.',
+    selectAllPackages: 'Select all',
+    clearPackages: 'Clear',
+    removePackage: 'Remove this package',
+    removePackageConfirm: 'Remove this package from the participant?',
+    removePackageSuccess: 'Package removed from the participant.',
     remove: 'Remove from course',
     removing: 'Removing...',
     removeConfirm: 'Are you sure you want to remove this participant from the course?',
@@ -196,11 +217,15 @@ function CourseBlock({
   locale,
   t,
   defaultOpen = false,
+  onRemovePackage,
+  removingPackageId,
 }: {
   course: CourseEnrollmentDetail;
   locale: string;
   t: typeof texts.tr;
   defaultOpen?: boolean;
+  onRemovePackage?: (tierId: string, packageTitle: string) => void;
+  removingPackageId?: string | null;
 }) {
   const [open, setOpen] = useState(defaultOpen);
 
@@ -252,13 +277,25 @@ function CourseBlock({
                 {course.purchased_packages.map((pkg) => (
                   <span
                     key={`${pkg.tier_id || 'full'}-${pkg.title}`}
-                    className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium ${
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium ${
                       pkg.is_full_course
                         ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
                         : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
                     }`}
                   >
                     {pkg.title}
+                    {onRemovePackage && pkg.tier_id && (
+                      <button
+                        type="button"
+                        onClick={() => onRemovePackage(pkg.tier_id!, pkg.title)}
+                        disabled={removingPackageId === pkg.tier_id}
+                        title={t.removePackage}
+                        aria-label={`${t.removePackage}: ${pkg.title}`}
+                        className="text-current/70 hover:text-current disabled:opacity-50"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </span>
                 ))}
               </div>
@@ -339,6 +376,9 @@ export default function CourseEnrollmentPanel({
   const [addError, setAddError] = useState<string | null>(null);
   const [addMessage, setAddMessage] = useState<string | null>(null);
   const [removingUserId, setRemovingUserId] = useState<string | null>(null);
+  const [packages, setPackages] = useState<CoursePackagePrice[]>([]);
+  const [selectedTierIds, setSelectedTierIds] = useState<string[]>([]);
+  const [removingPackageKey, setRemovingPackageKey] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -360,6 +400,25 @@ export default function CourseEnrollmentPanel({
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (!courseId) return;
+    let cancelled = false;
+    getCoursePackagePrices(courseId)
+      .then((rows) => {
+        if (cancelled) return;
+        setPackages(rows);
+        const fullCourse = rows.find((row) => row.is_full_course);
+        const preselected = fullCourse?.id || rows[0]?.id;
+        setSelectedTierIds(preselected ? [preselected] : []);
+      })
+      .catch((err) => {
+        console.error('Course packages load error:', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [courseId]);
 
   const filteredPeople = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -396,6 +455,12 @@ export default function CourseEnrollmentPanel({
       return;
     }
 
+    if (packages.length > 0 && selectedTierIds.length === 0) {
+      setAddError(t.packageRequired);
+      setAddMessage(null);
+      return;
+    }
+
     setAdding(true);
     setAddError(null);
     setAddMessage(null);
@@ -404,7 +469,12 @@ export default function CourseEnrollmentPanel({
       const res = await fetch('/api/lms/admin-enrollments', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ courseId, email, locale }),
+        body: JSON.stringify({
+          courseId,
+          email,
+          locale,
+          tierIds: selectedTierIds,
+        }),
       });
       const data = await res.json().catch(() => ({}));
 
@@ -474,6 +544,38 @@ export default function CourseEnrollmentPanel({
     }
   };
 
+  const handleRemovePackage = async (
+    userId: string,
+    tierId: string,
+    packageTitle: string
+  ) => {
+    if (!courseId || removingPackageKey) return;
+    if (!window.confirm(`${t.removePackageConfirm}\n\n${packageTitle}`)) return;
+
+    const key = `${userId}:${tierId}`;
+    setRemovingPackageKey(key);
+    setAddError(null);
+    setAddMessage(null);
+    try {
+      const res = await fetch('/api/lms/admin-enrollments', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courseId, userId, tierId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setAddError(typeof data.error === 'string' ? data.error : t.error);
+        return;
+      }
+      setAddMessage(t.removePackageSuccess);
+      await loadData();
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : t.error);
+    } finally {
+      setRemovingPackageKey(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {showHeader && (
@@ -491,6 +593,68 @@ export default function CourseEnrollmentPanel({
             </h3>
             <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">{t.addHint}</p>
           </div>
+          {packages.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <span className="text-xs font-medium text-neutral-700 dark:text-neutral-300">
+                  {t.packageLabel}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTierIds(packages.map((pkg) => pkg.id))}
+                    disabled={adding}
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-60"
+                  >
+                    {t.selectAllPackages}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTierIds([])}
+                    disabled={adding}
+                    className="text-xs text-neutral-500 dark:text-neutral-400 hover:underline disabled:opacity-60"
+                  >
+                    {t.clearPackages}
+                  </button>
+                </div>
+              </div>
+              <div className="grid gap-1.5 sm:grid-cols-2">
+                {packages.map((pkg) => (
+                  <label
+                    key={pkg.id}
+                    className="flex items-start gap-2 rounded-md border border-neutral-200 dark:border-neutral-700 px-3 py-2 cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-700/40"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedTierIds.includes(pkg.id)}
+                      onChange={(e) =>
+                        setSelectedTierIds((prev) =>
+                          e.target.checked
+                            ? [...prev, pkg.id]
+                            : prev.filter((id) => id !== pkg.id)
+                        )
+                      }
+                      disabled={adding}
+                      className="mt-0.5 w-4 h-4 accent-[#990000]"
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm text-neutral-900 dark:text-neutral-100">
+                        {pkg.title}
+                      </span>
+                      <span className="block text-xs text-neutral-500 dark:text-neutral-400">
+                        {pkg.is_full_course ? t.fullAccess : t.packageAccess}
+                        {' · '}
+                        {formatMoney(pkg.price, locale)}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1.5">
+                {t.packageHint}
+              </p>
+            </div>
+          )}
           <form onSubmit={handleAddParticipant} className="flex flex-col sm:flex-row gap-2">
             <input
               type="email"
@@ -628,6 +792,21 @@ export default function CourseEnrollmentPanel({
                         locale={locale}
                         t={t}
                         defaultOpen={Boolean(courseId)}
+                        onRemovePackage={
+                          courseId && course.course_id === courseId
+                            ? (tierId, packageTitle) =>
+                                handleRemovePackage(
+                                  person.user_id,
+                                  tierId,
+                                  packageTitle
+                                )
+                            : undefined
+                        }
+                        removingPackageId={
+                          removingPackageKey?.startsWith(`${person.user_id}:`)
+                            ? removingPackageKey.split(':')[1]
+                            : null
+                        }
                       />
                     ))}
                   </div>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifyCourseEnrollmentToken } from '@/app/lib/lms/courseEnrollmentInvite';
+import { resolveEnrollmentTierIds } from '@/app/lib/lms/enrollmentTiers';
 import { getMyuniPublicOrigin } from '@/app/lib/siteApplications/publicUrls';
 
 function serviceSupabase() {
@@ -80,20 +81,32 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const { data: existingRows, error: existingError } = await supabase
+  const tierResult = await resolveEnrollmentTierIds(
+    supabase,
+    parsed.courseId,
+    parsed.tierIds
+  );
+  const tierIds = tierResult.error ? [null] : tierResult.tierIds;
+
+  const { data: allRows, error: existingError } = await supabase
     .from('myuni_enrollments')
-    .select('id, is_active, progress_percentage')
+    .select('id, is_active, progress_percentage, tier_id')
     .eq('course_id', parsed.courseId)
     .eq('user_id', userId)
-    .limit(5);
+    .limit(50);
   if (existingError) {
     return errorResponse(existingError.message, 500);
   }
 
-  const active = (existingRows || []).some((row) => row.is_active !== false);
+  const courseRows = allRows || [];
+  const hadActiveCourseAccess = courseRows.some((row) => row.is_active !== false);
+
   let newlyActivated = false;
-  if (!active) {
-    const inactive = (existingRows || []).find((row) => row.is_active === false);
+  for (const tierId of tierIds) {
+    const tierRows = courseRows.filter((row) => (row.tier_id ?? null) === tierId);
+    if (tierRows.some((row) => row.is_active !== false)) continue;
+
+    const inactive = tierRows.find((row) => row.is_active === false);
     if (inactive) {
       const { error } = await supabase
         .from('myuni_enrollments')
@@ -112,15 +125,16 @@ export async function GET(request: NextRequest) {
         enrolled_at: new Date().toISOString(),
         progress_percentage: 0,
         is_active: true,
+        tier_id: tierId,
       });
       if (error && error.code !== '23505') {
         return errorResponse(error.message, 500);
       }
-      newlyActivated = !error;
+      newlyActivated = newlyActivated || !error;
     }
   }
 
-  if (newlyActivated) {
+  if (newlyActivated && !hadActiveCourseAccess) {
     await supabase
       .from('myuni_courses')
       .update({
