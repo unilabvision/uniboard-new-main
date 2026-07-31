@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { createClient } from '@supabase/supabase-js';
 import { verifyCourseEnrollmentToken } from '@/app/lib/lms/courseEnrollmentInvite';
+import { getMyuniPublicOrigin } from '@/app/lib/siteApplications/publicUrls';
 
 function serviceSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL2;
@@ -12,24 +13,8 @@ function serviceSupabase() {
   });
 }
 
-function dashboardOrigin(request: NextRequest) {
-  const configured = (
-    process.env.NEXT_PUBLIC_APP_URL ||
-    process.env.NEXT_PUBLIC_DASHBOARD_URL ||
-    ''
-  )
-    .trim()
-    .replace(/\/$/, '');
-  return configured || request.nextUrl.origin;
-}
-
 function publicCourseUrl(locale: string, slug: string) {
-  const base = (
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.NEXT_PUBLIC_BASE_URL ||
-    'https://myunilab.net'
-  ).replace(/\/$/, '');
-  return `${base}/${locale}/lms/courses/${encodeURIComponent(slug)}`;
+  return `${getMyuniPublicOrigin()}/${locale}/lms/courses/${encodeURIComponent(slug)}`;
 }
 
 function errorResponse(message: string, status: number) {
@@ -60,7 +45,7 @@ export async function GET(request: NextRequest) {
     const claimPath = `/api/lms/claim-enrollment?token=${encodeURIComponent(
       token
     )}&locale=${locale}`;
-    const loginUrl = new URL(`/${locale}/login`, dashboardOrigin(request));
+    const loginUrl = new URL(`/${locale}/login`, request.nextUrl.origin);
     loginUrl.searchParams.set('tab', 'signup');
     loginUrl.searchParams.set('email', parsed.email);
     loginUrl.searchParams.set('redirect', claimPath);

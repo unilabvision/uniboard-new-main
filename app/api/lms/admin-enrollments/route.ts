@@ -5,8 +5,9 @@ import { sendCourseEnrollmentEmail } from '@/app/_services/courseEnrollmentEmail
 import { createCourseEnrollmentToken } from '@/app/lib/lms/courseEnrollmentInvite';
 import {
   findClerkUserByEmail,
-  getAppBaseUrl,
+  getMailSafeAppBaseUrl,
 } from '@/app/lib/moduleAccess/helpers';
+import { getMyuniPublicOrigin } from '@/app/lib/siteApplications/publicUrls';
 import { loadUserAccessRows } from '@/app/lib/moduleAccess/rbac';
 
 function getServiceSupabase() {
@@ -19,12 +20,7 @@ function getServiceSupabase() {
 }
 
 function publicCourseUrl(locale: string, slug: string) {
-  const base = (
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.NEXT_PUBLIC_BASE_URL ||
-    'https://myunilab.net'
-  ).replace(/\/$/, '');
-  return `${base}/${locale}/lms/courses/${encodeURIComponent(slug)}`;
+  return `${getMyuniPublicOrigin()}/${locale}/lms/courses/${encodeURIComponent(slug)}`;
 }
 
 function clerkDisplayName(user: {
@@ -172,7 +168,7 @@ export async function PUT(request: NextRequest) {
     const claimPath = `/api/lms/claim-enrollment?token=${encodeURIComponent(
       token
     )}&locale=${safeLocale}`;
-    const signupUrl = new URL(`/${safeLocale}/login`, getAppBaseUrl());
+    const signupUrl = new URL(`/${safeLocale}/login`, getMailSafeAppBaseUrl());
     signupUrl.searchParams.set('tab', 'signup');
     signupUrl.searchParams.set('email', email);
     signupUrl.searchParams.set('redirect', claimPath);

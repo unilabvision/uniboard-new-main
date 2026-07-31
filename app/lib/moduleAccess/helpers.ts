@@ -282,6 +282,25 @@ export function getAppBaseUrl() {
   return DEFAULT_DASHBOARD_ORIGIN;
 }
 
+/** E-postalara gömülecek linkler için: localhost / preview origin'i asla kullanma. */
+export function getMailSafeAppBaseUrl() {
+  const candidates = [
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.NEXT_PUBLIC_DASHBOARD_URL,
+  ];
+
+  for (const raw of candidates) {
+    const value = (raw || '').trim().replace(/\/$/, '');
+    if (!value) continue;
+    if (/localhost|127\.0\.0\.1|0\.0\.0\.0|vercel\.app|vercel\.com/i.test(value)) {
+      continue;
+    }
+    return value.startsWith('http') ? value : `https://${value}`;
+  }
+
+  return DEFAULT_DASHBOARD_ORIGIN;
+}
+
 export function buildModuleAccessLinks(locale: string, dashboardPath: string) {
   const base = getAppBaseUrl();
   const safeLocale = locale === 'en' ? 'en' : 'tr';
