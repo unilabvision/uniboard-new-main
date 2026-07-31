@@ -6,7 +6,7 @@ import {
   Eye, Calendar, PlayCircle, Plus, Trash2, 
   ChevronDown, ChevronRight,
   Video, FileText, Edit2, Check, X,
-  ArrowUp, ArrowDown, HelpCircle, Users
+  ArrowUp, ArrowDown, HelpCircle, Users, Clock, RefreshCw
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -20,6 +20,7 @@ import ResourceLinkModal from '@/app/components/lms/ResourceLinkModal';
 import CourseEnrollmentPanel from '@/app/components/lms/CourseEnrollmentPanel';
 import { Course, CourseSection, CourseLesson, CourseVideo, CourseNote, CourseQuiz, ModuleType } from '@/app/types/course';
 import { buildCourseUpdatePayload } from '@/app/lib/lms/courseUtils';
+import { formatDurationMinutes, resolveLessonDurationMinutes } from '@/app/lib/lms/durationFormat';
 import { normalizeDescriptionForStorage } from '@/app/lib/lms/htmlContent';
 import HtmlDescriptionEditor from '@/app/components/lms/HtmlDescriptionEditor';
 
@@ -622,10 +623,66 @@ const CourseContentManager = ({
   const [addingLessonSectionId, setAddingLessonSectionId] = useState<string | null>(null);
   const [newLessonTitle, setNewLessonTitle] = useState('');
 
+  // Duration sync
+  const [syncingDurations, setSyncingDurations] = useState(false);
+  const [durationSyncMessage, setDurationSyncMessage] = useState<string | null>(null);
+
   const startAddingLesson = (sectionId: string) => {
     setAddingLessonSectionId(sectionId);
     setNewLessonTitle('');
     setExpandedSections((prev) => new Set([...prev, sectionId]));
+  };
+
+  /**
+   * Vimeo transcode bitmeden süre 0 döndüğü için süreler sonradan tazelenmeli.
+   * Bu işlem videoların süresini Vimeo'dan çeker ve derslerin duration_minutes
+   * alanını günceller; öğrenci paneli bu alanı okuyor.
+   */
+  const syncDurations = async () => {
+    if (syncingDurations) return;
+
+    setSyncingDurations(true);
+    setDurationSyncMessage(null);
+
+    try {
+      const res = await fetch(`/api/lms/courses/${courseId}/sync-durations?force=true`, {
+        method: 'POST',
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload.error || 'Süreler senkronize edilemedi');
+
+      const updatedLessons: Array<{ id: string; duration_minutes: number }> =
+        Array.isArray(payload.lessons) ? payload.lessons : [];
+      const durationById = new Map(
+        updatedLessons.map((lesson) => [lesson.id, lesson.duration_minutes])
+      );
+
+      if (durationById.size > 0) {
+        setSections((prev) =>
+          prev.map((s) => ({
+            ...s,
+            lessons: s.lessons.map((l) =>
+              durationById.has(l.id)
+                ? { ...l, duration_minutes: durationById.get(l.id) }
+                : l
+            ),
+          }))
+        );
+      }
+
+      const pending = Array.isArray(payload.failures) ? payload.failures.length : 0;
+      setDurationSyncMessage(
+        pending > 0
+          ? `${durationById.size} dersin süresi güncellendi. ${pending} video için süre henüz Vimeo'da hazır değil, birkaç dakika sonra tekrar deneyin.`
+          : `${durationById.size} dersin süresi güncellendi.`
+      );
+    } catch (error) {
+      setDurationSyncMessage(
+        error instanceof Error ? error.message : 'Süreler senkronize edilemedi'
+      );
+    } finally {
+      setSyncingDurations(false);
+    }
   };
 
   // Add new section
@@ -1327,13 +1384,24 @@ const CourseContentManager = ({
         </div>
         
         {!isAddingSection ? (
-          <button
-            onClick={() => setIsAddingSection(true)}
-            className="px-4 py-2 bg-[#990000] hover:bg-[#880000] text-white rounded-lg transition-colors flex items-center"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Bölüm Ekle
-          </button>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={syncDurations}
+              disabled={syncingDurations}
+              className="px-4 py-2 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-50 dark:hover:bg-neutral-800 rounded-lg transition-colors flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Video sürelerini Vimeo'dan çekip öğrenci paneliyle eşitler"
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${syncingDurations ? 'animate-spin' : ''}`} />
+              {syncingDurations ? 'Senkronize ediliyor...' : 'Süreleri Senkronize Et'}
+            </button>
+            <button
+              onClick={() => setIsAddingSection(true)}
+              className="px-4 py-2 bg-[#990000] hover:bg-[#880000] text-white rounded-lg transition-colors flex items-center"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Bölüm Ekle
+            </button>
+          </div>
         ) : (
           <div className="flex items-center space-x-2">
             <input
@@ -1364,6 +1432,19 @@ const CourseContentManager = ({
           </div>
         )}
       </div>
+
+      {durationSyncMessage && (
+        <div className="flex items-start p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-sm text-blue-800 dark:text-blue-200">
+          <Clock className="w-4 h-4 mr-2 mt-0.5 flex-shrink-0" />
+          <span className="flex-1">{durationSyncMessage}</span>
+          <button
+            onClick={() => setDurationSyncMessage(null)}
+            className="ml-2 text-blue-600 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-100"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Sections List */}
       <div className="space-y-4">
@@ -1531,7 +1612,10 @@ const CourseContentManager = ({
                   ) : (
                     section.lessons.map((lesson, lessonIndex) => {
                       const moduleInfo = getLessonModuleInfo(lesson);
-                      
+                      const lessonDuration = formatDurationMinutes(
+                        resolveLessonDurationMinutes(lesson)
+                      );
+
                       return (
                         <div key={lesson.id} className="border border-neutral-200 dark:border-neutral-700 rounded-lg">
                           {/* Lesson Header */}
@@ -1605,6 +1689,25 @@ const CourseContentManager = ({
                                       : 'İçerik Yok'
                                     }
                                   </span>
+
+                                  {/* Öğrenci panelinde görünen süre */}
+                                  {lessonDuration ? (
+                                    <span
+                                      className="text-xs px-2 py-1 rounded bg-neutral-100 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300 flex items-center"
+                                      title="Öğrenci panelinde görünen süre"
+                                    >
+                                      <Clock className="w-3 h-3 mr-1" />
+                                      {lessonDuration}
+                                    </span>
+                                  ) : moduleInfo.activeModuleType === 'video' ? (
+                                    <span
+                                      className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300 flex items-center"
+                                      title="Vimeo süresi henüz alınmadı. 'Süreleri Senkronize Et' ile güncelleyin."
+                                    >
+                                      <Clock className="w-3 h-3 mr-1" />
+                                      Süre yok
+                                    </span>
+                                  ) : null}
                                 </div>
                               </div>
                               

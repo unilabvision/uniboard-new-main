@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { syncLessonVideoDurations } from '@/app/lib/lms/videoDurations';
 
 // Initialize Supabase client with service role key for server-side operations
 const supabase = createClient(
@@ -193,9 +194,23 @@ export async function POST(request: NextRequest) {
 
     console.log('Video record created successfully:', data?.id);
 
+    // Vimeo transcode bitmeden süre 0 döner; dersin duration_minutes değerini
+    // eldeki en güncel veriyle tazele (öğrenci paneli bu alanı okuyor).
+    let durationSynced = false;
+    try {
+      const syncResult = await syncLessonVideoDurations(lessonId);
+      durationSynced = syncResult.lessonsUpdated > 0;
+      console.log('Lesson duration sync:', syncResult);
+    } catch (syncError) {
+      // Süre senkronizasyonu videonun kaydedilmesini engellememeli.
+      console.error('Lesson duration sync failed:', syncError);
+    }
+
     return NextResponse.json({
       success: true,
       video: data,
+      durationSynced,
+      durationPending: !vimeoData.duration,
     });
   } catch (error) {
     console.error('=== Videos API Error ===');
@@ -293,6 +308,13 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
+    // Silmeden önce dersi öğren, süre toplamı sonrasında yeniden hesaplanacak.
+    const { data: existingVideo } = await supabase
+      .from('myuni_videos')
+      .select('lesson_id')
+      .eq('id', videoId)
+      .maybeSingle();
+
     // Delete from database
     const { error } = await supabase
       .from('myuni_videos')
@@ -301,6 +323,14 @@ export async function DELETE(request: NextRequest) {
 
     if (error) {
       throw error;
+    }
+
+    if (existingVideo?.lesson_id) {
+      try {
+        await syncLessonVideoDurations(existingVideo.lesson_id);
+      } catch (syncError) {
+        console.error('Lesson duration sync failed after delete:', syncError);
+      }
     }
 
     // Delete from Vimeo if requested and we have credentials
