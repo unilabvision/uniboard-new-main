@@ -12,7 +12,12 @@ export default function Page({ params }: { params: Promise<{ locale: string }> }
   const [currentImage, setCurrentImage] = useState(1);
   const [mounted, setMounted] = useState(false);
   const searchParams = useSearchParams();
-  const redirectUrl = searchParams.get('redirect') || "/";
+  const redirectUrl =
+    searchParams.get('redirect_url') ||
+    searchParams.get('after_sign_up_url') ||
+    searchParams.get('redirect_url_complete') ||
+    searchParams.get('redirect') ||
+    "/";
 
   // Localization - memoized for performance (always call, regardless of resolvedParams)
   const translations = useMemo(() => ({
@@ -40,6 +45,11 @@ export default function Page({ params }: { params: Promise<{ locale: string }> }
   const locale = resolvedParams?.locale || 'en';
   const normalizedLocale = locale?.toLowerCase() === 'tr' ? 'tr' : 'en';
   const t = translations[normalizedLocale];
+  const afterSignUpTarget =
+    searchParams.get('after_sign_up_url') ||
+    searchParams.get('redirect_url_complete') ||
+    searchParams.get('redirect_url') ||
+    `/${normalizedLocale}/complete-profile`;
 
   // Resolve params
   useEffect(() => {
@@ -179,7 +189,7 @@ export default function Page({ params }: { params: Promise<{ locale: string }> }
               <SignUp
                 appearance={clerkAppearance}
                 signInUrl={`/${locale}/login?tab=signin&redirect=${encodeURIComponent(redirectUrl)}`}
-                afterSignUpUrl={`/${locale}/complete-profile`}
+                afterSignUpUrl={afterSignUpTarget}
                 afterSignInUrl={redirectUrl}
               />
 

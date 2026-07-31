@@ -217,14 +217,17 @@ export async function PUT(request: NextRequest) {
     claimUrl.searchParams.set('token', token);
     claimUrl.searchParams.set('locale', safeLocale);
 
+    // After the invitee creates their account, Clerk must send them back to
+    // claim-enrollment so the course row is written with their new user id.
     try {
       const siteClerk = getSiteClerkClient() || (await clerkClient());
       await siteClerk.invitations.createInvitation({
         emailAddress: email,
-        redirectUrl: `${getMyuniPublicOrigin()}/${safeLocale}/sign-up`,
+        redirectUrl: claimUrl.toString(),
         publicMetadata: {
           pendingCourseId: courseId,
           pendingCourseLocale: safeLocale,
+          pendingTierId: tierId,
         },
         notify: false,
       });

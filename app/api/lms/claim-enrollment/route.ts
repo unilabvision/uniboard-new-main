@@ -27,7 +27,11 @@ function escapeHtml(value: string) {
     .replace(/"/g, '&quot;');
 }
 
-function htmlResponse(message: string, status: number, action?: { href: string; label: string }) {
+function htmlResponse(
+  message: string,
+  status: number,
+  action?: { href: string; label: string }
+) {
   const button = action
     ? `<p style="margin:24px 0"><a href="${escapeHtml(action.href)}" style="background:#990000;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block">${escapeHtml(action.label)}</a></p>`
     : '';
@@ -44,6 +48,15 @@ function errorResponse(message: string, status: number) {
   return htmlResponse(message, status);
 }
 
+function isUniqueConflict(error: { code?: string; message?: string } | null) {
+  return Boolean(
+    error &&
+      (error.code === '23505' ||
+        (error.message || '').includes('unique_user_course_enrollment') ||
+        (error.message || '').includes('duplicate key'))
+  );
+}
+
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get('token') || '';
   const locale = request.nextUrl.searchParams.get('locale') === 'en' ? 'en' : 'tr';
@@ -57,15 +70,23 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  // Absolute claim URL so signup can send the user back here after account creation.
+  const claimUrl = new URL(request.nextUrl.href);
+
   const user = await findSiteClerkUserByEmail(parsed.email);
 
   if (!user) {
     const signupUrl = new URL(`/${locale}/sign-up`, getMyuniPublicOrigin());
     signupUrl.searchParams.set('email', parsed.email);
+    // Clerk / site auth flows commonly honor these redirect params.
+    signupUrl.searchParams.set('redirect_url', claimUrl.toString());
+    signupUrl.searchParams.set('after_sign_up_url', claimUrl.toString());
+    signupUrl.searchParams.set('redirect_url_complete', claimUrl.toString());
+
     return htmlResponse(
       locale === 'en'
-        ? `No MyUNI account exists for ${escapeHtml(parsed.email)} yet. Create your account first, then open this link again to activate the course.`
-        : `${escapeHtml(parsed.email)} için henüz bir MyUNI hesabı yok. Önce hesabınızı oluşturun, ardından kursu aktifleştirmek için bu bağlantıya tekrar tıklayın.`,
+        ? `No MyUNI account exists for ${escapeHtml(parsed.email)} yet. Create your account with this email, then you will be returned here to activate the course. Keep this invitation email until the course appears.`
+        : `${escapeHtml(parsed.email)} için henüz bir MyUNI hesabı yok. Bu e-posta ile hesabınızı oluşturun; ardından kursu aktifleştirmek için buraya yönlendirileceksiniz. Kurs görünene kadar bu davet e-postasını saklayın.`,
       200,
       {
         href: signupUrl.toString(),
@@ -110,45 +131,46 @@ export async function GET(request: NextRequest) {
   const activeRow = courseRows.find((row) => row.is_active !== false);
   const inactiveRow = courseRows.find((row) => row.is_active === false);
 
-  const isUniqueConflict = (error: { code?: string; message?: string } | null) =>
-    Boolean(
-      error &&
-        (error.code === '23505' ||
-          (error.message || '').includes('unique_user_course_enrollment') ||
-          (error.message || '').includes('duplicate key'))
-    );
-
   let newlyActivated = false;
-  if (!activeRow) {
-    if (inactiveRow) {
+
+  if (activeRow) {
+    // Already enrolled — still sync package from the invitation when needed.
+    if ((activeRow.tier_id ?? null) !== tierId) {
       const { error } = await supabase
         .from('myuni_enrollments')
-        .update({
-          is_active: true,
-          tier_id: tierId,
-          enrolled_at: new Date().toISOString(),
-          progress_percentage: inactiveRow.progress_percentage ?? 0,
-        })
-        .eq('id', inactiveRow.id);
-      // Another active row may already occupy unique_user_course_enrollment.
+        .update({ tier_id: tierId })
+        .eq('id', activeRow.id);
       if (error && !isUniqueConflict(error)) {
         return errorResponse(error.message, 500);
       }
-      newlyActivated = !error;
-    } else {
-      const { error } = await supabase.from('myuni_enrollments').insert({
-        course_id: parsed.courseId,
-        user_id: userId,
-        enrolled_at: new Date().toISOString(),
-        progress_percentage: 0,
+    }
+  } else if (inactiveRow) {
+    const { error } = await supabase
+      .from('myuni_enrollments')
+      .update({
         is_active: true,
         tier_id: tierId,
-      });
-      if (error && !isUniqueConflict(error)) {
-        return errorResponse(error.message, 500);
-      }
-      newlyActivated = !error;
+        enrolled_at: new Date().toISOString(),
+        progress_percentage: inactiveRow.progress_percentage ?? 0,
+      })
+      .eq('id', inactiveRow.id);
+    if (error && !isUniqueConflict(error)) {
+      return errorResponse(error.message, 500);
     }
+    newlyActivated = !error;
+  } else {
+    const { error } = await supabase.from('myuni_enrollments').insert({
+      course_id: parsed.courseId,
+      user_id: userId,
+      enrolled_at: new Date().toISOString(),
+      progress_percentage: 0,
+      is_active: true,
+      tier_id: tierId,
+    });
+    if (error && !isUniqueConflict(error)) {
+      return errorResponse(error.message, 500);
+    }
+    newlyActivated = !error;
   }
 
   if (newlyActivated) {

@@ -51,15 +51,15 @@ export async function sendCourseEnrollmentEmail({
     const greeting = tr ? `Merhaba ${displayName},` : `Hello ${displayName},`;
     const body = invited
       ? tr
-        ? `"${courseTitle}" kursuna davet edildiniz. MyUNI hesabınızı oluşturmak veya giriş yapmak için aşağıdaki butonu kullanın. Kayıt tamamlandığında eğitim hesabınızda otomatik olarak görünecektir.`
-        : `You have been invited to "${courseTitle}". Use the button below to create your MyUNI account or sign in. The course will automatically appear in your account after registration.`
+        ? `"${courseTitle}" kursuna davet edildiniz. Aşağıdaki butona tıklayın: hesabınız yoksa önce oluşturun, ardından aynı bağlantı kursu hesabınıza tanımlar. Hesabı oluşturduktan sonra kurs görünmezse bu e-postadaki bağlantıyı tekrar açın.`
+        : `You have been invited to "${courseTitle}". Click the button below: create your account if needed, then the same link assigns the course. If the course does not appear after sign-up, open this email link again.`
       : tr
         ? `"${courseTitle}" kursuna kaydınız oluşturuldu. Kursa erişmek için aşağıdaki butonu kullanabilirsiniz.`
         : `You have been enrolled in "${courseTitle}". Use the button below to access the course.`;
     const cta = invited
       ? tr
-        ? 'Kaydol ve Eğitime Katıl'
-        : 'Sign Up and Join'
+        ? 'Daveti Aç ve Eğitime Katıl'
+        : 'Open Invite and Join'
       : tr
         ? 'Kursa Git'
         : 'Open Course';

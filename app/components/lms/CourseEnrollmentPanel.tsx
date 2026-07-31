@@ -52,15 +52,18 @@ const texts = {
     noModules: 'Bu paket için eşleşen modül yok',
     peopleCount: 'kişi',
     addTitle: 'Katılımcı ekle',
-    addHint: 'E-posta ile kursa kayıt oluşturun. MyUNI hesabı yoksa kayıt daveti gönderilir; hesap açılınca eğitim otomatik görünür.',
+    addHint:
+      'E-posta ile kursa kayıt oluşturun. MyUNI hesabı varsa paket hemen tanımlanır. Hesap yoksa davet maili gider; katılımcı hesap açıp e-postadaki bağlantıyı açınca kurs tanımlanır.',
     addEmailPlaceholder: 'ornek@email.com',
     addButton: 'Katılımcı ekle',
     adding: 'Ekleniyor...',
     addSuccess: 'Katılımcı eklendi ve bilgilendirme maili gönderildi.',
     addSuccessNoEmail: 'Katılımcı eklendi ancak bilgilendirme maili gönderilemedi.',
     alreadyEnrolled: 'Bu e-posta zaten bu kursa kayıtlı.',
-    inviteSuccess: 'MyUNI hesabı bulunamadı; kayıt daveti e-postası gönderildi.',
-    inviteSuccessNoEmail: 'Kayıt daveti oluşturuldu ancak e-posta gönderilemedi.',
+    inviteSuccess:
+      'MyUNI hesabı bulunamadı; kayıt daveti e-postası gönderildi. Katılımcı hesaba kaydolup e-postadaki bağlantıyı açınca kurs tanımlanır.',
+    inviteSuccessNoEmail:
+      'Kayıt daveti oluşturuldu ancak e-posta gönderilemedi. Hesap açıldıktan sonra davet bağlantısıyla kurs aktifleşir.',
     packageLabel: 'Tanımlanacak paket',
     packageHint:
       'Katılımcıya hangi paketin/modülün tanımlanacağını seçin. Sitedeki panelde bu paket görünür. Kayıtlı bir katılımcıya farklı paket seçerseniz mevcut paketi bununla değişir.',
@@ -99,15 +102,18 @@ const texts = {
     noModules: 'No modules matched this package',
     peopleCount: 'people',
     addTitle: 'Add participant',
-    addHint: 'Enroll by email. If no MyUNI account exists, an invitation is sent and the course appears automatically after sign-up.',
+    addHint:
+      'Enroll by email. If a MyUNI account exists, the package is assigned immediately. If not, an invitation is emailed; the course is assigned after they sign up and open the link.',
     addEmailPlaceholder: 'example@email.com',
     addButton: 'Add participant',
     adding: 'Adding...',
     addSuccess: 'Participant enrolled and notification email sent.',
     addSuccessNoEmail: 'Participant enrolled but the notification email could not be sent.',
     alreadyEnrolled: 'This email is already enrolled in this course.',
-    inviteSuccess: 'No MyUNI account was found; a sign-up invitation was sent.',
-    inviteSuccessNoEmail: 'The invitation was created but its email could not be sent.',
+    inviteSuccess:
+      'No MyUNI account was found; a sign-up invitation was sent. The course is assigned after they register and open the link in the email.',
+    inviteSuccessNoEmail:
+      'The invitation was created but its email could not be sent. The course activates via the invitation link after sign-up.',
     packageLabel: 'Package to grant',
     packageHint:
       'Choose which package/module the participant receives. Picking another package for an existing participant replaces their current one.',
