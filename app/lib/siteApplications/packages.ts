@@ -8,6 +8,10 @@ export interface EventCertificatePackageSettings {
   certificate_title_en: string;
   certificate_description_tr: string;
   certificate_description_en: string;
+  /** Etkinlik bitişinden X dakika sonra katılım sertifikalarını otomatik ilet */
+  certificate_auto_issue: boolean;
+  /** Etkinlik bitişinden sonra beklenecek süre (dakika). Örn. 60 = 1 saat */
+  certificate_delay_minutes: number;
 }
 
 export interface PublicRegistrationPackage {
@@ -28,6 +32,8 @@ export const DEFAULT_PACKAGE_SETTINGS: EventCertificatePackageSettings = {
   certificate_title_en: 'Certificate Package',
   certificate_description_tr: 'Etkinlik sonunda resmi katılım sertifikası alın.',
   certificate_description_en: 'Receive an official participation certificate after the event.',
+  certificate_auto_issue: false,
+  certificate_delay_minutes: 60,
 };
 
 export function normalizePackageSettings(raw: unknown): EventCertificatePackageSettings {
@@ -40,6 +46,12 @@ export function normalizePackageSettings(raw: unknown): EventCertificatePackageS
     priceRaw === null || priceRaw === undefined || priceRaw === ''
       ? null
       : Number(priceRaw);
+
+  const delayRaw = Number(row.certificate_delay_minutes);
+  const delayMinutes =
+    Number.isFinite(delayRaw) && delayRaw >= 0
+      ? Math.round(delayRaw)
+      : DEFAULT_PACKAGE_SETTINGS.certificate_delay_minutes;
 
   return {
     certificate_enabled: Boolean(row.certificate_enabled),
@@ -57,7 +69,23 @@ export function normalizePackageSettings(raw: unknown): EventCertificatePackageS
     certificate_description_en:
       String(row.certificate_description_en || DEFAULT_PACKAGE_SETTINGS.certificate_description_en).trim() ||
       DEFAULT_PACKAGE_SETTINGS.certificate_description_en,
+    certificate_auto_issue: Boolean(row.certificate_auto_issue),
+    certificate_delay_minutes: delayMinutes,
   };
+}
+
+/** Etkinlik bitişine bekleme süresini ekleyerek sertifika gönderim zamanını hesaplar. */
+export function computeCertificateEligibleAt(
+  endDate: string | null | undefined,
+  delayMinutes: number,
+  fallbackDate?: string | null
+): string {
+  const base =
+    (endDate && !Number.isNaN(new Date(endDate).getTime()) && endDate) ||
+    (fallbackDate && !Number.isNaN(new Date(fallbackDate).getTime()) && fallbackDate) ||
+    new Date().toISOString();
+  const delayMs = Math.max(0, Number(delayMinutes) || 0) * 60_000;
+  return new Date(new Date(base).getTime() + delayMs).toISOString();
 }
 
 export function parsePackageSettingsFromForm(form: {

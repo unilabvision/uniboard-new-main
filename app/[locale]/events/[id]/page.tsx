@@ -3,6 +3,11 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { use } from 'react';
+import EventFormFields, {
+  eventToFormState,
+  formStateToPayload,
+} from '@/app/components/events/EventFormFields';
+import EventCertificateSettingsPanel from '@/app/components/events/EventCertificateSettingsPanel';
 import {
   ArrowLeft,
   Loader2,
@@ -12,10 +17,6 @@ import {
   Users,
   CreditCard,
 } from 'lucide-react';
-import EventFormFields, {
-  eventToFormState,
-  formStateToPayload,
-} from '@/app/components/events/EventFormFields';
 
 export default function EditEventPage({
   params,
@@ -55,6 +56,8 @@ export default function EditEventPage({
       status: 'upcoming',
       is_active: true,
       is_featured: false,
+      template_id: null,
+      certificate_description: null,
       created_at: '',
       updated_at: '',
     })
@@ -242,6 +245,14 @@ export default function EditEventPage({
           <p className="mt-3 text-sm text-red-600 dark:text-red-400">{actionError}</p>
         )}
       </section>
+
+      <div className="mb-8">
+        <EventCertificateSettingsPanel
+          locale={locale}
+          eventId={id}
+          endDate={form.end_date || form.start_date}
+        />
+      </div>
 
       {message && (
         <div className="mb-4 rounded-lg bg-green-50 border border-green-200 text-green-800 px-4 py-2 text-sm">

@@ -24,6 +24,7 @@ export type IssueResult = {
   issued: number;
   emailed: number;
   failed: number;
+  skipped?: number;
   errors: Array<{ id: string; error: string }>;
 };
 

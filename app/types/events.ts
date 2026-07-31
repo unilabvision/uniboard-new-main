@@ -32,6 +32,12 @@ export interface MyuniEvent {
   status: EventStatus;
   is_active: boolean;
   is_featured: boolean;
+  /** Katılım sertifikası şablonu (certificate_templates.id) */
+  template_id?: number | string | null;
+  certificate_description?: string | null;
+  /** Etkinlik bitişinden sonra otomatik sertifika gönderimi (sütun yoksa form package_settings kullanılır) */
+  certificate_auto_issue?: boolean | null;
+  certificate_delay_minutes?: number | null;
   created_at: string;
   updated_at: string;
 }

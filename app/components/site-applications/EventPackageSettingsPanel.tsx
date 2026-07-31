@@ -23,6 +23,11 @@ const texts = {
     descEn: 'Paket açıklaması (EN)',
     freeLabel: 'Ücretsiz kayıt',
     freeHint: 'Her zaman sunulur — ücret alınmaz.',
+    autoIssue: 'Etkinlik bitince katılım sertifikalarını otomatik gönder',
+    autoIssueHint:
+      'Sertifika paketini alan katılımcılara, etkinlik bitişinden sonra girdiğiniz süre dolunca e-posta ile sertifika iletilir.',
+    delayMinutes: 'Gönderim bekleme süresi (dakika)',
+    delayHint: 'Örn. 60 = etkinlik bitiminden 1 saat sonra. 0 = biter bitmez.',
   },
   en: {
     title: 'Registration packages',
@@ -36,6 +41,11 @@ const texts = {
     descEn: 'Package description (EN)',
     freeLabel: 'Free registration',
     freeHint: 'Always available — no charge.',
+    autoIssue: 'Auto-send participation certificates after the event ends',
+    autoIssueHint:
+      'After the wait period from event end, certificate-package attendees receive their certificate by email.',
+    delayMinutes: 'Send delay (minutes)',
+    delayHint: 'e.g. 60 = 1 hour after the event ends. 0 = immediately at end.',
   },
 };
 
@@ -137,6 +147,42 @@ export default function EventPackageSettingsPanel({
               onChange={(e) => patch({ certificate_description_en: e.target.value })}
               className="w-full rounded-xl border px-3 py-2 text-sm dark:bg-neutral-900"
             />
+          </div>
+
+          <div className="sm:col-span-2 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-950/40 p-4 space-y-3">
+            <label className="inline-flex items-start gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings.certificate_auto_issue}
+                onChange={(e) => patch({ certificate_auto_issue: e.target.checked })}
+                className="mt-0.5 rounded border-neutral-300 text-[#990000] focus:ring-[#990000]"
+              />
+              <span>
+                <span className="font-medium block">{t.autoIssue}</span>
+                <span className="text-xs text-neutral-500">{t.autoIssueHint}</span>
+              </span>
+            </label>
+            {settings.certificate_auto_issue && (
+              <div>
+                <label className="text-sm font-medium block mb-1">{t.delayMinutes}</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={settings.certificate_delay_minutes}
+                  onChange={(e) => {
+                    const raw = Number(e.target.value);
+                    patch({
+                      certificate_delay_minutes: Number.isFinite(raw)
+                        ? Math.max(0, Math.round(raw))
+                        : 60,
+                    });
+                  }}
+                  className="w-full max-w-xs rounded-xl border px-3 py-2 text-sm dark:bg-neutral-900"
+                />
+                <p className="text-xs text-neutral-500 mt-1">{t.delayHint}</p>
+              </div>
+            )}
           </div>
         </div>
       )}
