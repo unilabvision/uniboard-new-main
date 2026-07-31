@@ -57,19 +57,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Enrollment must reference the Clerk instance myunilab.net uses, which is not
-  // necessarily the instance this dashboard signs admins in with.
-  const { user, siteInstanceAvailable } = await findSiteClerkUserByEmail(
-    parsed.email
-  );
-  if (!siteInstanceAvailable) {
-    return errorResponse(
-      locale === 'en'
-        ? 'Enrollment service is not configured. Please contact info@myunilab.net.'
-        : 'Kayıt servisi yapılandırılmamış. Lütfen info@myunilab.net ile iletişime geçin.',
-      503
-    );
-  }
+  const user = await findSiteClerkUserByEmail(parsed.email);
 
   if (!user) {
     const signupUrl = new URL(`/${locale}/sign-up`, getMyuniPublicOrigin());

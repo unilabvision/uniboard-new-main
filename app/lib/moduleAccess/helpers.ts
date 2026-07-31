@@ -155,9 +155,8 @@ export async function clerkUserToResult(user: {
 }
 
 /**
- * Secret key of the Clerk instance myunilab.net authenticates against.
- * The dashboard itself may run on the development instance, whose user ids the
- * public site cannot resolve.
+ * Optional secret key for a separate Clerk instance holding the public site's
+ * users. Unset by default: CLERK_SECRET_KEY is the instance used everywhere.
  */
 export function getSiteClerkSecretKey(): string {
   const key = (
@@ -169,15 +168,10 @@ export function getSiteClerkSecretKey(): string {
   return key;
 }
 
-export function isSiteClerkPrimary(): boolean {
-  return (process.env.CLERK_SECRET_KEY || '').startsWith('sk_live_');
-}
-
 let cachedSiteClerk: ReturnType<typeof createClerkClient> | null = null;
 
-/** Clerk client for the instance the public site uses, or null when unavailable. */
+/** Dedicated site Clerk client, or null to use the CLERK_SECRET_KEY instance. */
 export function getSiteClerkClient() {
-  if (isSiteClerkPrimary()) return null;
   const key = getSiteClerkSecretKey();
   if (!key) return null;
   if (!cachedSiteClerk) cachedSiteClerk = createClerkClient({ secretKey: key });
@@ -242,20 +236,13 @@ export async function findClerkUserByEmail(email: string) {
 }
 
 /**
- * Resolves an email on the Clerk instance the public site uses, so stored user
- * ids stay usable on myunilab.net.
+ * Resolves an email for enrollment writes. Uses the CLERK_SECRET_KEY instance
+ * unless a dedicated site key is configured.
  */
 export async function findSiteClerkUserByEmail(email: string) {
   const siteClerk = getSiteClerkClient();
-  if (siteClerk) {
-    const user = await searchClerkUserByEmail(siteClerk, email);
-    return { user, siteInstanceAvailable: true };
-  }
-  if (isSiteClerkPrimary()) {
-    const user = await findClerkUserByEmail(email);
-    return { user, siteInstanceAvailable: true };
-  }
-  return { user: null, siteInstanceAvailable: false };
+  if (siteClerk) return searchClerkUserByEmail(siteClerk, email);
+  return findClerkUserByEmail(email);
 }
 
 function clerkErrorMessage(err: unknown): string {

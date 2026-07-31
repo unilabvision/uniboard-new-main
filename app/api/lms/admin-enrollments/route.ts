@@ -205,21 +205,7 @@ export async function PUT(request: NextRequest) {
   }
   const tierId = tierResult.tierId;
 
-  const { user: clerkUser, siteInstanceAvailable } =
-    await findSiteClerkUserByEmail(email);
-
-  // Writing a dashboard-instance user id would create a row myunilab.net can
-  // never match, so refuse instead of silently producing an invisible course.
-  if (!siteInstanceAvailable) {
-    return NextResponse.json(
-      {
-        error:
-          'Katılımcı kaydı myunilab.net Clerk hesabına yazılmalı. Sunucuda CLERK_SECRET_KEY_LIVE (sk_live_...) tanımlı değil, bu yüzden kayıt sitede görünmez.',
-        code: 'site_clerk_missing',
-      },
-      { status: 503 }
-    );
-  }
+  const clerkUser = await findSiteClerkUserByEmail(email);
 
   if (!clerkUser) {
     const safeLocale = locale === 'en' ? 'en' : 'tr';

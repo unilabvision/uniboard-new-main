@@ -66,8 +66,6 @@ const texts = {
       'Katılımcıya hangi paketin/modülün tanımlanacağını seçin. Sitedeki panelde bu paket görünür. Kayıtlı bir katılımcıya farklı paket seçerseniz mevcut paketi bununla değişir.',
     packageRequired: 'Bir paket seçin.',
     packageChanged: 'Katılımcının paketi güncellendi.',
-    siteClerkMissing:
-      'Kayıt myunilab.net hesap sistemine yazılamıyor: sunucuda CLERK_SECRET_KEY_LIVE tanımlı değil. Bu ayar yapılmadan eklenen katılımcı sitede görünmez.',
     remove: 'Kurstan çıkar',
     removing: 'Çıkarılıyor...',
     removeConfirm: 'Bu katılımcıyı kurstan çıkarmak istediğinizden emin misiniz?',
@@ -115,8 +113,6 @@ const texts = {
       'Choose which package/module the participant receives. Picking another package for an existing participant replaces their current one.',
     packageRequired: 'Select a package.',
     packageChanged: 'Participant package updated.',
-    siteClerkMissing:
-      'Enrollment cannot be written to the myunilab.net account system: CLERK_SECRET_KEY_LIVE is not configured on the server. Until then, added participants stay invisible on the site.',
     remove: 'Remove from course',
     removing: 'Removing...',
     removeConfirm: 'Are you sure you want to remove this participant from the course?',
@@ -461,11 +457,7 @@ export default function CourseEnrollmentPanel({
           rawError.includes('unique_user_course_enrollment') ||
           rawError.includes('duplicate key');
         setAddError(
-          data.code === 'site_clerk_missing'
-            ? t.siteClerkMissing
-            : duplicateEnrollment
-              ? t.alreadyEnrolled
-              : rawError || t.error
+          duplicateEnrollment ? t.alreadyEnrolled : rawError || t.error
         );
         return;
       }
