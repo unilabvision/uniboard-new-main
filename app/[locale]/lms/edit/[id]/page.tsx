@@ -9,7 +9,7 @@ import {
   ArrowUp, ArrowDown, HelpCircle, Users, Clock, RefreshCw
 } from 'lucide-react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import VideoUploadModal from '@/app/components/lms/VideoUploadModal';
@@ -80,11 +80,24 @@ export default function EditCoursePage() {
   const [activeTab, setActiveTab] = useState<'info' | 'content' | 'settings' | 'participants'>('info');
   
   const params = useParams();
+  const searchParams = useSearchParams();
   const { user: clerkUser, isLoaded } = useUser();
   
   const courseId = params?.id as string;
   const locale = (params?.locale as string) || 'tr';
   const t = texts[locale as keyof typeof texts] || texts.tr;
+
+  useEffect(() => {
+    const tab = searchParams?.get('tab');
+    if (
+      tab === 'info' ||
+      tab === 'content' ||
+      tab === 'settings' ||
+      tab === 'participants'
+    ) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   // Fetch course data
   useEffect(() => {
@@ -304,8 +317,8 @@ export default function EditCoursePage() {
         </div>
 
         {/* Tab Navigation */}
-        <div className="border-b border-neutral-200 dark:border-neutral-700 mb-8">
-          <nav className="flex space-x-8">
+        <div className="border-b border-neutral-200 dark:border-neutral-700 mb-8 overflow-x-auto">
+          <nav className="flex gap-2 sm:gap-6 min-w-max">
             {[
               { key: 'info', label: t.courseInfo, icon: BookOpen },
               { key: 'content', label: t.courseContent, icon: PlayCircle },
@@ -314,8 +327,9 @@ export default function EditCoursePage() {
             ].map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
+                type="button"
                 onClick={() => setActiveTab(key as 'info' | 'content' | 'settings' | 'participants')}
-                className={`flex items-center px-1 py-4 border-b-2 font-medium text-sm transition-colors ${
+                className={`flex items-center px-3 py-4 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
                   activeTab === key
                     ? 'border-[#990000] text-[#990000]'
                     : 'border-transparent text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-300'

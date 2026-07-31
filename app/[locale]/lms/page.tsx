@@ -103,6 +103,7 @@ const texts = {
     createNew: "Yeni Kurs",
     viewCourse: "Kursu Görüntüle",
     editCourse: "Kursu Düzenle",
+    addParticipants: "Katılımcı Ekle",
     deleteCourse: "Kursu Sil",
     deleteConfirmTitle: "Kursu Sil",
     deleteConfirmMessage: "Bu kursu silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.",
@@ -181,6 +182,7 @@ const texts = {
     createNew: "New Course",
     viewCourse: "View Course",
     editCourse: "Edit Course",
+    addParticipants: "Add Participants",
     deleteCourse: "Delete Course",
     deleteConfirmTitle: "Delete Course",
     deleteConfirmMessage: "Are you sure you want to delete this course? This action cannot be undone.",
@@ -366,19 +368,21 @@ const DeleteConfirmationModal = ({
 };
 
 // Course Card Component
-const CourseCard = ({ 
-  course, 
-  locale, 
+const CourseCard = ({
+  course,
+  locale,
   t,
   onEdit,
+  onAddParticipants,
   onDelete,
   onPriceUpdate,
   onRegistrationUpdate,
-}: { 
+}: {
   course: Course;
   locale: string;
   t: typeof texts.tr;
   onEdit: (course: Course) => void;
+  onAddParticipants: (course: Course) => void;
   onDelete: (course: Course) => void;
   onPriceUpdate: (courseId: string, price: number | null, originalPrice: number | null) => Promise<void>;
   onRegistrationUpdate: (
@@ -633,6 +637,16 @@ const CourseCard = ({
             >
               <Edit2 className="w-3 h-3 mr-2" />
               {t.editCourse}
+            </button>
+            <button
+              onClick={() => {
+                onAddParticipants(course);
+                setShowMenu(false);
+              }}
+              className="w-full px-3 py-2 text-left text-[#990000] dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md flex items-center text-sm"
+            >
+              <Users className="w-3 h-3 mr-2" />
+              {t.addParticipants}
             </button>
             <button
               onClick={startPriceEdit}
@@ -1276,6 +1290,10 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
     router.push(`/${locale}/lms/edit/${course.id}`);
   };
 
+  const handleAddParticipants = (course: Course) => {
+    router.push(`/${locale}/lms/edit/${course.id}?tab=participants`);
+  };
+
   // Handle delete course
   const handleDeleteCourse = (course: Course) => {
     setCourseToDelete(course);
@@ -1588,12 +1606,13 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {paginatedData.map((course: Course) => (
-                <CourseCard 
+                <CourseCard
                   key={course.id}
                   course={course}
                   locale={locale}
                   t={t}
                   onEdit={handleEditCourse}
+                  onAddParticipants={handleAddParticipants}
                   onDelete={handleDeleteCourse}
                   onPriceUpdate={handlePriceUpdate}
                   onRegistrationUpdate={handleRegistrationUpdate}
