@@ -23,9 +23,9 @@ const texts = {
     descEn: 'Paket açıklaması (EN)',
     freeLabel: 'Ücretsiz kayıt',
     freeHint: 'Her zaman sunulur — ücret alınmaz.',
-    autoIssue: 'Etkinlik bitince katılım sertifikalarını otomatik gönder',
+    autoIssue: 'Etkinlik sonrası sertifika gönderimini planla',
     autoIssueHint:
-      'Sertifika paketini alan katılımcılara, etkinlik bitişinden sonra girdiğiniz süre dolunca e-posta ile sertifika iletilir.',
+      'Bekleme süresi dolunca sertifikalar gönderime hazır olur. Toplu e-posta gönderimi etkinlik düzenleme ekranındaki manuel butondan başlatılır.',
     delayMinutes: 'Gönderim bekleme süresi (dakika)',
     delayHint: 'Örn. 60 = etkinlik bitiminden 1 saat sonra. 0 = biter bitmez.',
   },
@@ -41,9 +41,9 @@ const texts = {
     descEn: 'Package description (EN)',
     freeLabel: 'Free registration',
     freeHint: 'Always available — no charge.',
-    autoIssue: 'Auto-send participation certificates after the event ends',
+    autoIssue: 'Schedule participation certificate delivery after the event',
     autoIssueHint:
-      'After the wait period from event end, certificate-package attendees receive their certificate by email.',
+      'Certificates become ready after the wait period. Start bulk email delivery manually from the event edit screen.',
     delayMinutes: 'Send delay (minutes)',
     delayHint: 'e.g. 60 = 1 hour after the event ends. 0 = immediately at end.',
   },

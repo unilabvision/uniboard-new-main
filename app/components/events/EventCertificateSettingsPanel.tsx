@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Award, Loader2, Save } from 'lucide-react';
+import { Award, Loader2, Mail, Save } from 'lucide-react';
 
 type TemplateOption = {
   id: number;
@@ -20,34 +20,40 @@ type CertSettings = {
 
 const texts = {
   tr: {
-    title: 'Katılım sertifikası (otomatik gönderim)',
-    hint: 'Etkinlik bitişinden sonra girdiğiniz süre dolunca, sertifika paketini alan katılımcılara e-posta ile katılım sertifikası iletilir.',
-    autoIssue: 'Otomatik sertifika gönderimini aç',
+    title: 'Katılım sertifikası gönderimi',
+    hint: 'Etkinlik bitişinden sonra girdiğiniz bekleme süresi dolunca sertifikalar gönderime hazır olur. Vercel cron kısıtı nedeniyle gönderimi aşağıdaki butonla manuel başlatın.',
+    autoIssue: 'Etkinlik sonrası sertifika gönderimini planla',
     delay: 'Bekleme süresi (dakika)',
     delayHint: 'Örn. Biyoinformatik 101 için 60 = etkinlik bitiminden 1 saat sonra. 0 = biter bitmez.',
     template: 'Sertifika şablonu',
-    templateHint: 'Otomatik gönderimde kullanılacak şablon. Organizasyon şablondan alınır.',
+    templateHint: 'Manuel toplu gönderimde kullanılacak şablon. Organizasyon şablondan alınır.',
     description: 'Sertifika açıklaması',
     descriptionHint: 'Boş bırakılırsa varsayılan katılım metni kullanılır.',
-    noForm: 'Bu etkinliğe bağlı başvuru formu yok. Önce Site Başvuruları’ndan etkinlik formu bağlayın; otomatik gönderim ayarı forma da yazılır.',
+    noForm: 'Bu etkinliğe bağlı başvuru formu yok. Önce Site Başvuruları’ndan etkinlik formu bağlayın; gönderim planı forma da yazılır.',
     save: 'Sertifika ayarlarını kaydet',
     saved: 'Sertifika ayarları kaydedildi',
     selectTemplate: 'Şablon seçin',
+    send: 'Süresi dolan sertifikaları şimdi gönder',
+    sending: 'Sertifikalar gönderiliyor…',
+    confirmSend: 'Bekleme süresi dolmuş tüm katılım sertifikaları oluşturulup e-posta ile gönderilsin mi?',
   },
   en: {
-    title: 'Participation certificate (auto-send)',
-    hint: 'After the wait period from event end, certificate-package attendees receive their participation certificate by email.',
-    autoIssue: 'Enable automatic certificate delivery',
+    title: 'Participation certificate delivery',
+    hint: 'Certificates become ready after the configured wait period. Due to Vercel cron limits, start delivery manually using the button below.',
+    autoIssue: 'Schedule post-event certificate delivery',
     delay: 'Wait time (minutes)',
     delayHint: 'e.g. 60 = 1 hour after the event ends. 0 = right at end.',
     template: 'Certificate template',
-    templateHint: 'Template used for auto-send. Organization is taken from the template.',
+    templateHint: 'Template used for manual bulk delivery. Organization is taken from the template.',
     description: 'Certificate description',
     descriptionHint: 'Leave blank to use the default participation text.',
-    noForm: 'No application form is linked to this event. Link a form under Site Applications first; auto-send settings are also stored on the form.',
+    noForm: 'No application form is linked to this event. Link a form under Site Applications first; delivery settings are also stored on the form.',
     save: 'Save certificate settings',
     saved: 'Certificate settings saved',
     selectTemplate: 'Select a template',
+    send: 'Send due certificates now',
+    sending: 'Sending certificates…',
+    confirmSend: 'Create and email all participation certificates whose wait period has elapsed?',
   },
 };
 
@@ -63,6 +69,7 @@ export default function EventCertificateSettingsPanel({
   const t = texts[locale as keyof typeof texts] || texts.tr;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [templates, setTemplates] = useState<TemplateOption[]>([]);
@@ -111,8 +118,8 @@ export default function EventCertificateSettingsPanel({
       if (settings.certificate_auto_issue && !settings.template_id) {
         throw new Error(
           locale === 'en'
-            ? 'Select a certificate template for auto-send'
-            : 'Otomatik gönderim için bir sertifika şablonu seçin'
+            ? 'Select a certificate template for delivery'
+            : 'Gönderim için bir sertifika şablonu seçin'
         );
       }
       const res = await fetch(`/api/events/${eventId}/certificate-settings`, {
@@ -142,6 +149,33 @@ export default function EventCertificateSettingsPanel({
       setError(err instanceof Error ? err.message : 'Error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSend = async () => {
+    if (!confirm(t.confirmSend)) return;
+    setSending(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/events/${eventId}/issue-certificates`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Send failed');
+
+      if (data.eligibleAt && !data.issued) {
+        const date = new Date(data.eligibleAt).toLocaleString(
+          locale === 'en' ? 'en-GB' : 'tr-TR'
+        );
+        setMessage(`${data.message} ${date}`);
+      } else {
+        setMessage(data.message || `${data.issued || 0} sertifika gönderildi.`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error');
+    } finally {
+      setSending(false);
     }
   };
 
@@ -210,7 +244,7 @@ export default function EventCertificateSettingsPanel({
             <p className="text-xs text-neutral-500 mt-1">{t.delayHint}</p>
             {previewEligibleAt && (
               <p className="text-xs text-[#990000] mt-1">
-                {locale === 'en' ? 'Scheduled send:' : 'Planlanan gönderim:'} {previewEligibleAt}
+                {locale === 'en' ? 'Ready after:' : 'Gönderime hazır olacağı zaman:'} {previewEligibleAt}
               </p>
             )}
           </div>
@@ -262,15 +296,33 @@ export default function EventCertificateSettingsPanel({
       {error && <p className="text-sm text-red-600">{error}</p>}
       {message && <p className="text-sm text-emerald-600">{message}</p>}
 
-      <button
-        type="button"
-        onClick={handleSave}
-        disabled={saving}
-        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#990000] text-white text-sm hover:bg-[#7a0000] disabled:opacity-50"
-      >
-        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-        {t.save}
-      </button>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving || sending}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-700 disabled:opacity-50"
+        >
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          {t.save}
+        </button>
+        <button
+          type="button"
+          onClick={handleSend}
+          disabled={saving || sending || !settings.certificate_auto_issue}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#990000] text-white text-sm hover:bg-[#7a0000] disabled:opacity-50"
+          title={
+            settings.certificate_auto_issue
+              ? undefined
+              : locale === 'en'
+                ? 'Enable the delivery plan first'
+                : 'Önce sertifika gönderim planını açın'
+          }
+        >
+          {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+          {sending ? t.sending : t.send}
+        </button>
+      </div>
     </section>
   );
 }

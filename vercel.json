@@ -7,19 +7,12 @@
     {
       "path": "/api/certificates/issuance/sync",
       "schedule": "15 4 * * *"
-    },
-    {
-      "path": "/api/certificates/issuance/auto-issue",
-      "schedule": "0 * * * *"
     }
   ],
   "functions": {
     "app/api/vimeo/upload/route.ts": {
       "maxDuration": 300,
       "memory": 1024
-    },
-    "app/api/certificates/issuance/auto-issue/route.ts": {
-      "maxDuration": 300
     }
   }
 }
