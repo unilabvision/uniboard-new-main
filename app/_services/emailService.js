@@ -1,31 +1,45 @@
 // app/_services/emailService.js
 import nodemailer from 'nodemailer';
 
-// Send course purchase confirmation email
-const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, locale = 'tr', courseType = 'online') => {
-  try {
-    console.log('Starting email send process...');
-    console.log('Nodemailer loaded successfully');
-    
-    // Create transporter
-    const transporter = nodemailer.createTransport({
+/** Reuse one SMTP connection — Gmail rate-limits repeated login/verify. */
+let cachedTransporter = null;
+let transporterVerified = false;
+
+async function getMailTransporter() {
+  if (!cachedTransporter) {
+    cachedTransporter = nodemailer.createTransport({
       host: process.env.EMAIL_HOST,
-      port: parseInt(process.env.EMAIL_PORT || '587'),
+      port: parseInt(process.env.EMAIL_PORT || '587', 10),
       secure: process.env.EMAIL_SECURE === 'true',
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASSWORD,
       },
+      pool: true,
+      maxConnections: 1,
+      maxMessages: 50,
+      rateDelta: 1000,
+      rateLimit: 1,
       tls: {
-        rejectUnauthorized: false
-      }
+        rejectUnauthorized: false,
+      },
     });
-    
-    console.log('Transporter created successfully');
-    
-    // Verify transporter
-    await transporter.verify();
-    console.log('Transporter verified successfully');
+  }
+
+  if (!transporterVerified) {
+    await cachedTransporter.verify();
+    transporterVerified = true;
+  }
+
+  return cachedTransporter;
+}
+
+// Send course purchase confirmation email
+const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, locale = 'tr', courseType = 'online') => {
+  try {
+    console.log('Starting email send process...');
+
+    const transporter = await getMailTransporter();
     
     const isTurkish = locale === 'tr';
     const isLive = courseType === 'live';

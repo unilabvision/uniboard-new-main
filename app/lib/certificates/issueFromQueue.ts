@@ -104,6 +104,9 @@ export async function issueCertificatesFromQueue(
 
   for (const row of (rows || []) as CertificateIssuanceRow[]) {
     try {
+      // Avoid Gmail SMTP 454 "Too many login attempts" on bulk issue.
+      await new Promise((r) => setTimeout(r, 1500));
+
       const courseName =
         row.kind === 'event_participation'
           ? row.event_name || 'Etkinlik'
