@@ -778,13 +778,14 @@ export default function CertificatesPage() {
     setIsDeleting(true);
     
     try {
-      const { error } = await supabase
-        .from('certificates')
-        .delete()
-        .eq('id', certificateToDelete.id);
-      
-      if (error) {
-        throw error;
+      const res = await fetch('/api/certificates', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [certificateToDelete.id] }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof data.error === 'string' ? data.error : t.deleteError);
       }
       
       // Remove certificate from local state
@@ -850,13 +851,14 @@ export default function CertificatesPage() {
     
     try {
       const idsToDelete = Array.from(selectedCertificates);
-      const { error } = await supabase
-        .from('certificates')
-        .delete()
-        .in('id', idsToDelete);
-      
-      if (error) {
-        throw error;
+      const res = await fetch('/api/certificates', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: idsToDelete }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof data.error === 'string' ? data.error : t.deleteError);
       }
       
       // Remove certificates from local state
