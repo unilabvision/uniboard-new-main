@@ -150,6 +150,107 @@ export async function requireSiteApplicationsOrEventsUser(
   return { error: null, status: 200 as const, userId, supabase, isSuperAdmin };
 }
 
+type SiteAppsTenantScope =
+  | { mode: 'all' }
+  | { mode: 'none' }
+  | { mode: 'scoped'; allowedValues: string[] };
+
+/**
+ * External kurum/kişi paneli için tenant-scoping:
+ * - user_module_access.panel_organization_id -> panel_organizations (slug/name)
+ * - myuni_site_applications.organization alanına filtre uygular.
+ *
+ * Not: `organization` değeri formdan geldiği için hem `slug` hem `name` match listesine
+ * eklenir (değer hangi şekilde saklanıyorsa yakalamak için).
+ */
+export async function resolveSiteApplicationsTenantScope(
+  supabase: ReturnType<typeof getServiceSupabase>,
+  userId: string
+): Promise<SiteAppsTenantScope> {
+  const rows = await loadUserAccessRows(supabase, userId);
+  const resolved = resolveMembershipFromRows(rows, SITE_APPLICATIONS_MODULE_KEY);
+
+  if (resolved.isSuperAdmin) return { mode: 'all' };
+
+  // Org-scoped tenant:
+  // - panel_organization_id = null ise kullanıcı modüle global erişimde demektir (tüm başvurular)
+  // - panel_organization_id atanmışsa o org'larla kısıtlı başvurular görünmeli
+  const hasUnscopedMembership = resolved.memberships.some(
+    (m) => m.panelOrganizationId == null
+  );
+  if (hasUnscopedMembership) return { mode: 'all' };
+
+  const orgIds = Array.from(
+    new Set(
+      resolved.memberships
+        .map((m) => m.panelOrganizationId)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)
+    )
+  );
+
+  if (orgIds.length === 0) return { mode: 'none' };
+
+  const { data, error } = await supabase
+    .from('panel_organizations')
+    .select('slug, name')
+    .in('id', orgIds)
+    .eq('is_active', true);
+
+  if (error) return { mode: 'none' };
+
+  const allowedValues = Array.from(
+    new Set(
+      (data ?? [])
+        .flatMap((o) => [o.slug, o.name])
+        .map((v) => (typeof v === 'string' ? v.trim() : ''))
+        .filter(Boolean)
+    )
+  );
+
+  return { mode: allowedValues.length > 0 ? 'scoped' : 'none', allowedValues };
+}
+
+type SiteAppsPanelOrganizationScope =
+  | { mode: 'all' }
+  | { mode: 'none' }
+  | { mode: 'scoped'; panelOrganizationIds: string[] };
+
+/**
+ * Form sahipliği/tenant-scoping için:
+ * - Formlar `myuni_site_application_forms.created_by` (clerk user id) ile kim tarafından oluşturulduğu bilgisine sahip.
+ * - Bu helper, kullanıcının bağlı olduğu `panel_organization_id` (uuid) listesini çıkarır.
+ *
+ * Eşleştirme mantığı:
+ * - Ulaşılabilen tenant = panel_organization_id seti.
+ * - Form, ancak `created_by` olan kullanıcının da aynı panel_organization_id içinde olması durumunda görünür/düzenlenir.
+ */
+export async function resolveSiteApplicationsPanelOrganizationScope(
+  supabase: ReturnType<typeof getServiceSupabase>,
+  userId: string
+): Promise<SiteAppsPanelOrganizationScope> {
+  const rows = await loadUserAccessRows(supabase, userId);
+  const siteResolved = resolveMembershipFromRows(rows, SITE_APPLICATIONS_MODULE_KEY);
+  const eventsResolved = resolveMembershipFromRows(rows, EVENTS_MODULE_KEY);
+
+  if (siteResolved.isSuperAdmin || eventsResolved.isSuperAdmin) return { mode: 'all' };
+
+  const memberships = [...siteResolved.memberships, ...eventsResolved.memberships];
+
+  const hasUnscopedMembership = memberships.some((m) => m.panelOrganizationId == null);
+  if (hasUnscopedMembership) return { mode: 'all' };
+
+  const panelOrganizationIds = Array.from(
+    new Set(
+      memberships
+        .map((m) => m.panelOrganizationId)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)
+    )
+  );
+
+  if (panelOrganizationIds.length === 0) return { mode: 'none' };
+  return { mode: 'scoped', panelOrganizationIds };
+}
+
 /** Write access for form settings/fields: Events forms OR Site-applications forms OR super-admin. */
 export async function requireEventFormsWriteUser() {
   const { userId } = await auth();

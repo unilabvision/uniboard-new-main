@@ -20,7 +20,7 @@ const texts = {
     teamTitle: 'Yeni Ekip Başvuru Formu',
     eventTitle: 'Yeni Etkinlik Başvuru Formu',
     back: 'Formlara Dön',
-    forbidden: 'Bu sayfaya yalnızca süper admin erişebilir.',
+    forbidden: 'Bu sayfaya erişim yetkiniz bulunmuyor.',
     teamBadge: 'UNILAB Ekip Başvurusu',
     eventBadge: 'Etkinlik Başvuru Formu',
     titleTr: 'Başlık (TR)',
@@ -85,7 +85,14 @@ function NewSiteApplicationFormContent({ locale }: { locale: string }) {
     ? `/${locale}/events/forms`
     : `/${locale}/site-applications/forms`;
   const formType = (isEventsHub ? 'event' : 'team') as SiteApplicationFormType;
-  const { isSuperAdmin, loading: modulesLoading } = useUserModules();
+  const { isSuperAdmin, memberships, loading: modulesLoading } = useUserModules();
+  const canManageForms =
+    isSuperAdmin ||
+    memberships.some(
+      (m) =>
+        (m.moduleKey === 'site-applications' || m.moduleKey === 'events') &&
+        (m.capabilities == null || m.capabilities.includes('forms'))
+    );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [events, setEvents] = useState<Array<{ id: string; slug: string; title: string }>>([]);
@@ -173,7 +180,7 @@ function NewSiteApplicationFormContent({ locale }: { locale: string }) {
     );
   }
 
-  if (!isSuperAdmin && !(isEventsHub && !isTeam)) {
+  if (!canManageForms && !(isEventsHub && !isTeam)) {
     return (
       <div className="p-8 max-w-lg">
         <p className="text-red-600">{t.forbidden}</p>

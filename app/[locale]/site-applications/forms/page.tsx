@@ -38,7 +38,7 @@ const texts = {
     tabTeam: 'Ekip Başvuruları',
     tabEvent: 'Etkinlik Başvuruları',
     tabAll: 'Tümü',
-    superAdminOnly: 'Form yapılandırması yalnızca süper admin tarafından yapılabilir.',
+    superAdminOnly: 'Form oluşturma ve düzenleme yetkiniz bulunmuyor. Lütfen yöneticinizle iletişime geçin.',
     loading: 'Yükleniyor...',
     emptyTeam: 'Henüz ekip başvuru formu yok.',
     emptyEvent: 'Henüz etkinlik başvuru formu yok.',
@@ -92,7 +92,12 @@ function FormsListContent({ locale }: { locale: string }) {
     : `/${locale}/site-applications/forms`;
   const [forms, setForms] = useState<FormWithEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const { isSuperAdmin, loading: modulesLoading } = useUserModules();
+  const { isSuperAdmin, memberships, loading: modulesLoading } = useUserModules();
+  const canManageForms = isSuperAdmin || memberships.some(
+    (m) =>
+      (m.moduleKey === 'site-applications' || m.moduleKey === 'events') &&
+      (m.capabilities == null || m.capabilities.includes('forms'))
+  );
   const t = texts[locale as keyof typeof texts] || texts.tr;
 
   useEffect(() => {
@@ -149,9 +154,9 @@ function FormsListContent({ locale }: { locale: string }) {
               : t.subtitle}
           </p>
         </div>
-        {(isSuperAdmin || isEventsHub) && (
+        {(canManageForms || isEventsHub) && (
           <div className="flex flex-wrap gap-2">
-            {!isEventsHub && isSuperAdmin && (
+            {!isEventsHub && canManageForms && (
               <Link
                 href={`${formsBase}/new?type=team`}
                 className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#990000] text-white rounded-lg hover:bg-[#800000]"
@@ -173,7 +178,7 @@ function FormsListContent({ locale }: { locale: string }) {
         )}
       </div>
 
-      {!isSuperAdmin && !isEventsHub && (
+      {!canManageForms && !isEventsHub && (
         <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 p-4 text-amber-800 dark:text-amber-200 text-sm">
           {t.superAdminOnly}
         </div>
@@ -265,7 +270,7 @@ function FormsListContent({ locale }: { locale: string }) {
                         {t.preview}
                       </a>
                     )}
-                    {(isSuperAdmin || isEventsHub) && (
+                    {(canManageForms || isEventsHub) && (
                       <Link
                         href={`${formsBase}/${form.id}`}
                         className="inline-flex items-center gap-1.5 px-3 py-2 text-sm bg-[#990000] text-white rounded-lg hover:bg-[#800000]"

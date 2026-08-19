@@ -4,6 +4,7 @@ import { requireEventFormsWriteUser } from '@/app/api/site-applications/access/_
 import type { SiteApplicationFormFieldInput } from '@/app/types/siteApplicationForms';
 import { normalizeFieldOptions } from '@/app/lib/siteApplications/forms';
 import { normalizeResourceOptions } from '@/app/lib/siteApplications/files';
+import { resolveSiteApplicationsPanelOrganizationScope } from '@/app/api/site-applications/access/_helpers';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -80,6 +81,15 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
 
+  const panelScope = await resolveSiteApplicationsPanelOrganizationScope(
+    authResult.supabase!,
+    authResult.userId || ''
+  );
+
+  if (panelScope.mode === 'none') {
+    return NextResponse.json({ error: 'Form not found' }, { status: 404 });
+  }
+
   const body = await request.json();
   const rawFields = (body.fields || []) as SiteApplicationFormFieldInput[];
 
@@ -144,7 +154,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
   const { data: formRow, error: formLookupError } = await supabase
     .from(siteApplicationsDb.forms)
-    .select('id')
+    .select('id, created_by')
     .eq('id', formId)
     .maybeSingle();
 
@@ -153,6 +163,34 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   }
   if (!formRow) {
     return NextResponse.json({ error: 'Form not found' }, { status: 404 });
+  }
+
+  if (panelScope.mode === 'scoped') {
+    const creatorId = formRow.created_by as string | null;
+    if (!creatorId) {
+      return NextResponse.json({ error: 'Form not found' }, { status: 404 });
+    }
+
+    const { data: ownerRows } = await supabase
+      .from('user_module_access')
+      .select('clerk_user_id')
+      .eq('is_enabled', true)
+      .in('module_key', [
+        'site-applications',
+        'site_basvurular',
+        'site-basvurular',
+        'basvurular',
+        'events',
+        'event',
+        'etkinlik',
+        'etkinlikler',
+      ])
+      .eq('clerk_user_id', creatorId)
+      .in('panel_organization_id', panelScope.panelOrganizationIds);
+
+    if (!ownerRows || ownerRows.length === 0) {
+      return NextResponse.json({ error: 'Form not found' }, { status: 404 });
+    }
   }
 
   // Backup full rows first. Unique(form_id, field_key) means we must delete

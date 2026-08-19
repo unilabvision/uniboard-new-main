@@ -6,7 +6,10 @@ import {
 } from '@/app/lib/siteApplications/files';
 import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
 import { inferFormType } from '@/app/lib/siteApplications/formTypes';
-import { requireEventFormsWriteUser } from '@/app/api/site-applications/access/_helpers';
+import {
+  requireEventFormsWriteUser,
+  resolveSiteApplicationsPanelOrganizationScope,
+} from '@/app/api/site-applications/access/_helpers';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -17,11 +20,19 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
 
+  const panelScope = await resolveSiteApplicationsPanelOrganizationScope(
+    authResult.supabase,
+    authResult.userId || ''
+  );
+  if (panelScope.mode === 'none') {
+    return NextResponse.json({ error: 'Form not found' }, { status: 404 });
+  }
+
   const supabase = authResult.supabase;
 
   const { data: form, error: formError } = await supabase
     .from(siteApplicationsDb.forms)
-    .select('id, form_type, event_id')
+    .select('id, form_type, event_id, created_by')
     .eq('id', formId)
     .maybeSingle();
 
@@ -30,6 +41,34 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
   if (!form) {
     return NextResponse.json({ error: 'Form not found' }, { status: 404 });
+  }
+
+  if (panelScope.mode === 'scoped') {
+    const creatorId = form.created_by as string | null;
+    if (!creatorId) {
+      return NextResponse.json({ error: 'Form not found' }, { status: 404 });
+    }
+
+    const { data: ownerRows } = await supabase
+      .from('user_module_access')
+      .select('clerk_user_id')
+      .eq('is_enabled', true)
+      .in('module_key', [
+        'site-applications',
+        'site_basvurular',
+        'site-basvurular',
+        'basvurular',
+        'events',
+        'event',
+        'etkinlik',
+        'etkinlikler',
+      ])
+      .eq('clerk_user_id', creatorId)
+      .in('panel_organization_id', panelScope.panelOrganizationIds);
+
+    if (!ownerRows || ownerRows.length === 0) {
+      return NextResponse.json({ error: 'Form not found' }, { status: 404 });
+    }
   }
 
   let body: {

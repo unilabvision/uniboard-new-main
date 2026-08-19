@@ -34,7 +34,7 @@ import { ArrowLeft, ExternalLink, Loader2, Save } from 'lucide-react';
 const texts = {
   tr: {
     back: 'Formlara Dön',
-    forbidden: 'Bu sayfaya yalnızca süper admin erişebilir.',
+    forbidden: 'Bu sayfaya erişim yetkiniz bulunmuyor.',
     loading: 'Yükleniyor...',
     settings: 'Form başlığı ve ayarlar',
     fields: 'Sorular',
@@ -68,7 +68,7 @@ const texts = {
     sitePreviewHint:
       'Soldaki “Site Önizleme” etkinlik listesini açar. Form değişiklikleri için bu sayfadaki başvuru linkini kullanın (.../basvuru).',
     questionHint:
-      'Soru metnini üstteki TR/EN satırlarına yazın. Ortadaki kesik çizgili kutu yalnızca önizlemedir — oraya yazılamaz.',
+      'Soru metnini üstteki TR/EN satırlarına yazın. Kesik çizgili kutu yalnızca önizlemedir — oraya yazılamaz. Canlı siteye yansıması için "Kaydet ve yayınla" butonuna tıklayın.',
     eventsLoadError: 'Etkinlik listesi yüklenemedi',
     linkedEvent: 'Bağlı etkinlik',
     noEvent: 'Etkinlik seçilmedi',
@@ -153,7 +153,14 @@ export default function EditSiteApplicationFormPage({
   const formsBase = isEventsHub
     ? `/${locale}/events/forms`
     : `/${locale}/site-applications/forms`;
-  const { isSuperAdmin, loading: modulesLoading } = useUserModules();
+  const { isSuperAdmin, memberships, loading: modulesLoading } = useUserModules();
+  const canManageForms =
+    isSuperAdmin ||
+    memberships.some(
+      (m) =>
+        (m.moduleKey === 'site-applications' || m.moduleKey === 'events') &&
+        (m.capabilities == null || m.capabilities.includes('forms'))
+    );
   const t = texts[locale as keyof typeof texts] || texts.tr;
 
   const [form, setForm] = useState<SiteApplicationForm | null>(null);
@@ -522,7 +529,7 @@ export default function EditSiteApplicationFormPage({
   const formType: SiteApplicationFormType = form.form_type ?? inferFormType(form);
   const isTeam = formType === 'team';
 
-  if (!isSuperAdmin && !(isEventsHub && !isTeam)) {
+  if (!canManageForms && !(isEventsHub && !isTeam)) {
     return <div className="p-8 text-red-600">{t.forbidden}</div>;
   }
 

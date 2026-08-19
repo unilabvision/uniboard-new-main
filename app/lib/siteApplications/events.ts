@@ -56,8 +56,9 @@ export async function attachLinkedEventsToForms<
 
   const { data: events, error } = await supabase
     .from(eventsDb.events)
-    .select('id, slug, title')
-    .in('id', eventIds);
+    .select('id, slug, title, is_active')
+    .in('id', eventIds)
+    .eq('is_active', true);
 
   if (error) {
     console.error('attachLinkedEventsToForms:', error.message);

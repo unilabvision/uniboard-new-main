@@ -15,6 +15,7 @@ import {
   Paperclip,
   Download,
   Loader2,
+  Send,
 } from 'lucide-react';
 import type { SiteApplication, SiteApplicationStatusHistory } from '@/app/types/siteApplications';
 import {
@@ -178,8 +179,18 @@ export default function SiteApplicationDetailPage({
     ? `/${locale}/events/registrations`
     : `/${locale}/site-applications/applications`;
 
+  type FormFieldDef = {
+    field_key: string;
+    label_tr: string;
+    label_en: string;
+    order_index: number;
+    field_type: string;
+    options?: Array<{ label_tr: string; label_en: string; value: string }> | unknown;
+  };
+
   const [app, setApp] = useState<SiteApplication | null>(null);
   const [history, setHistory] = useState<SiteApplicationStatusHistory[]>([]);
+  const [formFields, setFormFields] = useState<FormFieldDef[]>([]);
   const [loading, setLoading] = useState(true);
   const [newStatus, setNewStatus] = useState('');
   const [notes, setNotes] = useState('');
@@ -191,6 +202,14 @@ export default function SiteApplicationDetailPage({
   const [fieldAttachments, setFieldAttachments] = useState<FieldAttachment[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailBody, setEmailBody] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailFlash, setEmailFlash] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  const [emailConfirmed, setEmailConfirmed] = useState(false);
+  const [smtpConfigured, setSmtpConfigured] = useState<boolean | null>(null);
+  const [statusEmailCheck, setStatusEmailCheck] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -212,6 +231,9 @@ export default function SiteApplicationDetailPage({
         setFieldAttachments(
           Array.isArray(data.field_attachments) ? (data.field_attachments as FieldAttachment[]) : []
         );
+        if (Array.isArray(data.form_fields)) {
+          setFormFields(data.form_fields as FormFieldDef[]);
+        }
       } catch {
         setApp(null);
         setLoadError(t.notFound);
@@ -221,6 +243,13 @@ export default function SiteApplicationDetailPage({
     };
     load();
   }, [id, t.notFound]);
+
+  useEffect(() => {
+    fetch('/api/site-applications/smtp-config')
+      .then((r) => r.json())
+      .then((data) => setSmtpConfigured(!!data.config?.is_verified))
+      .catch(() => setSmtpConfigured(false));
+  }, []);
 
   const updateStatus = async () => {
     if (!app || !user || newStatus === app.status) return;
@@ -350,15 +379,9 @@ export default function SiteApplicationDetailPage({
 
   const fieldFileKeys = new Set(fieldAttachments.map((f) => f.field_key));
 
-  const detailFields =
-    app.submission_data && Object.keys(app.submission_data).length > 0
-      ? Object.entries(app.submission_data).filter(
-          ([key, value]) =>
-            !INTERNAL_SUBMISSION_KEYS.has(key) &&
-            !fieldFileKeys.has(key) &&
-            !parseSubmissionFileMeta(value)
-        )
-      : isEvent
+  const detailFields = (() => {
+    if (!app.submission_data || Object.keys(app.submission_data).length === 0) {
+      return isEvent
         ? [
             ['event_name', app.event_name],
             ['event_date', app.event_date],
@@ -374,6 +397,56 @@ export default function SiteApplicationDetailPage({
             ['motivation', app.motivation],
             ['message', app.message],
           ];
+    }
+
+    if (formFields.length > 0) {
+      const sub = app.submission_data as Record<string, unknown>;
+      // Map contact field keys to top-level application columns
+      const contactFieldMap: Record<string, unknown> = {
+        email: app.email,
+        phone: app.phone,
+        first_name: app.first_name,
+        last_name: app.last_name,
+      };
+      return formFields
+        .filter((f) => !fieldFileKeys.has(f.field_key) && !INTERNAL_SUBMISSION_KEYS.has(f.field_key))
+        .map((f) => {
+          const val = sub[f.field_key] ?? contactFieldMap[f.field_key] ?? null;
+          return [f.field_key, val] as [string, unknown];
+        });
+    }
+
+    const entries = Object.entries(app.submission_data).filter(
+      ([key, value]) =>
+        !INTERNAL_SUBMISSION_KEYS.has(key) &&
+        !fieldFileKeys.has(key) &&
+        !parseSubmissionFileMeta(value)
+    );
+
+    return entries;
+  })();
+
+  const getFieldLabel = (key: string): string => {
+    if (formFields.length > 0) {
+      const def = formFields.find((f) => f.field_key === key);
+      if (def) return locale === 'en' ? def.label_en : def.label_tr;
+    }
+    return (
+      t.fields[key as keyof typeof t.fields] ||
+      String(key).replace(/_/g, ' ')
+    );
+  };
+
+  const resolveOptionValue = (key: string, rawValue: unknown): string => {
+    if (typeof rawValue !== 'string') return String(rawValue ?? '');
+    const def = formFields.find((f) => f.field_key === key);
+    if (!def || !Array.isArray(def.options)) return rawValue;
+    const match = (def.options as Array<{ label_tr?: string; label_en?: string; value?: string }>).find(
+      (o) => o.value === rawValue
+    );
+    if (!match) return rawValue;
+    return (locale === 'en' ? match.label_en : match.label_tr) || rawValue;
+  };
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto">
@@ -469,20 +542,26 @@ export default function SiteApplicationDetailPage({
           <dl className="space-y-4 text-sm">
             {detailFields.map((entry) => {
               const [key, value] = Array.isArray(entry) ? entry : [entry, app.submission_data[entry as string]];
-              if (value === null || value === undefined || value === '') return null;
-              const label =
-                t.fields[key as keyof typeof t.fields] ||
-                String(key).replace(/_/g, ' ');
+              const isEmpty = value === null || value === undefined || value === '';
+              if (isEmpty && formFields.length === 0) return null;
+              const label = getFieldLabel(String(key));
+              const fieldDef = formFields.find((f) => f.field_key === String(key));
+              const isUrl =
+                fieldDef?.field_type === 'url' ||
+                String(key).includes('url') ||
+                (typeof value === 'string' && /^https?:\/\//.test(value));
               return (
-                <div key={String(key)}>
-                  <dt className="text-neutral-500 mb-1 capitalize">{label}</dt>
-                  <dd className="text-neutral-900 dark:text-neutral-100 whitespace-pre-wrap">
-                    {String(key).includes('url') && typeof value === 'string' ? (
-                      <a href={String(value)} target="_blank" rel="noopener noreferrer" className="text-[#990000] break-all">
+                <div key={String(key)} className="border-b border-neutral-100 dark:border-neutral-700 pb-3 last:border-0 last:pb-0">
+                  <dt className="text-xs font-medium uppercase tracking-wide text-neutral-500 mb-1">{label}</dt>
+                  <dd className="text-neutral-900 dark:text-neutral-100 whitespace-pre-wrap text-sm">
+                    {isEmpty ? (
+                      <span className="italic text-neutral-400">{locale === 'tr' ? 'Yanıt yok' : 'No answer'}</span>
+                    ) : isUrl && typeof value === 'string' ? (
+                      <a href={String(value)} target="_blank" rel="noopener noreferrer" className="text-[#990000] underline break-all">
                         {String(value)}
                       </a>
                     ) : (
-                      String(value)
+                      resolveOptionValue(String(key), value)
                     )}
                   </dd>
                 </div>
@@ -632,7 +711,27 @@ export default function SiteApplicationDetailPage({
                   ))}
                 </select>
                 <button
-                  onClick={updateStatus}
+                  onClick={async () => {
+                    await updateStatus();
+                    if (statusEmailCheck && smtpConfigured && app) {
+                      const statusLabel = t.statusLabels[newStatus as keyof typeof t.statusLabels] || newStatus;
+                      try {
+                        await fetch(`/api/site-applications/applications/${app.id}/send-email`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            subject: locale === 'tr'
+                              ? `Başvuru Durumu Güncellendi: ${statusLabel}`
+                              : `Application Status Updated: ${statusLabel}`,
+                            body_text: locale === 'tr'
+                              ? `Sayın ${app.first_name} ${app.last_name},\n\nBaşvurunuzun durumu "${statusLabel}" olarak güncellenmiştir.\n\nSaygılarımızla`
+                              : `Dear ${app.first_name} ${app.last_name},\n\nYour application status has been updated to "${statusLabel}".\n\nBest regards`,
+                          }),
+                        });
+                      } catch { /* silent */ }
+                    }
+                    setStatusEmailCheck(false);
+                  }}
                   disabled={saving || newStatus === app.status}
                   className="px-4 py-2 bg-[#990000] text-white rounded-lg disabled:opacity-50 flex items-center gap-2"
                 >
@@ -640,6 +739,24 @@ export default function SiteApplicationDetailPage({
                   {t.changeStatus}
                 </button>
               </div>
+              {smtpConfigured && (
+                <label className="mt-3 flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={statusEmailCheck}
+                    onChange={(e) => setStatusEmailCheck(e.target.checked)}
+                    className="rounded border-neutral-300"
+                  />
+                  {locale === 'tr' ? 'Durum değişikliğini başvurana mail ile bildir' : 'Notify applicant via email'}
+                </label>
+              )}
+              {smtpConfigured === false && (
+                <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">
+                  {locale === 'tr'
+                    ? 'Mail göndermek için önce E-posta Ayarları sayfasından SMTP yapılandırmanızı tamamlayın.'
+                    : 'Configure your SMTP settings in Email Settings page to send emails.'}
+                </p>
+              )}
               {statusMessage && (
                 <p
                   className={`mt-3 text-sm ${
@@ -670,6 +787,119 @@ export default function SiteApplicationDetailPage({
           >
             {t.saveNotes}
           </button>
+        </section>
+
+        <section className="bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 p-6">
+          <h2 className="font-semibold mb-4 flex items-center gap-2">
+            <Mail className="w-4 h-4" />
+            {locale === 'tr' ? 'Başvurana Mail Gönder' : 'Send Email to Applicant'}
+          </h2>
+
+          {smtpConfigured === false ? (
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+              <p className="text-sm text-amber-800 dark:text-amber-300 mb-2">
+                {locale === 'tr'
+                  ? 'Mail göndermek için önce SMTP yapılandırmanızı tamamlamanız gerekiyor.'
+                  : 'You need to configure your SMTP settings before sending emails.'}
+              </p>
+              <a
+                href={`/${locale}/site-applications/email-settings`}
+                className="inline-flex items-center gap-1 text-sm font-medium text-[#990000] hover:underline"
+              >
+                {locale === 'tr' ? 'E-posta Ayarlarına Git →' : 'Go to Email Settings →'}
+              </a>
+            </div>
+          ) : !emailModalOpen ? (
+            <div>
+              <p className="text-sm text-neutral-500 mb-3">
+                {locale === 'tr'
+                  ? `Bu mail ${app.email} adresine, kurumsal SMTP ayarlarınız üzerinden gönderilecektir.`
+                  : `This email will be sent to ${app.email} via your configured SMTP settings.`}
+              </p>
+              <button
+                type="button"
+                onClick={() => { setEmailModalOpen(true); setEmailConfirmed(false); setEmailFlash(null); }}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-[#990000] text-white text-sm font-medium rounded-lg hover:bg-[#7a0000] transition"
+              >
+                <Send className="w-4 h-4" />
+                {locale === 'tr' ? 'Mail Yaz' : 'Compose Email'}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="text-xs text-neutral-500 bg-neutral-50 dark:bg-neutral-900 rounded-lg px-3 py-2">
+                {locale === 'tr' ? 'Alıcı:' : 'To:'} <span className="font-medium text-neutral-700 dark:text-neutral-300">{app.email}</span>
+              </div>
+              <input
+                type="text"
+                value={emailSubject}
+                onChange={(e) => setEmailSubject(e.target.value)}
+                placeholder={locale === 'tr' ? 'Konu' : 'Subject'}
+                className="w-full px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-sm"
+              />
+              <textarea
+                value={emailBody}
+                onChange={(e) => setEmailBody(e.target.value)}
+                rows={6}
+                placeholder={locale === 'tr' ? 'Mesaj içeriği...' : 'Message body...'}
+                className="w-full px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-sm"
+              />
+              <label className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={emailConfirmed}
+                  onChange={(e) => setEmailConfirmed(e.target.checked)}
+                  className="rounded border-neutral-300"
+                />
+                {locale === 'tr'
+                  ? 'Bu mesajı göndermek istediğimi onaylıyorum'
+                  : 'I confirm I want to send this message'}
+              </label>
+              {emailFlash && (
+                <p className={`text-sm ${emailFlash.type === 'success' ? 'text-green-700 dark:text-green-300' : 'text-red-600 dark:text-red-400'}`}>
+                  {emailFlash.msg}
+                </p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={sendingEmail || !emailSubject || !emailBody || !emailConfirmed}
+                  onClick={async () => {
+                    setSendingEmail(true);
+                    setEmailFlash(null);
+                    try {
+                      const res = await fetch(`/api/site-applications/applications/${app.id}/send-email`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ subject: emailSubject, body_text: emailBody }),
+                      });
+                      const data = await res.json();
+                      if (!res.ok) throw new Error(data.error);
+                      setEmailFlash({ type: 'success', msg: locale === 'tr' ? `Mail başarıyla gönderildi: ${data.sent_to}` : `Email sent successfully to: ${data.sent_to}` });
+                      setEmailSubject('');
+                      setEmailBody('');
+                      setEmailConfirmed(false);
+                    } catch (err: unknown) {
+                      setEmailFlash({ type: 'error', msg: err instanceof Error ? err.message : 'Error' });
+                    } finally {
+                      setSendingEmail(false);
+                    }
+                  }}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-[#990000] text-white text-sm font-medium rounded-lg hover:bg-[#7a0000] disabled:opacity-50 transition"
+                >
+                  <Send className="w-4 h-4" />
+                  {sendingEmail ? (locale === 'tr' ? 'Gönderiliyor...' : 'Sending...') : (locale === 'tr' ? 'Gönder' : 'Send')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setEmailModalOpen(false); setEmailFlash(null); setEmailConfirmed(false); }}
+                  className="px-4 py-2 text-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-900"
+                >
+                  {locale === 'tr' ? 'İptal' : 'Cancel'}
+                </button>
+              </div>
+            </div>
+          )}
         </section>
 
         {history.length > 0 && (

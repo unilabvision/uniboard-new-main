@@ -4,7 +4,10 @@ import {
   applyTeamApplicationsFilter,
   applyEventApplicationsFilter,
 } from '@/app/lib/siteApplications/config';
-import { requireSiteApplicationsOrEventsUser } from '@/app/api/site-applications/access/_helpers';
+import {
+  requireSiteApplicationsOrEventsUser,
+  resolveSiteApplicationsTenantScope,
+} from '@/app/api/site-applications/access/_helpers';
 import { backfillPendingEventApplications } from '@/app/lib/siteApplications/eventAutoAccept';
 import { syncCertificatePaymentsFromOrders } from '@/app/lib/siteApplications/syncPayments';
 import {
@@ -17,6 +20,11 @@ export async function GET(request: NextRequest) {
   if (authResult.error || !authResult.supabase) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
+
+  const tenantScope = await resolveSiteApplicationsTenantScope(
+    authResult.supabase,
+    authResult.userId || ''
+  );
 
   // Eski pending etkinlik kayıtlarını accepted yap + source düzelt + ödeme senkron
   await backfillPendingEventApplications(authResult.supabase);
@@ -43,6 +51,13 @@ export async function GET(request: NextRequest) {
     query = applyEventApplicationsFilter(query);
   } else if (category === 'team') {
     query = applyTeamApplicationsFilter(query);
+  }
+
+  // Tenant scoping: external kurum/kişinin sadece kendi başvurularını görmesi
+  if (tenantScope.mode === 'none') {
+    query = query.eq('id', '__no_access__');
+  } else if (tenantScope.mode === 'scoped') {
+    query = query.in('organization', tenantScope.allowedValues);
   }
 
   if (eventId) {
@@ -97,6 +112,11 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
 
+  const tenantScope = await resolveSiteApplicationsTenantScope(
+    authResult.supabase,
+    authResult.userId || ''
+  );
+
   let body: { ids?: unknown };
   try {
     body = await request.json();
@@ -118,12 +138,45 @@ export async function DELETE(request: NextRequest) {
     );
   }
 
-  const { deleted, failed } = await deleteSiteApplicationsBulk(authResult.supabase, ids);
+  // Tenant scoping check: sadece izinli organization'a ait olanları sil.
+  let deletableIds = ids;
+  const forbidden: Array<{ id: string; error: string }> = [];
+
+  if (tenantScope.mode === 'none') {
+    deletableIds = [];
+    for (const id of ids) forbidden.push({ id, error: 'Forbidden by tenant scope' });
+  } else if (tenantScope.mode === 'scoped') {
+    const { data: existingRows } = await authResult.supabase
+      .from(siteApplicationsDb.applications)
+      .select('id, organization')
+      .in('id', ids);
+
+    const byId = new Map<string, string | null>(
+      (existingRows ?? []).map((r) => [String(r.id), (r.organization as string | null) ?? null])
+    );
+
+    const allowedSet = new Set(tenantScope.allowedValues);
+    deletableIds = ids.filter((id) => {
+      const org = byId.get(id) ?? null;
+      return org != null && allowedSet.has(org);
+    });
+
+    for (const id of ids) {
+      const org = byId.get(id) ?? null;
+      if (org == null) continue; // not found => bulk delete will handle as failed
+      if (!allowedSet.has(org)) {
+        forbidden.push({ id, error: 'Forbidden by tenant scope' });
+      }
+    }
+  }
+
+  const { deleted, failed } = await deleteSiteApplicationsBulk(authResult.supabase, deletableIds);
+  const failedCombined = [...forbidden, ...failed];
 
   return NextResponse.json({
-    success: failed.length === 0,
+    success: failedCombined.length === 0,
     deleted,
-    failed,
+    failed: failedCombined,
     deletedCount: deleted.length,
   });
 }

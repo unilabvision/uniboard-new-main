@@ -689,7 +689,7 @@ export default function ModuleAccessPage({
               <div className="grid gap-2 sm:grid-cols-2">
                 {capabilityDefs.map((cap) => {
                   const allowed = levelCeiling.has(cap.key);
-                  const checked = capabilities.includes(cap.key);
+                  const checked = allowed && capabilities.includes(cap.key);
                   return (
                     <label
                       key={cap.key}
@@ -708,9 +708,16 @@ export default function ModuleAccessPage({
                         onChange={() => toggleCapability(cap.key)}
                         className="mt-0.5 h-4 w-4 rounded accent-[#990000]"
                       />
-                      <span className="leading-snug font-medium">
-                        {tr ? cap.labelTr : cap.labelEn}
-                      </span>
+                      <div className="leading-snug font-medium min-w-0">
+                        <span>
+                          {tr ? cap.labelTr : cap.labelEn}
+                        </span>
+                        {!allowed && cap.key === 'access' && (
+                          <span className="block text-[11px] font-normal text-neutral-500 mt-1">
+                            {tr ? 'Sadece Admin seviyesinde' : 'Admin only'}
+                          </span>
+                        )}
+                      </div>
                     </label>
                   );
                 })}

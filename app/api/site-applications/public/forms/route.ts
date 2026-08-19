@@ -63,7 +63,13 @@ export async function GET(request: NextRequest) {
       });
 
     const eventApplications = formsWithEvents
-      .filter((form) => form.event_id && form.myuni_events && inferFormType(form) === 'event')
+      .filter(
+        (form) =>
+          form.event_id &&
+          form.myuni_events &&
+          form.show_on_website &&
+          inferFormType(form) === 'event'
+      )
       .map((form) => {
         const event = form.myuni_events!;
         const packageSettings = parsePackageSettingsFromForm(form);

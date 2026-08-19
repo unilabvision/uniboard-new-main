@@ -35,6 +35,7 @@ interface ModuleContent {
     icon: React.ComponentType<{ className?: string }>;
     capability?: string;
     crossModule?: boolean;
+    section?: string;
   }>;
 }
 
@@ -395,6 +396,12 @@ function GlobalDashboardSidebarInner({
       (currentModule && moduleAliases[currentModule]) ||
       (currentModule ? [currentModule] : []);
 
+    const isSiteApplicationsModule =
+      currentModule != null &&
+      ['site-applications', 'site_basvurular', 'site-basvurular', 'basvurular'].includes(
+        currentModule
+      );
+
     const moduleMemberships = memberships.filter((m) =>
       aliases.includes(m.moduleKey || '')
     );
@@ -420,9 +427,18 @@ function GlobalDashboardSidebarInner({
       return hasFeature(membership, capability, false);
     };
 
-    const filteredItems = (content as ModuleContent).items.filter((item) =>
-      canSee(item.capability)
-    );
+    const filteredItems = (content as ModuleContent).items
+      .filter((item) => canSee(item.capability))
+      .map((item) => {
+        if (!isSiteApplicationsModule) return item;
+        const applicationsPanelLabel =
+          locale === 'tr' ? 'Başvuru Paneli' : 'Applications Panel';
+        const accessPanelLabel = locale === 'tr' ? 'Yetkilendirme' : 'Access Control';
+        return {
+          ...item,
+          section: item.capability === 'access' ? accessPanelLabel : applicationsPanelLabel,
+        };
+      });
     
     
     return [
@@ -431,7 +447,8 @@ function GlobalDashboardSidebarInner({
         name: t.dashboard,
         href: `/${locale}/`,
         icon: TrendingUp,
-        active: pathname === `/${locale}/`
+        active: pathname === `/${locale}/`,
+        section: undefined,
       },
       // Modül özel navigation items
       ...filteredItems.map((item) => {
@@ -459,6 +476,7 @@ function GlobalDashboardSidebarInner({
           href: fullHref,
           icon: item.icon,
           active: isActive,
+          section: item.section,
         };
       })
     ];
@@ -578,35 +596,79 @@ function GlobalDashboardSidebarInner({
             {/* Eğer bir modül içindeysek, o modülün navigation'ını göster */}
             {isInModule && moduleContent ? (
               <>
-                {navigationItems.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <Link
-                      key={`${item.name}-${item.href}`}
-                      href={item.href}
-                      onClick={() => setIsOpen(false)}
-                      className={`group relative flex items-center rounded-lg text-sm font-medium transition-colors ${
-                        isCollapsed ? 'justify-center px-2 py-2.5' : 'px-2.5 py-2'
-                      } ${
-                        item.active
-                          ? 'bg-[#990000] text-white shadow-sm'
-                          : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800/80 hover:text-neutral-900 dark:hover:text-neutral-100'
-                      }`}
-                    >
-                      <Icon className="w-5 h-5 flex-shrink-0" />
-                      {!isCollapsed && (
-                        <span className="ml-3 truncate">{item.name}</span>
-                      )}
-                      
-                      {/* Tooltip for collapsed state */}
-                      {isCollapsed && (
-                        <div className="absolute left-full ml-2 px-2 py-1 bg-neutral-900 dark:bg-neutral-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
-                          {item.name}
-                        </div>
-                      )}
-                    </Link>
-                  );
-                })}
+                {(() => {
+                  let lastSection: string | null = null;
+                  return navigationItems.map((item) => {
+                    const Icon = item.icon;
+                    const needsHeader =
+                      item.section && item.section !== lastSection;
+
+                    if (needsHeader) {
+                      lastSection = item.section || null;
+                      return (
+                        <React.Fragment key={`section-${item.section}-${item.href}`}>
+                          {!isCollapsed && (
+                            <div className="px-2.5 mt-3 mb-1 text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase">
+                              {item.section}
+                            </div>
+                          )}
+                          <Link
+                            href={item.href}
+                            onClick={() => setIsOpen(false)}
+                            className={`group relative flex items-center rounded-lg text-sm font-medium transition-colors ${
+                              isCollapsed
+                                ? 'justify-center px-2 py-2.5'
+                                : 'px-2.5 py-2'
+                            } ${
+                              item.active
+                                ? 'bg-[#990000] text-white shadow-sm'
+                                : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800/80 hover:text-neutral-900 dark:hover:text-neutral-100'
+                            }`}
+                          >
+                            <Icon className="w-5 h-5 flex-shrink-0" />
+                            {!isCollapsed && (
+                              <span className="ml-3 truncate">{item.name}</span>
+                            )}
+
+                            {/* Tooltip for collapsed state */}
+                            {isCollapsed && (
+                              <div className="absolute left-full ml-2 px-2 py-1 bg-neutral-900 dark:bg-neutral-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+                                {item.name}
+                              </div>
+                            )}
+                          </Link>
+                        </React.Fragment>
+                      );
+                    }
+
+                    return (
+                      <Link
+                        key={`${item.name}-${item.href}`}
+                        href={item.href}
+                        onClick={() => setIsOpen(false)}
+                        className={`group relative flex items-center rounded-lg text-sm font-medium transition-colors ${
+                          isCollapsed ? 'justify-center px-2 py-2.5' : 'px-2.5 py-2'
+                        } ${
+                          item.active
+                            ? 'bg-[#990000] text-white shadow-sm'
+                            : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800/80 hover:text-neutral-900 dark:hover:text-neutral-100'
+                        }`}
+                      >
+                        <Icon className="w-5 h-5 flex-shrink-0" />
+                        {!isCollapsed && (
+                          <span className="ml-3 truncate">{item.name}</span>
+                        )}
+
+                        {/* Tooltip for collapsed state */}
+                        {isCollapsed && (
+                          <div className="absolute left-full ml-2 px-2 py-1 bg-neutral-900 dark:bg-neutral-700 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+                            {item.name}
+                          </div>
+                        )}
+                      </Link>
+                    );
+                  });
+                })()}
               </>
             ) : (
               <>

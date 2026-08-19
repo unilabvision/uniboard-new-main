@@ -7,6 +7,7 @@ import {
   FileText,
   Shield,
   FormInput,
+  Mail,
 } from 'lucide-react';
 
 export const siteApplicationsSidebarContent = {
@@ -20,6 +21,7 @@ export const siteApplicationsSidebarContent = {
       { name: 'İncelemede', href: '/applications?status=under_review', icon: FileText, capability: 'applications' },
       { name: 'Kabul Edilenler', href: '/applications?status=accepted', icon: CheckCircle, capability: 'applications' },
       { name: 'Reddedilenler', href: '/applications?status=rejected', icon: XCircle, capability: 'applications' },
+      { name: 'E-posta Ayarları', href: '/email-settings', icon: Mail, capability: 'forms' },
       { name: 'Yetkilendirme', href: '/access', icon: Shield, capability: 'access' },
     ],
   },
@@ -33,6 +35,7 @@ export const siteApplicationsSidebarContent = {
       { name: 'Under Review', href: '/applications?status=under_review', icon: FileText, capability: 'applications' },
       { name: 'Accepted', href: '/applications?status=accepted', icon: CheckCircle, capability: 'applications' },
       { name: 'Rejected', href: '/applications?status=rejected', icon: XCircle, capability: 'applications' },
+      { name: 'Email Settings', href: '/email-settings', icon: Mail, capability: 'forms' },
       { name: 'Access Control', href: '/access', icon: Shield, capability: 'access' },
     ],
   },

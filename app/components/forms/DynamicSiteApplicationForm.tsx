@@ -54,6 +54,7 @@ const ui = {
   tr: {
     loading: 'Form hazırlanıyor...',
     notFound: 'Bu başvuru formu bulunamadı veya yayında değil.',
+    unavailable: 'Şu an form geçici olarak kullanılamıyor. Lütfen daha sonra tekrar deneyin.',
     submit: 'Başvuruyu Gönder',
     submitting: 'Gönderiliyor...',
     success: 'Başvurunuz alındı. En kısa sürede sizinle iletişime geçeceğiz.',
@@ -86,6 +87,7 @@ const ui = {
   en: {
     loading: 'Preparing your form...',
     notFound: 'This application form was not found or is not published.',
+    unavailable: 'This form is temporarily unavailable. Please try again later.',
     submit: 'Submit Application',
     submitting: 'Submitting...',
     success: 'Your application has been received. We will contact you soon.',
@@ -171,6 +173,7 @@ export default function DynamicSiteApplicationForm({
   const [resolvedFormSlug, setResolvedFormSlug] = useState<string>(
     previewMode ? previewConfig?.slug || '' : ''
   );
+  const [loadErrorType, setLoadErrorType] = useState<'not_found' | 'unavailable' | null>(null);
   const [loading, setLoading] = useState(!previewMode);
   const [values, setValues] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -214,6 +217,7 @@ export default function DynamicSiteApplicationForm({
 
     const load = async () => {
       try {
+        setLoadErrorType(null);
         const url = eventSlug
           ? `/api/site-applications/public/forms/by-event/${encodeURIComponent(eventSlug)}?locale=${locale}`
           : `/api/site-applications/public/forms/${encodeURIComponent(formSlug || '')}?locale=${locale}`;
@@ -222,6 +226,9 @@ export default function DynamicSiteApplicationForm({
         if (!res.ok) {
           setFormConfig(null);
           setResolvedFormSlug('');
+          setLoadErrorType(
+            res.status >= 500 ? 'unavailable' : 'not_found'
+          );
           return;
         }
         const data = await res.json();
@@ -231,6 +238,7 @@ export default function DynamicSiteApplicationForm({
       } catch {
         setFormConfig(null);
         setResolvedFormSlug('');
+        setLoadErrorType('unavailable');
       } finally {
         setLoading(false);
       }
@@ -544,7 +552,9 @@ export default function DynamicSiteApplicationForm({
             ? locale === 'tr'
               ? 'Önizleme için soru ekleyin.'
               : 'Add questions to preview the form.'
-            : t.notFound}
+            : loadErrorType === 'unavailable'
+              ? t.unavailable
+              : t.notFound}
         </div>
       </FormShell>
     );

@@ -9,9 +9,10 @@ import {
 } from '@/app/lib/siteApplications/formTypes';
 import { normalizeFieldOptions } from '@/app/lib/siteApplications/forms';
 import {
-  requireSiteApplicationsSuperAdmin,
   requireEventFormsWriteUser,
   requireSiteApplicationsOrEventsUser,
+  requireSiteApplicationsCapability,
+  resolveSiteApplicationsPanelOrganizationScope,
 } from '@/app/api/site-applications/access/_helpers';
 import type { SiteApplicationFormInput } from '@/app/types/siteApplicationForms';
 
@@ -34,7 +35,61 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  let forms = (await attachLinkedEventsToForms(authResult.supabase!, data ?? [])).map(
+  // Tenant scope'u formlara da uygula:
+  // form sadece `created_by` olan kişinin tenant'ıyla eşleşiyorsa listelensin.
+  let scopedFormsData = (data ?? []) as Array<
+    Record<string, unknown> & { created_by?: string | null }
+  >;
+
+  const panelScope = await resolveSiteApplicationsPanelOrganizationScope(
+    authResult.supabase!,
+    authResult.userId || ''
+  );
+
+  if (panelScope.mode === 'none') {
+    return NextResponse.json({ forms: [] });
+  }
+
+  if (panelScope.mode === 'scoped') {
+    const creatorIds = Array.from(
+      new Set(
+        (scopedFormsData ?? [])
+          .map((f) => f.created_by)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0)
+      )
+    );
+
+    if (creatorIds.length === 0) {
+      return NextResponse.json({ forms: [] });
+    }
+
+    const { data: accessRows } = await authResult.supabase!
+      .from('user_module_access')
+      .select('clerk_user_id')
+      .eq('is_enabled', true)
+      .in('module_key', [
+        'site-applications',
+        'site_basvurular',
+        'site-basvurular',
+        'basvurular',
+        'events',
+        'event',
+        'etkinlik',
+        'etkinlikler',
+      ])
+      .in('clerk_user_id', creatorIds)
+      .in('panel_organization_id', panelScope.panelOrganizationIds);
+
+    const allowedCreators = new Set(
+      (accessRows ?? []).map((r: { clerk_user_id: string }) => r.clerk_user_id)
+    );
+
+    scopedFormsData = scopedFormsData.filter(
+      (f) => typeof f.created_by === 'string' && allowedCreators.has(f.created_by)
+    );
+  }
+
+  let forms = (await attachLinkedEventsToForms(authResult.supabase!, scopedFormsData)).map(
     (form) => {
       const form_type = inferFormType(form);
       return { ...form, form_type };
@@ -50,7 +105,7 @@ export async function GET(request: NextRequest) {
   // Soft-repair: wrong form_type='team' on event-titled rows confuses mail/nav.
   // Persist corrected type when we can (best-effort, non-blocking).
   const repairs = forms.filter((form) => {
-    const raw = (data ?? []).find((row) => row.id === form.id);
+    const raw = (scopedFormsData ?? []).find((row) => row.id === form.id);
     return Boolean(raw && raw.form_type !== form.form_type && form.form_type === 'event');
   });
   if (repairs.length > 0) {
@@ -77,7 +132,7 @@ export async function POST(request: NextRequest) {
   const authResult =
     formType === 'event'
       ? await requireEventFormsWriteUser()
-      : await requireSiteApplicationsSuperAdmin();
+      : await requireSiteApplicationsCapability('forms');
   if (authResult.error) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }

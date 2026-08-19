@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { getServiceSupabase } from '@/app/lib/moduleAccess/helpers';
 import { loadUserAccessRows } from '@/app/lib/moduleAccess/rbac';
+import { getModuleAccessDefinition } from '@/app/lib/moduleAccess/registry';
 
 function slugify(input: string): string {
   return input
@@ -56,6 +57,10 @@ export async function GET(request: NextRequest) {
 
   const isSuperAdmin = rows.some((r) => r.is_super_admin === true);
   const moduleKey = request.nextUrl.searchParams.get('moduleKey');
+  const allowedModuleKeys =
+    moduleKey != null
+      ? getModuleAccessDefinition(moduleKey)?.moduleKeys ?? [moduleKey]
+      : null;
 
   if (isSuperAdmin) {
     const { data, error } = await supabase
@@ -81,7 +86,7 @@ export async function GET(request: NextRequest) {
         .filter((r) => {
           if (!r.panel_organization_id) return false;
           if (!moduleKey) return true;
-          return r.module_key === moduleKey;
+          return (allowedModuleKeys ?? []).includes(r.module_key);
         })
         .map((r) => r.panel_organization_id as string)
     ),

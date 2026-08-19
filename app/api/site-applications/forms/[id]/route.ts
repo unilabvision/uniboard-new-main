@@ -5,6 +5,7 @@ import { fetchEventById } from '@/app/lib/siteApplications/events';
 import {
   requireSiteApplicationsOrEventsUser,
   requireEventFormsWriteUser,
+  resolveSiteApplicationsPanelOrganizationScope,
 } from '@/app/api/site-applications/access/_helpers';
 import type { SiteApplicationFormInput } from '@/app/types/siteApplicationForms';
 import {
@@ -29,6 +30,41 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
   if (error || !form) {
     return NextResponse.json({ error: 'Form not found' }, { status: 404 });
+  }
+
+  const panelScope = await resolveSiteApplicationsPanelOrganizationScope(
+    authResult.supabase!,
+    authResult.userId || ''
+  );
+  if (panelScope.mode === 'none') {
+    return NextResponse.json({ error: 'Form not found' }, { status: 404 });
+  }
+  if (panelScope.mode === 'scoped') {
+    const creatorId = (form.created_by ?? null) as string | null;
+    if (!creatorId) {
+      return NextResponse.json({ error: 'Form not found' }, { status: 404 });
+    }
+
+    const { data: ownerRows } = await authResult.supabase!
+      .from('user_module_access')
+      .select('clerk_user_id')
+      .eq('is_enabled', true)
+      .in('module_key', [
+        'site-applications',
+        'site_basvurular',
+        'site-basvurular',
+        'basvurular',
+        'events',
+        'event',
+        'etkinlik',
+        'etkinlikler',
+      ])
+      .eq('clerk_user_id', creatorId)
+      .in('panel_organization_id', panelScope.panelOrganizationIds);
+
+    if (!ownerRows || ownerRows.length === 0) {
+      return NextResponse.json({ error: 'Form not found' }, { status: 404 });
+    }
   }
 
   const { data: fields } = await authResult.supabase!
@@ -58,6 +94,47 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   const authResult = await requireEventFormsWriteUser();
   if (authResult.error) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+  }
+
+  const panelScope = await resolveSiteApplicationsPanelOrganizationScope(
+    authResult.supabase!,
+    authResult.userId || ''
+  );
+  if (panelScope.mode === 'none') {
+    return NextResponse.json({ error: 'Form not found' }, { status: 404 });
+  }
+
+  if (panelScope.mode === 'scoped') {
+    const { data: formRow } = await authResult.supabase!
+      .from(siteApplicationsDb.forms)
+      .select('id, created_by')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (!formRow?.created_by) {
+      return NextResponse.json({ error: 'Form not found' }, { status: 404 });
+    }
+
+    const { data: ownerRows } = await authResult.supabase!
+      .from('user_module_access')
+      .select('clerk_user_id')
+      .eq('is_enabled', true)
+      .in('module_key', [
+        'site-applications',
+        'site_basvurular',
+        'site-basvurular',
+        'basvurular',
+        'events',
+        'event',
+        'etkinlik',
+        'etkinlikler',
+      ])
+      .eq('clerk_user_id', String(formRow.created_by))
+      .in('panel_organization_id', panelScope.panelOrganizationIds);
+
+    if (!ownerRows || ownerRows.length === 0) {
+      return NextResponse.json({ error: 'Form not found' }, { status: 404 });
+    }
   }
 
   const body = (await request.json()) as Partial<SiteApplicationFormInput>;
@@ -196,6 +273,46 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
   const authResult = await requireEventFormsWriteUser();
   if (authResult.error) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+  }
+
+  const panelScope = await resolveSiteApplicationsPanelOrganizationScope(
+    authResult.supabase!,
+    authResult.userId || ''
+  );
+  if (panelScope.mode === 'none') {
+    return NextResponse.json({ error: 'Form not found' }, { status: 404 });
+  }
+  if (panelScope.mode === 'scoped') {
+    const { data: formRow } = await authResult.supabase!
+      .from(siteApplicationsDb.forms)
+      .select('id, created_by')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (!formRow?.created_by) {
+      return NextResponse.json({ error: 'Form not found' }, { status: 404 });
+    }
+
+    const { data: ownerRows } = await authResult.supabase!
+      .from('user_module_access')
+      .select('clerk_user_id')
+      .eq('is_enabled', true)
+      .in('module_key', [
+        'site-applications',
+        'site_basvurular',
+        'site-basvurular',
+        'basvurular',
+        'events',
+        'event',
+        'etkinlik',
+        'etkinlikler',
+      ])
+      .eq('clerk_user_id', String(formRow.created_by))
+      .in('panel_organization_id', panelScope.panelOrganizationIds);
+
+    if (!ownerRows || ownerRows.length === 0) {
+      return NextResponse.json({ error: 'Form not found' }, { status: 404 });
+    }
   }
 
   const { error } = await authResult.supabase!

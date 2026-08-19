@@ -640,7 +640,7 @@ export default function SiteApplicationsListPage({
         )}
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="flex flex-wrap gap-2 mb-4 items-center">
         <Link
           href={buildListHref({ status: null, category: categoryFilter })}
           className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
@@ -664,6 +664,24 @@ export default function SiteApplicationsListPage({
             {t.statusLabels[status]}
           </Link>
         ))}
+        <button
+          type="button"
+          className="ml-auto px-3 py-1.5 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700 transition inline-flex items-center gap-1.5"
+          onClick={() => {
+            const params = new URLSearchParams();
+            if (statusFilter) params.set('status', statusFilter);
+            if (categoryFilter) params.set('category', categoryFilter);
+            if (eventIdParam) params.set('eventId', eventIdParam);
+            if (eventNameParam) params.set('eventName', eventNameParam);
+            if (search) params.set('search', search);
+            params.set('locale', locale);
+            const qs = params.toString();
+            window.open(`/api/site-applications/applications/export${qs ? `?${qs}` : ''}`, '_blank');
+          }}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" /></svg>
+          {locale === 'tr' ? "Excel'e Aktar" : 'Export to Excel'}
+        </button>
       </div>
 
       {showEventColumns && (

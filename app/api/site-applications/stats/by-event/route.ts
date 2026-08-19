@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { siteApplicationsDb, eventApplicationOrFilter } from '@/app/lib/siteApplications/config';
-import { requireSiteApplicationsOrEventsUser } from '@/app/api/site-applications/access/_helpers';
+import {
+  requireSiteApplicationsOrEventsUser,
+  resolveSiteApplicationsTenantScope,
+} from '@/app/api/site-applications/access/_helpers';
 import { fetchActiveEvents } from '@/app/lib/siteApplications/events';
 import { backfillPendingEventApplications } from '@/app/lib/siteApplications/eventAutoAccept';
 import { syncCertificatePaymentsFromOrders } from '@/app/lib/siteApplications/syncPayments';
@@ -49,17 +52,28 @@ export async function GET() {
 
   const supabase = authResult.supabase;
 
+  const tenantScope = await resolveSiteApplicationsTenantScope(
+    supabase,
+    authResult.userId || ''
+  );
+
   await backfillPendingEventApplications(supabase);
   await syncCertificatePaymentsFromOrders(supabase);
 
+  let appsQuery = supabase
+    .from(siteApplicationsDb.applications)
+    .select('id, event_id, event_name, status, source, submission_data, created_at')
+    .or(eventApplicationOrFilter)
+    .order('created_at', { ascending: false });
+
+  if (tenantScope.mode === 'none') {
+    appsQuery = appsQuery.eq('id', '__no_access__');
+  } else if (tenantScope.mode === 'scoped') {
+    appsQuery = appsQuery.in('organization', tenantScope.allowedValues);
+  }
+
   const [{ data: apps, error }, eventsResult] = await Promise.all([
-    supabase
-      .from(siteApplicationsDb.applications)
-      .select(
-        'id, event_id, event_name, status, source, submission_data, created_at'
-      )
-      .or(eventApplicationOrFilter)
-      .order('created_at', { ascending: false }),
+    appsQuery,
     fetchActiveEvents(supabase),
   ]);
 
