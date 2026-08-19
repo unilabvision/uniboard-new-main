@@ -57,7 +57,7 @@ export async function sendSiteApplicationsAccessInviteEmail({
     const supportLabel = tr ? 'Destek' : 'Support';
     const linkHint = tr
       ? 'Buton çalışmıyorsa aşağıdaki bağlantıyı tarayıcınıza yapıştırın:'
-      : 'If the button doesn't work, paste this link into your browser:';
+      : "If the button doesn't work, paste this link into your browser:";
 
     const htmlContent = `
 <!DOCTYPE html>
