@@ -89,12 +89,14 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  let forms = (await attachLinkedEventsToForms(authResult.supabase!, scopedFormsData as Array<{ event_id?: string | null }>)).map(
-    (form) => {
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  let forms: any[] = (await attachLinkedEventsToForms(authResult.supabase!, scopedFormsData as any)).map(
+    (form: any) => {
       const form_type = inferFormType(form);
       return { ...form, form_type };
     }
   );
+  /* eslint-enable @typescript-eslint/no-explicit-any */
 
   if (wantTeam) {
     forms = forms.filter((form) => form.form_type === 'team');
