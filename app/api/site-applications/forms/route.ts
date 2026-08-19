@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  let forms = (await attachLinkedEventsToForms(authResult.supabase!, scopedFormsData)).map(
+  let forms = (await attachLinkedEventsToForms(authResult.supabase!, scopedFormsData as Array<{ event_id?: string | null }>)).map(
     (form) => {
       const form_type = inferFormType(form);
       return { ...form, form_type };
