@@ -130,6 +130,7 @@ export async function GET(request: NextRequest) {
   const courseRows = allRows || [];
   const activeRow = courseRows.find((row) => row.is_active !== false);
   const inactiveRow = courseRows.find((row) => row.is_active === false);
+  const hadActiveCourseAccess = courseRows.some((row) => row.is_active !== false);
 
   let newlyActivated = false;
 
@@ -173,7 +174,9 @@ export async function GET(request: NextRequest) {
     newlyActivated = !error;
   }
 
-  if (newlyActivated) {
+  // Idempotency: only bump participant count when access becomes active
+  // for the first time (no previously-active row for this user+course).
+  if (newlyActivated && !hadActiveCourseAccess) {
     await supabase
       .from('myuni_courses')
       .update({

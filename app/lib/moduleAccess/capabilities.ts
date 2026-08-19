@@ -66,6 +66,11 @@ export const MODULE_CAPABILITIES: Record<string, ModuleCapabilityDef[]> = {
       labelEn: 'Create certificate',
     },
     {
+      key: 'delete',
+      labelTr: 'Sertifika silme',
+      labelEn: 'Delete certificate',
+    },
+    {
       key: 'templates',
       labelTr: 'Şablonlar',
       labelEn: 'Templates',

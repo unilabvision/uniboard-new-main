@@ -6,18 +6,50 @@ import Link from "next/link";
 import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 
+function sanitizeRedirectPath(candidate: string | null, fallback: string) {
+  const raw = candidate?.trim();
+  if (!raw) return fallback;
+
+  // Allow absolute URLs only if they are same-origin; otherwise block.
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    try {
+      const u = new URL(raw);
+      const origin =
+        typeof window !== 'undefined' ? window.location.origin : '';
+      if (origin && u.origin !== origin) return fallback;
+      if (!u.pathname.startsWith('/')) return fallback;
+      return `${u.pathname}${u.search}${u.hash}`;
+    } catch {
+      return fallback;
+    }
+  }
+
+  // Block protocol-relative / javascript / data redirects.
+  if (raw.startsWith('//') || raw.startsWith('javascript:') || raw.startsWith('data:')) {
+    return fallback;
+  }
+
+  // We only allow same-origin relative paths (e.g. `/tr/complete-profile`).
+  if (!raw.startsWith('/')) return fallback;
+  if (raw.includes('\n') || raw.includes('\r') || raw.includes('\0')) return fallback;
+
+  return raw;
+}
+
 export default function Page({ params }: { params: Promise<{ locale: string }> }) {
   const [resolvedParams, setResolvedParams] = useState<{ locale: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentImage, setCurrentImage] = useState(1);
   const [mounted, setMounted] = useState(false);
   const searchParams = useSearchParams();
-  const redirectUrl =
+  const redirectUrl = sanitizeRedirectPath(
     searchParams.get('redirect_url') ||
-    searchParams.get('after_sign_up_url') ||
-    searchParams.get('redirect_url_complete') ||
-    searchParams.get('redirect') ||
-    "/";
+      searchParams.get('after_sign_up_url') ||
+      searchParams.get('redirect_url_complete') ||
+      searchParams.get('redirect') ||
+      '/',
+    '/'
+  );
 
   // Localization - memoized for performance (always call, regardless of resolvedParams)
   const translations = useMemo(() => ({
@@ -45,11 +77,13 @@ export default function Page({ params }: { params: Promise<{ locale: string }> }
   const locale = resolvedParams?.locale || 'en';
   const normalizedLocale = locale?.toLowerCase() === 'tr' ? 'tr' : 'en';
   const t = translations[normalizedLocale];
-  const afterSignUpTarget =
+  const afterSignUpTarget = sanitizeRedirectPath(
     searchParams.get('after_sign_up_url') ||
-    searchParams.get('redirect_url_complete') ||
-    searchParams.get('redirect_url') ||
-    `/${normalizedLocale}/complete-profile`;
+      searchParams.get('redirect_url_complete') ||
+      searchParams.get('redirect_url') ||
+      `/${normalizedLocale}/complete-profile`,
+    `/${normalizedLocale}/complete-profile`
+  );
 
   // Resolve params
   useEffect(() => {

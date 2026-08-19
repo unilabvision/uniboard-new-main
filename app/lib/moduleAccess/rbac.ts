@@ -22,6 +22,7 @@ export const ACCESS_LEVEL_LABELS: Record<
 const VIEWER_EXCLUDED = new Set([
   'edit',
   'create',
+  'delete',
   'issuance',
   'ops',
   'access',
