@@ -10,7 +10,7 @@ import {
   getAbsoluteSiteApplicationPublicPath,
   slugifyFormValue,
 } from '@/app/lib/siteApplications/config';
-import { ArrowLeft, ExternalLink, FormInput, Loader2, Trash2 } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, ExternalLink, FormInput, Loader2, Trash2 } from 'lucide-react';
 import { OpportunityBannerUpload } from '@/app/components/site-applications/OpportunityBannerUpload';
 
 const texts = {
@@ -36,8 +36,11 @@ const texts = {
     location: 'Şehir / konum',
     deadline: 'Son başvuru günü',
     slug: 'Sitedeki adres (son kısım)',
-    publish: 'Sitede yayınla',
-    publishHint: 'Açıkken hem ilan hem başvuru formu görünür.',
+    publish: 'Sitede yayınla (DB)',
+    publishHint:
+      'Bu anahtar veritabanındaki is_active alanını günceller. Bazı özel sayfalar (ör. gonullu-ekip-basvurusu) sitede sabit olabilir; kapalı olsa bile canlıda açık kalabilir.',
+    publishMismatch:
+      'Uyuşmazlık: Panelde yayın kapalı ama bu adres sitede hâlâ açık görünebilir. Asıl kontrol için myunilab sayfasının is_active okuması gerekir.',
     featured: 'Öne çıkar',
     save: 'Kaydet',
     saving: 'Kaydediliyor...',
@@ -77,8 +80,11 @@ const texts = {
     location: 'Location',
     deadline: 'Application deadline',
     slug: 'URL ending',
-    publish: 'Publish on site',
-    publishHint: 'When on, both listing and form are visible.',
+    publish: 'Publish on site (DB)',
+    publishHint:
+      'This toggles is_active in the database. Some special pages may stay live on the site even when this is off.',
+    publishMismatch:
+      'Mismatch: unpublished in the panel, but this URL may still be live. The public site must respect is_active.',
     featured: 'Featured',
     save: 'Save',
     saving: 'Saving...',
@@ -420,6 +426,12 @@ export default function EditOpportunityPage() {
             {t.publish}
           </label>
           <p className="text-xs text-neutral-500 pl-6">{t.publishHint}</p>
+          {!isActive && (
+            <div className="flex gap-2 rounded-lg border border-amber-300/60 bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 text-xs px-3 py-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <p>{t.publishMismatch}</p>
+            </div>
+          )}
           <label className="inline-flex items-center gap-2 text-sm">
             <input type="checkbox" checked={isFeatured} onChange={(e) => setIsFeatured(e.target.checked)} />
             {t.featured}

@@ -239,7 +239,8 @@ export async function POST(request: NextRequest) {
 
       const titleTr = String(formRow.title_tr || slug);
       const titleEn = String(formRow.title_en || titleTr);
-      const isActive = Boolean(formRow.is_active);
+      // Taslak oluştur — sitede ekstra kart çıkmasın; panelden "Yayınla" ile açılır
+      const isActive = false;
 
       const { data: created, error: createErr } = await supabase
         .from(internshipDb.opportunities)
@@ -276,11 +277,6 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
-
-      await supabase
-        .from(siteApplicationsDb.forms)
-        .update({ is_active: isActive, show_on_website: isActive })
-        .eq('id', formRow.id);
 
       return NextResponse.json({ opportunity: created, linked: true, created: true }, { status: 201 });
     }
