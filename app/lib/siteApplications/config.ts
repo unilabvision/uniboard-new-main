@@ -107,6 +107,14 @@ export function getAbsoluteSiteApplicationPublicPath(locale: string, slug: strin
   return toAbsoluteMyuniUrl(getSiteApplicationPublicPath(locale, slug));
 }
 
+export function getOpportunityListingPath(locale: string, slug: string): string {
+  return `/${locale}/stajlar/${slug}`;
+}
+
+export function getAbsoluteOpportunityListingPath(locale: string, slug: string): string {
+  return toAbsoluteMyuniUrl(getOpportunityListingPath(locale, slug));
+}
+
 export function getAbsoluteEventApplicationPath(locale: string, eventSlug: string): string {
   return toAbsoluteMyuniUrl(getEventApplicationPath(locale, eventSlug));
 }

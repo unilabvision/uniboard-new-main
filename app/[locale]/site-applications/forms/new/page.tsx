@@ -17,11 +17,11 @@ import { ArrowLeft, Loader2, Users, Calendar } from 'lucide-react';
 
 const texts = {
   tr: {
-    teamTitle: 'Yeni Ekip Başvuru Formu',
+    teamTitle: 'Yeni Başvuru Formu',
     eventTitle: 'Yeni Etkinlik Başvuru Formu',
     back: 'Formlara Dön',
     forbidden: 'Bu sayfaya erişim yetkiniz bulunmuyor.',
-    teamBadge: 'UNILAB Ekip Başvurusu',
+    teamBadge: 'Site Başvurusu (iş / gönüllü)',
     eventBadge: 'Etkinlik Başvuru Formu',
     titleTr: 'Başlık (TR)',
     titleEn: 'Başlık (EN)',
@@ -34,7 +34,7 @@ const texts = {
     successTr: 'Başarı mesajı (TR)',
     successEn: 'Başarı mesajı (EN)',
     active: 'Formu aktif et',
-    showOnWebsite: 'myunilab.net menüsünde göster',
+    showOnWebsite: 'Sitede yayınla (listelensin)',
     linkedEvent: 'Bağlı etkinlik',
     linkedEventHint: 'Bu form seçilen etkinliğin başvuru sayfasında açılır',
     selectEvent: 'Etkinlik seçin',
@@ -44,13 +44,14 @@ const texts = {
     saving: 'Kaydediliyor...',
     error: 'Form oluşturulamadı',
     eventRequired: 'Lütfen bir etkinlik seçin',
+    titleHint: 'Örn: “ARONIACEAE Staj Başvurusu” veya “Yazılım Mühendisi İş Başvurusu”. UNILAB / gönüllü ekip metni zorunlu değildir.',
   },
   en: {
-    teamTitle: 'New Team Application Form',
+    teamTitle: 'New Application Form',
     eventTitle: 'New Event Application Form',
     back: 'Back to Forms',
-    forbidden: 'Only super admins can access this page.',
-    teamBadge: 'UNILAB Team Application',
+    forbidden: 'You do not have access to this page.',
+    teamBadge: 'Site application (job / volunteer)',
     eventBadge: 'Event Application Form',
     titleTr: 'Title (TR)',
     titleEn: 'Title (EN)',
@@ -63,7 +64,7 @@ const texts = {
     successTr: 'Success message (TR)',
     successEn: 'Success message (EN)',
     active: 'Activate form',
-    showOnWebsite: 'Show in myunilab.net menu',
+    showOnWebsite: 'Publish on site (list publicly)',
     linkedEvent: 'Linked event',
     linkedEventHint: 'This form opens on the selected event application page',
     selectEvent: 'Select an event',
@@ -73,6 +74,7 @@ const texts = {
     saving: 'Saving...',
     error: 'Could not create form',
     eventRequired: 'Please select an event',
+    titleHint: 'E.g. “ARONIACEAE Internship Application” or “Software Engineer Job Application”. UNILAB / volunteer team wording is not required.',
   },
 };
 
@@ -250,6 +252,9 @@ function NewSiteApplicationFormContent({ locale }: { locale: string }) {
           <Field label={t.subtitleTr} value={form.subtitle_tr} onChange={(v) => setForm({ ...form, subtitle_tr: v })} />
           <Field label={t.subtitleEn} value={form.subtitle_en} onChange={(v) => setForm({ ...form, subtitle_en: v })} />
         </div>
+        {isTeam && (
+          <p className="text-xs text-neutral-500 -mt-2">{t.titleHint}</p>
+        )}
 
         {isTeam && (
           <div>

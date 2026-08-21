@@ -8,14 +8,15 @@ export const TEAM_FORM_LEGACY_SLUGS = {
   en: 'team-application',
 } as const;
 
+/** Neutral placeholders — each org sets its own job/volunteer title in the panel. */
 export const TEAM_FORM_DEFAULT_TITLES = {
-  tr: 'UNILAB Ekip Başvurusu',
-  en: 'UNILAB Team Application',
+  tr: '',
+  en: '',
 } as const;
 
 export const TEAM_FORM_DEFAULT_SUBTITLES = {
-  tr: 'UNILAB Vision ekibine katılmak için başvurunu gönder.',
-  en: 'Apply to join the UNILAB Vision team.',
+  tr: '',
+  en: '',
 } as const;
 
 export const EVENT_FORM_LEGACY_SLUGS = {
@@ -143,20 +144,28 @@ export const TEAM_DEFAULT_FIELDS: SiteApplicationFormFieldInput[] = [
     order_index: 5,
   },
   {
+    field_key: 'position',
+    field_type: 'text',
+    label_tr: 'Başvurulan pozisyon / alan',
+    label_en: 'Position / area applied for',
+    required: false,
+    order_index: 6,
+  },
+  {
     field_key: 'motivation',
     field_type: 'textarea',
-    label_tr: 'Neden UNILAB ekibine katılmak istiyorsunuz?',
-    label_en: 'Why do you want to join the UNILAB team?',
+    label_tr: 'Neden başvuruyorsunuz? / Kısa motivasyon',
+    label_en: 'Why are you applying? / Short motivation',
     required: true,
-    order_index: 6,
+    order_index: 7,
   },
   {
     field_key: 'linkedin',
     field_type: 'url',
-    label_tr: 'LinkedIn profili',
-    label_en: 'LinkedIn profile',
+    label_tr: 'LinkedIn / Portfolyo URL',
+    label_en: 'LinkedIn / Portfolio URL',
     required: false,
-    order_index: 7,
+    order_index: 8,
   },
 ];
 
@@ -221,14 +230,14 @@ export function buildEventFormSlugs(eventSlug: string): { slug_tr: string; slug_
 
 export function emptyTeamFormState() {
   return {
-    title_tr: TEAM_FORM_DEFAULT_TITLES.tr,
-    title_en: TEAM_FORM_DEFAULT_TITLES.en,
-    subtitle_tr: TEAM_FORM_DEFAULT_SUBTITLES.tr,
-    subtitle_en: TEAM_FORM_DEFAULT_SUBTITLES.en,
-    slug_tr: TEAM_FORM_LEGACY_SLUGS.tr,
-    slug_en: TEAM_FORM_LEGACY_SLUGS.en,
-    success_message_tr: 'Başvurunuz alındı. UNILAB ekibi en kısa sürede sizinle iletişime geçecek.',
-    success_message_en: 'Your application has been received. The UNILAB team will contact you soon.',
+    title_tr: '',
+    title_en: '',
+    subtitle_tr: '',
+    subtitle_en: '',
+    slug_tr: '',
+    slug_en: '',
+    success_message_tr: 'Başvurunuz alındı. En kısa sürede sizinle iletişime geçilecektir.',
+    success_message_en: 'Your application has been received. We will contact you soon.',
     is_active: false,
     show_on_website: false,
     allows_attachment: true,

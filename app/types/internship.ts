@@ -117,6 +117,11 @@ export interface Opportunity {
   work_mode: string | null;
   application_deadline: string | null;
   form_config_id: string | null;
+  site_form_id?: string | null;
+  panel_organization_id?: string | null;
+  opportunity_type?: 'staj' | 'gonullu' | 'is' | string | null;
+  created_by?: string | null;
+  banner_url?: string | null;
   is_active: boolean;
   is_featured: boolean;
   order_index: number;

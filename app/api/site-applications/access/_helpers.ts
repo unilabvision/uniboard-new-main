@@ -251,6 +251,29 @@ export async function resolveSiteApplicationsPanelOrganizationScope(
   return { mode: 'scoped', panelOrganizationIds };
 }
 
+/**
+ * Resolve a single panel_organization_id for write operations (SMTP, opportunities).
+ * Scoped users: first membership org. Super-admin / all: first non-null org on their access rows.
+ */
+export async function resolvePanelOrganizationIdForWrite(
+  supabase: ReturnType<typeof getServiceSupabase>,
+  userId: string
+): Promise<string | null> {
+  const scope = await resolveSiteApplicationsPanelOrganizationScope(supabase, userId);
+  if (scope.mode === 'none') return null;
+  if (scope.mode === 'scoped') return scope.panelOrganizationIds[0] ?? null;
+
+  const { data: row } = await supabase
+    .from('user_module_access')
+    .select('panel_organization_id')
+    .eq('clerk_user_id', userId)
+    .eq('is_enabled', true)
+    .not('panel_organization_id', 'is', null)
+    .limit(1)
+    .maybeSingle();
+  return row?.panel_organization_id ?? null;
+}
+
 /** Write access for form settings/fields: Events forms OR Site-applications forms OR super-admin. */
 export async function requireEventFormsWriteUser() {
   const { userId } = await auth();

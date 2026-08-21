@@ -7,8 +7,8 @@ import type { SiteApplication } from '@/app/types/siteApplications';
 
 const texts = {
   tr: {
-    title: 'Ekip Başvuruları',
-    subtitle: 'myunilab.net ekip başvuru formlarından gelen başvuruları yönetin',
+    title: 'Site Başvuruları',
+    subtitle: 'Kurumunuzun iş veya gönüllü başvuru formlarından gelen başvuruları yönetin',
     total: 'Toplam',
     forms: 'Aktif Form',
     pending: 'Bekleyen',
@@ -20,8 +20,8 @@ const texts = {
     loading: 'Yükleniyor...',
   },
   en: {
-    title: 'Team Applications',
-    subtitle: 'Manage team applications from myunilab.net forms',
+    title: 'Site Applications',
+    subtitle: 'Manage applications from your organization\'s job or volunteer forms',
     total: 'Total',
     forms: 'Active Forms',
     pending: 'Pending',

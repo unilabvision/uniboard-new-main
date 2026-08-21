@@ -40,8 +40,8 @@ export const MODULE_CAPABILITIES: Record<string, ModuleCapabilityDef[]> = {
     },
     {
       key: 'forms',
-      labelTr: 'Formlar (takım formları)',
-      labelEn: 'Forms (team forms)',
+      labelTr: 'Formlar / ilanlar',
+      labelEn: 'Forms / listings',
     },
     {
       key: 'access',

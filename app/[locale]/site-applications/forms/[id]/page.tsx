@@ -45,12 +45,12 @@ const texts = {
     preview: 'Canlı önizleme',
     openForm: 'Formu aç',
     active: 'Yayında (başvuru alınsın)',
-    showOnWebsite: 'Menüde göster',
+    showOnWebsite: 'Sitede yayınla (listelensin)',
     allowsAttachment: 'Ek dosya izni',
-    teamFileLimit: 'Ekip formu dosya limiti: en fazla 100 MB (depolama). Dosyalar 30 gün sonra otomatik silinir.',
-    teamBadge: 'UNILAB Ekip Başvurusu',
+    teamFileLimit: 'Dosya limiti: en fazla 100 MB. Dosyalar 30 gün sonra otomatik silinir.',
+    teamBadge: 'Site Başvurusu (iş / gönüllü)',
     eventBadge: 'Etkinlik Başvuru Formu',
-    teamMenuHint: 'Ekip başvuruları → Site Başvuruları (Ekip) modülünde listelenir.',
+    teamMenuHint: 'Başlık ve açıklama tamamen size aittir — sitede UNILAB gönüllü metni zorunlu değildir.',
     eventMenuHint: 'Etkinlik formları → Etkinlik Yönetimi → Formlar. Kayıtlar Dashboard’da izlenir.',
     pageAddress: 'Başvuru sayfası (canlı site)',
     connectionTitle: 'Site bağlantısı',
@@ -77,6 +77,7 @@ const texts = {
       'Bağlı etkinlik yayında değil. Sitede form açılmaz — önce etkinliği aktif edin.',
     titleTr: 'Form başlığı (TR)',
     titleEn: 'Form başlığı (EN)',
+    titleHint: 'Örn: şirket adı + “Staj Başvurusu” / “İş Başvurusu”. Bu metin sitede görünür.',
     subtitleTr: 'Açıklama (TR)',
     subtitleEn: 'Açıklama (EN)',
     successTr: 'Başarı mesajı (TR)',
@@ -98,12 +99,12 @@ const texts = {
     preview: 'Live preview',
     openForm: 'Open form',
     active: 'Published (accept submissions)',
-    showOnWebsite: 'Show in menu',
+    showOnWebsite: 'Publish on site (list publicly)',
     allowsAttachment: 'Allow attachments',
-    teamFileLimit: 'Team form file limit: max 100 MB (storage). Files are auto-deleted after 30 days.',
-    teamBadge: 'UNILAB Team Application',
+    teamFileLimit: 'File limit: max 100 MB. Files are auto-deleted after 30 days.',
+    teamBadge: 'Site application (job / volunteer)',
     eventBadge: 'Event Application Form',
-    teamMenuHint: 'Team applications are listed under Team Applications.',
+    teamMenuHint: 'Title and description are yours — UNILAB volunteer wording is not required on the site.',
     eventMenuHint: 'Event forms live under Event Management → Forms. Registrations appear on the Events Dashboard.',
     pageAddress: 'Application page (live site)',
     connectionTitle: 'Site connection',
@@ -131,6 +132,7 @@ const texts = {
       'The linked event is inactive. The public form will not open until the event is activated.',
     titleTr: 'Form title (TR)',
     titleEn: 'Form title (EN)',
+    titleHint: 'E.g. company name + “Internship Application” / “Job Application”. Shown on the site.',
     subtitleTr: 'Description (TR)',
     subtitleEn: 'Description (EN)',
     successTr: 'Success message (TR)',
@@ -743,6 +745,9 @@ export default function EditSiteApplicationFormPage({
           </div>
           <Field label={t.titleTr} value={form.title_tr} onChange={(v) => setForm({ ...form, title_tr: v })} />
           <Field label={t.titleEn} value={form.title_en} onChange={(v) => setForm({ ...form, title_en: v })} />
+          {isTeam && t.titleHint && (
+            <p className="sm:col-span-2 text-xs text-neutral-500 -mt-1">{t.titleHint}</p>
+          )}
           <Field label={t.subtitleTr} value={form.subtitle_tr || ''} onChange={(v) => setForm({ ...form, subtitle_tr: v })} />
           <Field label={t.subtitleEn} value={form.subtitle_en || ''} onChange={(v) => setForm({ ...form, subtitle_en: v })} />
           <Field label={t.successTr} value={form.success_message_tr || ''} onChange={(v) => setForm({ ...form, success_message_tr: v })} />

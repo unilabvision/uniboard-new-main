@@ -2,25 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import {
   requireSiteApplicationsCapability,
-  resolveSiteApplicationsPanelOrganizationScope,
+  resolvePanelOrganizationIdForWrite,
   getServiceSupabase,
 } from '@/app/api/site-applications/access/_helpers';
 import { encryptSmtpPassword } from '@/app/_services/smtpEncryption';
 
 async function resolveOrgId(supabase: ReturnType<typeof getServiceSupabase>, userId: string) {
-  const scope = await resolveSiteApplicationsPanelOrganizationScope(supabase, userId);
-  if (scope.mode === 'none') return null;
-  if (scope.mode === 'scoped') return scope.panelOrganizationIds[0] ?? null;
-  // Super admin: look up their own panel_organization_id from user_module_access
-  const { data: row } = await supabase
-    .from('user_module_access')
-    .select('panel_organization_id')
-    .eq('clerk_user_id', userId)
-    .eq('is_enabled', true)
-    .not('panel_organization_id', 'is', null)
-    .limit(1)
-    .single();
-  return row?.panel_organization_id ?? null;
+  return resolvePanelOrganizationIdForWrite(supabase, userId);
 }
 
 export async function GET(request: NextRequest) {
