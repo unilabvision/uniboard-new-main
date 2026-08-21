@@ -4,10 +4,16 @@ import {
   EVENT_STORAGE_BUCKET,
 } from '@/app/lib/events/config';
 
+export type OpportunityImageKind = 'banner' | 'cover';
+
 export const OPPORTUNITY_STORAGE_FOLDER = 'opportunities';
 export const OPPORTUNITY_BANNER_WIDTH = 1920;
 export const OPPORTUNITY_BANNER_HEIGHT = 600;
 export const OPPORTUNITY_BANNER_ASPECT_CLASS = 'aspect-[1920/600]';
+/** Liste kartı kapak görseli */
+export const OPPORTUNITY_COVER_WIDTH = 800;
+export const OPPORTUNITY_COVER_HEIGHT = 450;
+export const OPPORTUNITY_COVER_ASPECT_CLASS = 'aspect-[16/9]';
 export const OPPORTUNITY_IMAGE_MAX_BYTES = EVENT_IMAGE_MAX_BYTES;
 export const OPPORTUNITY_IMAGE_MIME_TYPES = EVENT_IMAGE_MIME_TYPES;
 export const OPPORTUNITY_STORAGE_BUCKET =
@@ -49,6 +55,7 @@ export function validateOpportunityImageFile(file: {
 }
 
 export function buildOpportunityImageStoragePath(
+  kind: OpportunityImageKind,
   fileName: string,
   opportunitySlug?: string | null
 ): { bucket: string; objectPath: string } {
@@ -59,7 +66,8 @@ export function buildOpportunityImageStoragePath(
     ? safeName.split('.').pop()?.toLowerCase() || 'jpg'
     : 'jpg';
   const stamp = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const objectPath = `${OPPORTUNITY_STORAGE_FOLDER}/banner/${safeSlug}/${stamp}.${ext}`;
+  const folder = kind === 'cover' ? 'cover' : 'banner';
+  const objectPath = `${OPPORTUNITY_STORAGE_FOLDER}/${folder}/${safeSlug}/${stamp}.${ext}`;
   return {
     bucket: OPPORTUNITY_STORAGE_BUCKET,
     objectPath,

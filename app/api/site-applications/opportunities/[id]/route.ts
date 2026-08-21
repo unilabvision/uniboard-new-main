@@ -145,6 +145,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     updates.banner_url =
       raw === null || raw === '' ? null : String(raw).trim() || null;
   }
+  if (body.thumbnail_url !== undefined) {
+    const raw = body.thumbnail_url;
+    updates.thumbnail_url =
+      raw === null || raw === '' ? null : String(raw).trim() || null;
+  }
   if (body.order_index !== undefined) {
     updates.order_index = Number(body.order_index) || 0;
   }

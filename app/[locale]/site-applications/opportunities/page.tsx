@@ -403,10 +403,10 @@ export default function OpportunitiesListPage() {
                   className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-4 py-4"
                 >
                   <div className="min-w-0 flex gap-3">
-                    {opp.banner_url ? (
+                    {(opp.thumbnail_url || opp.banner_url) ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={opp.banner_url}
+                        src={opp.thumbnail_url || opp.banner_url || ''}
                         alt=""
                         className="hidden sm:block w-20 h-12 rounded-md object-cover shrink-0"
                       />

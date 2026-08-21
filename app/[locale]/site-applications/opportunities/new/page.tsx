@@ -10,7 +10,7 @@ import {
   slugifyFormValue,
 } from '@/app/lib/siteApplications/config';
 import { ArrowLeft, ExternalLink, Loader2 } from 'lucide-react';
-import { OpportunityBannerUpload } from '@/app/components/site-applications/OpportunityBannerUpload';
+import { OpportunityImageUpload } from '@/app/components/site-applications/OpportunityBannerUpload';
 
 const texts = {
   tr: {
@@ -41,12 +41,17 @@ const texts = {
     error: 'Kaydedilemedi',
     liveListing: 'İlan linki',
     liveForm: 'Başvuru linki',
-    hint: 'Kayıt hem ilan sayfasını hem başvuru formunu oluşturur. Banner’ı aşağıdan yükleyebilirsiniz.',
-    banner: 'Banner (üst görsel)',
-    bannerHint: 'Sürükleyip bırakın veya tıklayın. Önerilen: 1920×600.',
+    hint: 'Kayıt hem ilan sayfasını hem başvuru formunu oluşturur. Kapak ve banner’ı aşağıdan yükleyebilirsiniz.',
+    banner: 'Banner (detay sayfası)',
+    bannerHint: 'Detay sayfasının üst görseli. Önerilen: 1920×600.',
     bannerUpload: 'Görsel seç',
     bannerRemove: 'Kaldır',
     bannerUploading: 'Yükleniyor...',
+    cover: 'Kapak fotoğrafı (liste kartı)',
+    coverHint: '/stajlar listesindeki kart görseli. Önerilen: 800×450.',
+    coverUpload: 'Kapak seç',
+    coverRemove: 'Kaldır',
+    coverUploading: 'Yükleniyor...',
   },
   en: {
     title: 'New listing',
@@ -76,12 +81,17 @@ const texts = {
     error: 'Could not save',
     liveListing: 'Listing link',
     liveForm: 'Apply link',
-    hint: 'Creates both the listing page and the application form. Upload the banner below.',
-    banner: 'Banner image',
-    bannerHint: 'Drag and drop or click. Recommended: 1920×600.',
+    hint: 'Creates both the listing page and the application form. Upload cover and banner below.',
+    banner: 'Banner (detail page)',
+    bannerHint: 'Hero image on the detail page. Recommended: 1920×600.',
     bannerUpload: 'Choose image',
     bannerRemove: 'Remove',
     bannerUploading: 'Uploading...',
+    cover: 'Cover photo (list card)',
+    coverHint: 'Image on the /stajlar list card. Recommended: 800×450.',
+    coverUpload: 'Choose cover',
+    coverRemove: 'Remove',
+    coverUploading: 'Uploading...',
   },
 };
 
@@ -115,6 +125,7 @@ export default function NewOpportunityPage() {
   const [isActive, setIsActive] = useState(false);
   const [isFeatured, setIsFeatured] = useState(false);
   const [bannerUrl, setBannerUrl] = useState('');
+  const [thumbnailUrl, setThumbnailUrl] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -153,6 +164,7 @@ export default function NewOpportunityPage() {
           is_active: isActive,
           is_featured: isFeatured,
           banner_url: bannerUrl || null,
+          thumbnail_url: thumbnailUrl || null,
         }),
       });
       const data = await res.json();
@@ -283,7 +295,20 @@ export default function NewOpportunityPage() {
           <p className="text-xs text-neutral-500 mt-1">{t.slugHint}</p>
         </div>
 
-        <OpportunityBannerUpload
+        <OpportunityImageUpload
+          kind="cover"
+          value={thumbnailUrl}
+          onChange={setThumbnailUrl}
+          slug={slug}
+          label={t.cover}
+          hint={t.coverHint}
+          uploadLabel={t.coverUpload}
+          removeLabel={t.coverRemove}
+          uploadingLabel={t.coverUploading}
+        />
+
+        <OpportunityImageUpload
+          kind="banner"
           value={bannerUrl}
           onChange={setBannerUrl}
           slug={slug}

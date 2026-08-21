@@ -320,6 +320,10 @@ export async function POST(request: NextRequest) {
     typeof body.banner_url === 'string' && body.banner_url.trim()
       ? body.banner_url.trim()
       : null;
+  const thumbnailUrl =
+    typeof body.thumbnail_url === 'string' && body.thumbnail_url.trim()
+      ? body.thumbnail_url.trim()
+      : null;
   const existingFormId =
     typeof body.existing_form_id === 'string' && body.existing_form_id.trim()
       ? body.existing_form_id.trim()
@@ -471,6 +475,7 @@ export async function POST(request: NextRequest) {
     is_active: isActive,
     is_featured: isFeatured,
     banner_url: bannerUrl,
+    thumbnail_url: thumbnailUrl,
     order_index: 0,
     updated_at: new Date().toISOString(),
   };

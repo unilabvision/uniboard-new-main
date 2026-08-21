@@ -122,6 +122,7 @@ export interface Opportunity {
   opportunity_type?: 'staj' | 'gonullu' | 'is' | string | null;
   created_by?: string | null;
   banner_url?: string | null;
+  thumbnail_url?: string | null;
   is_active: boolean;
   is_featured: boolean;
   order_index: number;

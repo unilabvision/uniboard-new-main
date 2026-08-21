@@ -43,6 +43,7 @@ export const opportunityColumns = [
   'opportunity_type',
   'created_by',
   'banner_url',
+  'thumbnail_url',
   'is_active',
   'is_featured',
   'order_index',

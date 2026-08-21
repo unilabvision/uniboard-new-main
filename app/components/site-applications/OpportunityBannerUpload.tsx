@@ -6,9 +6,14 @@ import {
   OPPORTUNITY_BANNER_ASPECT_CLASS,
   OPPORTUNITY_BANNER_HEIGHT,
   OPPORTUNITY_BANNER_WIDTH,
+  OPPORTUNITY_COVER_ASPECT_CLASS,
+  OPPORTUNITY_COVER_HEIGHT,
+  OPPORTUNITY_COVER_WIDTH,
+  type OpportunityImageKind,
 } from '@/app/lib/siteApplications/opportunityStorage';
 
 type Props = {
+  kind: OpportunityImageKind;
   value: string;
   onChange: (url: string) => void;
   slug?: string;
@@ -19,7 +24,8 @@ type Props = {
   uploadingLabel: string;
 };
 
-export function OpportunityBannerUpload({
+export function OpportunityImageUpload({
+  kind,
   value,
   onChange,
   slug,
@@ -34,12 +40,19 @@ export function OpportunityBannerUpload({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const isBanner = kind === 'banner';
+  const aspectClass = isBanner ? OPPORTUNITY_BANNER_ASPECT_CLASS : OPPORTUNITY_COVER_ASPECT_CLASS;
+  const dimLabel = isBanner
+    ? `${OPPORTUNITY_BANNER_WIDTH}×${OPPORTUNITY_BANNER_HEIGHT} px`
+    : `${OPPORTUNITY_COVER_WIDTH}×${OPPORTUNITY_COVER_HEIGHT} px`;
+
   const uploadFile = async (file: File) => {
     setError(null);
     setUploading(true);
     try {
       const body = new FormData();
       body.append('file', file);
+      body.append('kind', kind);
       if (slug) body.append('slug', slug);
       const res = await fetch('/api/site-applications/opportunities/upload', {
         method: 'POST',
@@ -64,9 +77,7 @@ export function OpportunityBannerUpload({
         <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
           {label}
         </label>
-        <span className="text-xs text-neutral-500 whitespace-nowrap">
-          {OPPORTUNITY_BANNER_WIDTH}×{OPPORTUNITY_BANNER_HEIGHT} px
-        </span>
+        <span className="text-xs text-neutral-500 whitespace-nowrap">{dimLabel}</span>
       </div>
       <p className="text-xs text-neutral-500">{hint}</p>
 
@@ -91,7 +102,7 @@ export function OpportunityBannerUpload({
           const file = e.dataTransfer.files?.[0];
           if (file) void uploadFile(file);
         }}
-        className={`relative overflow-hidden rounded-xl border-2 border-dashed transition-colors cursor-pointer ${OPPORTUNITY_BANNER_ASPECT_CLASS} ${
+        className={`relative overflow-hidden rounded-xl border-2 border-dashed transition-colors cursor-pointer ${aspectClass} ${
           dragging
             ? 'border-[#990000] bg-[#990000]/5'
             : 'border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-900/40 hover:border-neutral-400'
@@ -154,4 +165,11 @@ export function OpportunityBannerUpload({
       {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
   );
+}
+
+/** @deprecated Use OpportunityImageUpload with kind="banner" */
+export function OpportunityBannerUpload(
+  props: Omit<Props, 'kind'>
+) {
+  return <OpportunityImageUpload {...props} kind="banner" />;
 }

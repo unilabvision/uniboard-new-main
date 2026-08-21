@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   buildOpportunityImageStoragePath,
   validateOpportunityImageFile,
+  type OpportunityImageKind,
 } from '@/app/lib/siteApplications/opportunityStorage';
 import { requireSiteApplicationsCapability } from '@/app/api/site-applications/access/_helpers';
+
+const ALLOWED_KINDS = new Set<OpportunityImageKind>(['banner', 'cover']);
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,9 +21,14 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get('file');
     const slug = String(formData.get('slug') || '').trim() || null;
+    const kindRaw = String(formData.get('kind') || 'banner').trim() as OpportunityImageKind;
 
     if (!(file instanceof File)) {
       return NextResponse.json({ error: 'Dosya gerekli' }, { status: 400 });
+    }
+
+    if (!ALLOWED_KINDS.has(kindRaw)) {
+      return NextResponse.json({ error: 'Geçersiz görsel türü (banner | cover)' }, { status: 400 });
     }
 
     const validationError = validateOpportunityImageFile({
@@ -32,7 +40,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: validationError }, { status: 400 });
     }
 
-    const { bucket, objectPath } = buildOpportunityImageStoragePath(file.name, slug);
+    const { bucket, objectPath } = buildOpportunityImageStoragePath(kindRaw, file.name, slug);
     const buffer = Buffer.from(await file.arrayBuffer());
     const { error: uploadError } = await authResult.supabase.storage
       .from(bucket)
@@ -43,7 +51,7 @@ export async function POST(request: NextRequest) {
       });
 
     if (uploadError) {
-      console.error('Opportunity banner upload error:', uploadError);
+      console.error('Opportunity image upload error:', uploadError);
       return NextResponse.json(
         {
           error:
@@ -69,6 +77,7 @@ export async function POST(request: NextRequest) {
       url: publicData.publicUrl,
       bucket,
       path: objectPath,
+      kind: kindRaw,
     });
   } catch (err) {
     console.error('Opportunity upload error:', err);

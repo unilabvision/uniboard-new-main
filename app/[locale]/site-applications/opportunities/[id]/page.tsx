@@ -11,7 +11,7 @@ import {
   slugifyFormValue,
 } from '@/app/lib/siteApplications/config';
 import { ArrowLeft, AlertTriangle, ExternalLink, FormInput, Loader2, Trash2 } from 'lucide-react';
-import { OpportunityBannerUpload } from '@/app/components/site-applications/OpportunityBannerUpload';
+import { OpportunityImageUpload } from '@/app/components/site-applications/OpportunityBannerUpload';
 
 const texts = {
   tr: {
@@ -36,11 +36,13 @@ const texts = {
     location: 'Şehir / konum',
     deadline: 'Son başvuru günü',
     slug: 'Sitedeki adres (son kısım)',
-    publish: 'Sitede yayınla (DB)',
+    publish: 'Sitede yayınla',
     publishHint:
-      'Bu anahtar veritabanındaki is_active alanını günceller. Bazı özel sayfalar (ör. gonullu-ekip-basvurusu) sitede sabit olabilir; kapalı olsa bile canlıda açık kalabilir.',
+      'Açıkken bu kayıt /stajlar listesinde görünür (myuni_opportunities). Kapalıyken listeden düşmesi için sitenin is_active filtrelemesi gerekir.',
     publishMismatch:
-      'Uyuşmazlık: Panelde yayın kapalı ama bu adres sitede hâlâ açık görünebilir. Asıl kontrol için myunilab sayfasının is_active okuması gerekir.',
+      'Panel kapalı ama kart sitede duruyorsa site is_active’i yok sayıyor demektir — myunilab listesinde is_active=true filtresi eklenmeli.',
+    publishDuplicateWarn:
+      'Yayın açık: liste DB kaydını gösterir. Aynı slug için sabit kart da varsa çift görünür; sabiti kaldırın.',
     featured: 'Öne çıkar',
     save: 'Kaydet',
     saving: 'Kaydediliyor...',
@@ -52,11 +54,16 @@ const texts = {
     delete: 'İlanı sil',
     deleteConfirm: 'İlan silinsin mi? Form pasife alınır.',
     deleting: 'Siliniyor...',
-    banner: 'Banner (üst görsel)',
-    bannerHint: 'Sitedeki büyük üst görsel. Buradan yükleyin.',
+    banner: 'Banner (detay sayfası üst görsel)',
+    bannerHint: 'İlan detay sayfasının en üstündeki geniş görsel.',
     bannerUpload: 'Görsel seç',
     bannerRemove: 'Kaldır',
     bannerUploading: 'Yükleniyor...',
+    cover: 'Kapak fotoğrafı (liste kartı)',
+    coverHint: '/stajlar listesindeki kartın görseli. Yoksa kart boş çanta ikonu gösterir.',
+    coverUpload: 'Kapak seç',
+    coverRemove: 'Kaldır',
+    coverUploading: 'Yükleniyor...',
   },
   en: {
     title: 'Edit listing',
@@ -80,11 +87,13 @@ const texts = {
     location: 'Location',
     deadline: 'Application deadline',
     slug: 'URL ending',
-    publish: 'Publish on site (DB)',
+    publish: 'Publish on site (DB list)',
     publishHint:
-      'This toggles is_active in the database. Some special pages may stay live on the site even when this is off.',
+      'When on, this row appears as a DB card on /stajlar. If the site also has a hardcoded card for the same slug, you get a duplicate — it does not merge into the existing card.',
     publishMismatch:
-      'Mismatch: unpublished in the panel, but this URL may still be live. The public site must respect is_active.',
+      'Mismatch: off in the panel, but the page may stay live (hardcoded). Turning publish on does not update that card; it may add a second list item.',
+    publishDuplicateWarn:
+      'Warning: if a card already exists on the site for this URL, publishing adds a second card. Remove the hardcoded card on myunilab first, or use DB only.',
     featured: 'Featured',
     save: 'Save',
     saving: 'Saving...',
@@ -96,11 +105,16 @@ const texts = {
     delete: 'Delete listing',
     deleteConfirm: 'Delete this listing? The form will be deactivated.',
     deleting: 'Deleting...',
-    banner: 'Banner image',
-    bannerHint: 'Large image at the top of the listing. Upload here.',
+    banner: 'Banner (detail page hero)',
+    bannerHint: 'Wide image at the top of the listing detail page.',
     bannerUpload: 'Choose image',
     bannerRemove: 'Remove',
     bannerUploading: 'Uploading...',
+    cover: 'Cover photo (list card)',
+    coverHint: 'Image on the /stajlar list card. Without it the card shows a placeholder.',
+    coverUpload: 'Choose cover',
+    coverRemove: 'Remove',
+    coverUploading: 'Uploading...',
   },
 };
 
@@ -152,6 +166,7 @@ export default function EditOpportunityPage() {
   const [isActive, setIsActive] = useState(false);
   const [isFeatured, setIsFeatured] = useState(false);
   const [bannerUrl, setBannerUrl] = useState('');
+  const [thumbnailUrl, setThumbnailUrl] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
@@ -174,6 +189,7 @@ export default function EditOpportunityPage() {
     setIsActive(Boolean(row.is_active));
     setIsFeatured(Boolean(row.is_featured));
     setBannerUrl(row.banner_url || '');
+    setThumbnailUrl(row.thumbnail_url || '');
   }, []);
 
   useEffect(() => {
@@ -222,6 +238,7 @@ export default function EditOpportunityPage() {
           is_active: isActive,
           is_featured: isFeatured,
           banner_url: bannerUrl || null,
+          thumbnail_url: thumbnailUrl || null,
         }),
       });
       const data = await res.json();
@@ -380,7 +397,20 @@ export default function EditOpportunityPage() {
           />
         </div>
 
-        <OpportunityBannerUpload
+        <OpportunityImageUpload
+          kind="cover"
+          value={thumbnailUrl}
+          onChange={setThumbnailUrl}
+          slug={slug}
+          label={t.cover}
+          hint={t.coverHint}
+          uploadLabel={t.coverUpload}
+          removeLabel={t.coverRemove}
+          uploadingLabel={t.coverUploading}
+        />
+
+        <OpportunityImageUpload
+          kind="banner"
           value={bannerUrl}
           onChange={setBannerUrl}
           slug={slug}
@@ -426,6 +456,12 @@ export default function EditOpportunityPage() {
             {t.publish}
           </label>
           <p className="text-xs text-neutral-500 pl-6">{t.publishHint}</p>
+          {isActive && (
+            <div className="flex gap-2 rounded-lg border border-amber-300/60 bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 text-xs px-3 py-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <p>{t.publishDuplicateWarn}</p>
+            </div>
+          )}
           {!isActive && (
             <div className="flex gap-2 rounded-lg border border-amber-300/60 bg-amber-50 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 text-xs px-3 py-2">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
