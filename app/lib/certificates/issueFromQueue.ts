@@ -15,6 +15,7 @@ export type IssueRequestItem = {
   organizationName?: string;
   organizationAbbreviation?: string;
   instructor?: string;
+  duration?: string;
   description?: string;
   customMessage?: string;
   locale?: string;
@@ -180,7 +181,7 @@ export async function issueCertificatesFromQueue(
           coursename: courseName,
           issuedate: formatIssueDateForDb(),
           instructor: params.instructor || '',
-          duration: '',
+          duration: params.duration || '',
           language: locale === 'en' ? 'en' : 'tr',
           certificate_title: title,
           provider_text: fieldTexts.provider_text,

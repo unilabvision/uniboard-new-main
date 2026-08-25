@@ -407,7 +407,7 @@ export default function EditTemplatePage() {
       layout: {
         title_position: { x: 50, y: 20, enabled: true, align: 'center', x_manual: 50, y_manual: 20 },
         name_position: { x: 50, y: 40, enabled: true, align: 'center', x_manual: 50, y_manual: 40 },
-        description_position: { x: 50, y: 55, enabled: true, align: 'center', x_manual: 50, y_manual: 55 },
+        description_position: { x: 12, y: 54, enabled: true, align: 'left', x_manual: 12, y_manual: 54 },
         course_name_position: { x: 50, y: 45, enabled: true, align: 'center', x_manual: 50, y_manual: 45 },
         ...balancedMetaLayout(),
       }
@@ -563,7 +563,7 @@ export default function EditTemplatePage() {
         const defaultLayout = {
           title_position: { x: 50, y: 20, enabled: true, align: 'center' as const, x_manual: 50, y_manual: 20 },
           name_position: { x: 50, y: 40, enabled: true, align: 'center' as const, x_manual: 50, y_manual: 40 },
-          description_position: { x: 50, y: 55, enabled: true, align: 'center' as const, x_manual: 50, y_manual: 55 },
+          description_position: { x: 12, y: 54, enabled: true, align: 'left' as const, x_manual: 12, y_manual: 54 },
           course_name_position: { x: 50, y: 45, enabled: true, align: 'center' as const, x_manual: 50, y_manual: 45 },
           ...balancedMetaLayout(),
         };
@@ -591,14 +591,25 @@ export default function EditTemplatePage() {
             x_manual: existingLayout.name_position?.x_manual ?? existingLayout.name_position?.x ?? defaultLayout.name_position.x,
             y_manual: existingLayout.name_position?.y_manual ?? existingLayout.name_position?.y ?? defaultLayout.name_position.y
           },
-          description_position: {
-            x: existingLayout.description_position?.x ?? defaultLayout.description_position.x,
-            y: existingLayout.description_position?.y ?? defaultLayout.description_position.y,
-            enabled: existingLayout.description_position?.enabled ?? true,
-            align: existingLayout.description_position?.align ?? 'center',
-            x_manual: existingLayout.description_position?.x_manual ?? existingLayout.description_position?.x ?? defaultLayout.description_position.x,
-            y_manual: existingLayout.description_position?.y_manual ?? existingLayout.description_position?.y ?? defaultLayout.description_position.y
-          },
+          description_position: (() => {
+            const existing = existingLayout.description_position;
+            const isNarrowCenter =
+              existing &&
+              (existing.align === 'center' || existing.align == null) &&
+              typeof (existing.x ?? existing.x_manual) === 'number' &&
+              Math.abs(Number(existing.x ?? existing.x_manual) - 50) <= 2.5;
+            if (isNarrowCenter || !existing) {
+              return { ...defaultLayout.description_position };
+            }
+            return {
+              x: existing.x ?? defaultLayout.description_position.x,
+              y: existing.y ?? defaultLayout.description_position.y,
+              enabled: existing.enabled ?? true,
+              align: existing.align ?? 'left',
+              x_manual: existing.x_manual ?? existing.x ?? defaultLayout.description_position.x,
+              y_manual: existing.y_manual ?? existing.y ?? defaultLayout.description_position.y,
+            };
+          })(),
           institution_position: metaDefaults
             ? { ...metaDefaults.institution_position }
             : {
@@ -861,7 +872,7 @@ export default function EditTemplatePage() {
         layout: {
           title_position: { x: 50, y: 20, enabled: true, align: 'center', x_manual: 50, y_manual: 20 },
           name_position: { x: 50, y: 40, enabled: true, align: 'center', x_manual: 50, y_manual: 40 },
-          description_position: { x: 50, y: 55, enabled: true, align: 'center', x_manual: 50, y_manual: 55 },
+          description_position: { x: 12, y: 54, enabled: true, align: 'left', x_manual: 12, y_manual: 54 },
           course_name_position: { x: 50, y: 45, enabled: true, align: 'center', x_manual: 50, y_manual: 45 },
           ...balancedMetaLayout(),
         }

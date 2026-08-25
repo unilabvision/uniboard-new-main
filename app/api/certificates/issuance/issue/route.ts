@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
         ? String(body.organizationAbbreviation)
         : undefined,
       instructor: body.instructor ? String(body.instructor) : undefined,
+      duration: body.duration ? String(body.duration) : undefined,
       description: body.description ? String(body.description) : undefined,
       customMessage: body.customMessage ? String(body.customMessage) : undefined,
       locale: body.locale === 'en' ? 'en' : 'tr',

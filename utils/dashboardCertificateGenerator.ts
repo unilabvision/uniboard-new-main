@@ -155,8 +155,8 @@ export const generateSampleCertificateData = (language: string = 'tr'): Certific
     completion_text: defaultTexts.completion_text,
     description:
       language === 'en'
-        ? 'This is a sample description for preview purposes only. The actual certificate content will be different.'
-        : 'Bu sadece önizleme amaçlı örnek bir açıklamadır. Gerçek sertifika içeriği farklı olacaktır.',
+        ? 'This is a longer sample description for preview purposes only, written so the text stretches clearly from left to right across the certificate canvas. The actual certificate content will be different and may include program details, achievements, and completion notes.'
+        : 'Bu sadece önizleme amaçlı, sertifika üzerinde soldan sağa uzayan uzun bir örnek açıklamadır. Gerçek sertifika içeriği farklı olacak; program detayları, kazanımlar ve tamamlanma notları burada yer alabilir.',
     duration: language === 'en' ? '40 hours' : '40 saat',
   };
 };

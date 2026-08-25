@@ -65,12 +65,16 @@ export interface CertificateRenderData {
   issuedate: string;
   organization?: string;
   instructor?: string;
+  /** Bazı kaynaklar instructor yerine signature kullanır */
+  signature?: string;
   language?: string;
   certificate_title?: string;
   completion_text?: string;
   description?: string;
   certificate_number_label?: string;
   duration?: string;
+  totalHours?: string;
+  total_hours?: string;
 }
 
 const REFERENCE_WIDTH = 1700;
@@ -124,18 +128,18 @@ export const DEFAULT_DESIGN_SETTINGS: TemplateDesignSettings = {
     duration: 20,
   },
   layout: {
-    // Merkez: başlık / isim / kurs / açıklama
+    // Merkez: başlık / isim / kurs — açıklama sola yayılır
     title_position: DEFAULT_POSITION(50, 18),
     name_position: DEFAULT_POSITION(50, 38),
     course_name_position: DEFAULT_POSITION(50, 46),
-    description_position: DEFAULT_POSITION(50, 56),
+    description_position: DEFAULT_POSITION(10, 50, 'left'),
     // Sol meta (şablon görselindeki Sertifika No / Tarih / Süre etiketlerinin değeri)
     institution_position: { ...DEFAULT_POSITION(38, 71.5, 'left'), enabled: false },
     certificate_no_position: DEFAULT_POSITION(38, 71.5, 'left'),
     date_position: DEFAULT_POSITION(38, 77.5, 'left'),
     duration_position: DEFAULT_POSITION(38, 83.5, 'left'),
-    // Sağ: imza
-    signature_position: DEFAULT_POSITION(76, 83.5, 'center'),
+    // Sağ: imza çizgisinin üstü
+    signature_position: DEFAULT_POSITION(76, 79, 'center'),
   },
 };
 
@@ -223,6 +227,21 @@ export const normalizeDesignSettings = (
   const layoutSrc = partial?.layout || ({} as TemplateDesignSettings['layout']);
   const legacyMeta = isLegacyScatteredMetaLayout(layoutSrc);
   const balanced = balancedMetaLayout();
+  const descRaw = layoutSrc.description_position;
+  // Ortalı/dar eski açıklama → sola yayılmış okunabilir gövde
+  const shouldWidenDescription =
+    !descRaw ||
+    descRaw.align === 'center' ||
+    descRaw.align == null ||
+    approxPos(descRaw.x ?? descRaw.x_manual, 50, 8);
+
+  const durationRaw = layoutSrc.duration_position;
+  const shouldResetDuration =
+    legacyMeta ||
+    !durationRaw ||
+    durationRaw.enabled === false ||
+    approxPos(durationRaw.x ?? durationRaw.x_manual, 20) ||
+    approxPos(durationRaw.x ?? durationRaw.x_manual, 8.9);
 
   return {
     fonts,
@@ -235,12 +254,23 @@ export const normalizeDesignSettings = (
       name_position: layoutSrc.name_position
         ? normalizePosition(layoutSrc.name_position, DEFAULT_DESIGN_SETTINGS.layout.name_position)
         : { ...DEFAULT_DESIGN_SETTINGS.layout.name_position, enabled: false },
-      description_position: layoutSrc.description_position
-        ? normalizePosition(
-            layoutSrc.description_position,
+      description_position: shouldWidenDescription
+        ? {
+            ...DEFAULT_DESIGN_SETTINGS.layout.description_position,
+            enabled: descRaw?.enabled !== false,
+          }
+        : normalizePosition(
+            {
+              ...descRaw,
+              align: 'left',
+              x: Math.min(asFiniteNumber(descRaw.x, 12), 14),
+              x_manual: Math.min(
+                asFiniteNumber(descRaw.x_manual ?? descRaw.x, 12),
+                14
+              ),
+            },
             DEFAULT_DESIGN_SETTINGS.layout.description_position
-          )
-        : { ...DEFAULT_DESIGN_SETTINGS.layout.description_position, enabled: false },
+          ),
       institution_position: legacyMeta
         ? { ...balanced.institution_position }
         : layoutSrc.institution_position
@@ -276,15 +306,12 @@ export const normalizeDesignSettings = (
             DEFAULT_DESIGN_SETTINGS.layout.course_name_position
           )
         : { ...DEFAULT_DESIGN_SETTINGS.layout.course_name_position, enabled: false },
-      duration_position: legacyMeta || !layoutSrc.duration_position
-        ? {
-            ...balanced.duration_position,
-            enabled: layoutSrc.duration_position?.enabled !== false,
-          }
-        : normalizePosition(
-            layoutSrc.duration_position,
-            DEFAULT_DESIGN_SETTINGS.layout.duration_position
-          ),
+      duration_position: shouldResetDuration
+        ? { ...balanced.duration_position, enabled: true }
+        : {
+            ...normalizePosition(durationRaw, DEFAULT_DESIGN_SETTINGS.layout.duration_position),
+            enabled: true,
+          },
     },
   };
 };
@@ -382,9 +409,10 @@ const drawMultilineText = (
   x: number,
   y: number,
   maxWidth: number,
-  fontSize: number
+  fontSize: number,
+  options?: { maxBottom?: number; alignTop?: boolean }
 ) => {
-  const words = text.split(' ');
+  const words = text.split(/\s+/).filter(Boolean);
   const lines: string[] = [];
   let currentLine = words[0] || '';
 
@@ -398,13 +426,49 @@ const drawMultilineText = (
       currentLine = testLine;
     }
   }
-  lines.push(currentLine);
+  if (currentLine) lines.push(currentLine);
 
-  const lineHeight = fontSize * 1.2;
-  lines.forEach((line, index) => {
-    ctx.fillText(line, x, y + index * lineHeight);
+  const lineHeight = fontSize * 1.38;
+  let visibleLines = lines;
+  if (options?.maxBottom != null && Number.isFinite(options.maxBottom)) {
+    const maxLines = Math.max(1, Math.floor((options.maxBottom - y) / lineHeight) + 1);
+    if (lines.length > maxLines) {
+      visibleLines = lines.slice(0, maxLines);
+      const last = visibleLines[visibleLines.length - 1] || '';
+      visibleLines[visibleLines.length - 1] =
+        last.length > 3 ? `${last.replace(/\s+\S*$/, '')}…` : `${last}…`;
+    }
+  }
+
+  const startY = options?.alignTop
+    ? y
+    : y - ((visibleLines.length - 1) * lineHeight) / 2;
+  visibleLines.forEach((line, index) => {
+    ctx.fillText(line, x, startY + index * lineHeight);
   });
 };
+
+/** Süre: duration alanı, totalHours veya açıklama metninden (örn. "10 saatlik") */
+export const resolveDurationValue = (data: CertificateRenderData): string => {
+  for (const candidate of [data.duration, data.totalHours, data.total_hours]) {
+    const value = String(candidate || '').trim();
+    if (value) return value;
+  }
+
+  const desc = String(data.description || data.completion_text || '');
+  const trMatch = desc.match(/(\d+(?:[.,]\d+)?)\s*saat(?:lik)?/i);
+  if (trMatch) {
+    return `${trMatch[1].replace(',', '.')} saat`;
+  }
+  const enMatch = desc.match(/(\d+(?:[.,]\d+)?)\s*-?\s*hours?\b/i);
+  if (enMatch) {
+    return `${enMatch[1]} hours`;
+  }
+  return '';
+};
+
+export const resolveInstructorName = (data: CertificateRenderData): string =>
+  String(data.instructor || data.signature || '').trim();
 
 export const renderCertificateFields = (
   ctx: CanvasRenderingContext2D,
@@ -434,7 +498,7 @@ export const renderCertificateFields = (
     pos: { x: number; align: string },
     preferredRatio = 0.58
   ) => {
-    const margin = canvasWidth * 0.04;
+    const margin = canvasWidth * 0.06;
     if (pos.align === 'left') {
       return Math.max(40, Math.min(canvasWidth * preferredRatio, canvasWidth - pos.x - margin));
     }
@@ -462,10 +526,17 @@ export const renderCertificateFields = (
     ctx.fillText(formatCertificateDate(data.issuedate, data.language), datePos.x, datePos.y);
   }
 
-  const durationPos = calculatePosition(layout.duration_position, canvasWidth, canvasHeight);
-  const durationValue = String(data.duration || '').trim();
+  const durationValue = resolveDurationValue(data);
+  let durationPos = calculatePosition(layout.duration_position, canvasWidth, canvasHeight);
+  if (!durationPos && durationValue) {
+    durationPos = calculatePosition(
+      { ...DEFAULT_DESIGN_SETTINGS.layout.duration_position, enabled: true },
+      canvasWidth,
+      canvasHeight
+    );
+  }
   if (durationPos && durationValue) {
-    // Şablon görselinde "Süre :" etiketi varsa sadece değeri çiz (çift etiket olmasın)
+    // Şablon görselinde "Süre :" etiketi varsa sadece değeri çiz
     ctx.fillStyle = colors.duration || colors.secondary;
     ctx.font = `500 ${Math.round((fontSizes.duration || fontSizes.date || 14) * fontScale)}px ${durationFont}`;
     ctx.textAlign = durationPos.align as CanvasTextAlign;
@@ -493,7 +564,6 @@ export const renderCertificateFields = (
 
   const certNoPos = calculatePosition(layout.certificate_no_position, canvasWidth, canvasHeight);
   if (certNoPos && data.certificatenumber) {
-    // Etiket yalnızca açıkça verilmişse; aksi halde şablon görselindeki "Sertifika No :" ile çakışmaz
     const label = (data.certificate_number_label || '').trim();
     const certNoText = label ? `${label}: ${data.certificatenumber}` : data.certificatenumber;
     ctx.fillStyle = colors.certificate_no || colors.secondary;
@@ -511,18 +581,20 @@ export const renderCertificateFields = (
       (fontSizes.description || fontSizes.institution || 14) * fontScale
     );
 
+    // Gövde metni her zaman sola hizalı ve geniş — şablon ortalaması dar sütun üretmesin
+    const descX = Math.min(descriptionPos.x, canvasWidth * 0.12);
+    const descY = Math.min(descriptionPos.y, canvasHeight * 0.56);
+    const descMaxWidth = Math.max(canvasWidth * 0.72, canvasWidth - descX - canvasWidth * 0.08);
+    const descMaxBottom = canvasHeight * 0.68;
+
     ctx.fillStyle = colors.description || colors.text;
     ctx.font = `400 ${descriptionFontSize}px ${descriptionFont}`;
-    ctx.textAlign = descriptionPos.align as CanvasTextAlign;
-    ctx.textBaseline = 'middle';
-    drawMultilineText(
-      ctx,
-      descriptionText,
-      descriptionPos.x,
-      descriptionPos.y,
-      maxTextWidth(descriptionPos, 0.55),
-      descriptionFontSize
-    );
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    drawMultilineText(ctx, descriptionText, descX, descY, descMaxWidth, descriptionFontSize, {
+      maxBottom: descMaxBottom,
+      alignTop: true,
+    });
   }
 
   const courseNamePos = calculatePosition(layout.course_name_position, canvasWidth, canvasHeight);
@@ -538,18 +610,26 @@ export const renderCertificateFields = (
       data.coursename,
       courseNamePos.x,
       courseNamePos.y,
-      maxTextWidth(courseNamePos, 0.55),
+      maxTextWidth(courseNamePos, 0.62),
       courseNameFontSize
     );
   }
 
-  const signaturePos = calculatePosition(layout.signature_position, canvasWidth, canvasHeight);
-  if (signaturePos && data.instructor) {
+  const instructorName = resolveInstructorName(data);
+  let signaturePos = calculatePosition(layout.signature_position, canvasWidth, canvasHeight);
+  if (!signaturePos && instructorName) {
+    signaturePos = calculatePosition(
+      { ...DEFAULT_DESIGN_SETTINGS.layout.signature_position, enabled: true },
+      canvasWidth,
+      canvasHeight
+    );
+  }
+  if (signaturePos && instructorName) {
     ctx.fillStyle = colors.signature || colors.text;
     ctx.font = `500 ${Math.round((fontSizes.signature || 14) * fontScale)}px ${signatureFont}`;
     ctx.textAlign = signaturePos.align as CanvasTextAlign;
     ctx.textBaseline = 'middle';
-    ctx.fillText(data.instructor, signaturePos.x, signaturePos.y);
+    ctx.fillText(instructorName, signaturePos.x, signaturePos.y);
   }
 };
 

@@ -11,6 +11,7 @@ import { certificatesSupabase as supabase } from '@/app/_services/certificatesSu
 import AIBulkCertificate from '@/app/components/certificates/AIBulkCertificate';
 import { getCertificateOrganizationSlugs } from '@/app/_services/organizationAccessService';
 import { useUserModules } from '@/app/hooks/useUserModules';
+import { resolveDurationValue } from '@/utils/certificateCanvasRenderer';
 
 // Types
 interface Organization {
@@ -1349,7 +1350,16 @@ export default function CreateCertificatePage() {
             coursename: multipleFormData.coursename,
             issuedate: multipleFormData.issuedate,
             instructor: multipleFormData.instructor,
-            duration: multipleFormData.duration,
+            duration:
+              multipleFormData.duration?.trim() ||
+              resolveDurationValue({
+                fullname: '',
+                coursename: multipleFormData.coursename,
+                certificatenumber: '',
+                issuedate: multipleFormData.issuedate,
+                description: multipleFormData.description,
+                duration: multipleFormData.duration,
+              }),
             language: multipleFormData.language,
             certificate_title: multipleFormData.certificate_title,
             provider_text: multipleFormData.provider_text,
@@ -1439,9 +1449,20 @@ export default function CreateCertificatePage() {
         // Handle single certificate creation
         const orgSlug = activeOrganization?.slug || '';
         const certificateUrl = `https://certificates.myunilab.net/${orgSlug}/${formData.certificatenumber}`;
-        
+        const resolvedDuration =
+          formData.duration?.trim() ||
+          resolveDurationValue({
+            fullname: formData.fullname,
+            coursename: formData.coursename,
+            certificatenumber: formData.certificatenumber,
+            issuedate: formData.issuedate,
+            description: formData.description,
+            duration: formData.duration,
+          });
+
         const certificateData = {
           ...formData,
+          duration: resolvedDuration,
           organization_slug: orgSlug,
           certificateurl: certificateUrl,
           template_id: selectedTemplate?.id,
