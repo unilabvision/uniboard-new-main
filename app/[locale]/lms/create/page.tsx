@@ -5,15 +5,7 @@ import { BookOpen, Save, ArrowLeft, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { generateCourseSlug } from '@/app/lib/lms/courseUtils';
-import { normalizeDescriptionForStorage } from '@/app/lib/lms/htmlContent';
 import HtmlDescriptionEditor from '@/app/components/lms/HtmlDescriptionEditor';
-
-const supabase = createClientComponentClient({
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL2 || 'https://emfvwpztyuykqtepnsfp.supabase.co',
-  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY2 || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtZnZ3cHp0eXV5a3F0ZXBuc2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzg0OTM5MDksImV4cCI6MjA1NDA2OTkwOX0.EbGPYHtXMO2RYGavv-FQa3mgI3RECiFnwAVqpUgghxg',
-});
 
 const texts = {
   tr: {
@@ -109,60 +101,31 @@ export default function CreateCoursePage() {
       setSaving(true);
       setError(null);
 
-      const slug = generateCourseSlug(title.trim());
-      const parsedPrice = price ? parseFloat(price) : 0;
-
-      const { data: course, error: courseError } = await supabase
-        .from('myuni_courses')
-        .insert([{
-          slug,
+      const res = await fetch('/api/lms/courses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           title: title.trim(),
-          description: normalizeDescriptionForStorage(description),
-          instructor_name: instructorName.trim() || null,
+          description,
+          instructor_name: instructorName.trim(),
           course_type: courseType,
           level,
-          duration: duration.trim() || null,
-          price: parsedPrice,
-          is_active: false,
-          is_registration_open: true,
-          current_participants: 0,
-          session_duration_minutes: 0,
-        }])
-        .select('id')
-        .single();
+          duration: duration.trim(),
+          price: price ? parseFloat(price) : 0,
+          locale,
+        }),
+      });
 
-      if (courseError) throw courseError;
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok || !result?.course?.id) {
+        throw new Error(
+          typeof result?.error === 'string' && result.error
+            ? result.error
+            : t.error
+        );
+      }
 
-      const { data: section, error: sectionError } = await supabase
-        .from('myuni_course_sections')
-        .insert([{
-          course_id: course.id,
-          title: locale === 'en' ? 'General' : 'Genel',
-          description: '',
-          order_index: 0,
-          is_active: true,
-        }])
-        .select('id')
-        .single();
-
-      if (sectionError) throw sectionError;
-
-      const { error: lessonError } = await supabase
-        .from('myuni_course_lessons')
-        .insert([{
-          section_id: section.id,
-          title: locale === 'en' ? 'Introduction' : 'Giriş',
-          description: '',
-          lesson_type: 'video',
-          order_index: 0,
-          is_active: true,
-          is_locked: false,
-          is_completed: false,
-        }]);
-
-      if (lessonError) throw lessonError;
-
-      router.push(`/${locale}/lms/edit/${course.id}`);
+      router.push(`/${locale}/lms/edit/${result.course.id}`);
     } catch (err) {
       console.error('Error creating course:', err);
       setError(err instanceof Error ? err.message : t.error);
