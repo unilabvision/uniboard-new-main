@@ -34,6 +34,7 @@ export type PendingPaymentReason =
   | 'awaiting_checkout'
   | 'checkout_started_not_completed'
   | 'order_completed_not_synced'
+  | 'order_captured_stuck'
   | 'duplicate_of_paid'
   | 'unknown';
 
@@ -90,6 +91,23 @@ function resolveApplicationIdFromOrder(order: OrderRow): string | null {
 function isPaidOrderStatus(status: string | null | undefined): boolean {
   const s = String(status || '').toLowerCase();
   return s === 'completed' || s === 'success' || s === 'paid';
+}
+
+/**
+ * Captured at Iyzico but stuck locally (callback/reconcile delivery failure).
+ * Treat as paid for application sync so Uniboard stops showing "pending".
+ */
+function isCapturedButStuckOrder(order: OrderRow): boolean {
+  const status = String(order.status || '').toLowerCase();
+  if (status !== 'payment_error' && status !== 'processing') return false;
+  const iyzicoStatus = String(
+    order.custom_data?.iyzicoPaymentStatus || ''
+  ).toUpperCase();
+  return iyzicoStatus === 'SUCCESS';
+}
+
+function isSyncablePaidOrder(order: OrderRow): boolean {
+  return isPaidOrderStatus(order.status) || isCapturedButStuckOrder(order);
 }
 
 function isEventCertificateOrder(order: OrderRow): boolean {
@@ -220,7 +238,7 @@ export async function syncCertificatePaymentsFromOrders(
 
   const paidByAppId = new Map<string, OrderRow>();
   for (const order of ordersByCourse) {
-    if (!isPaidOrderStatus(order.status)) continue;
+    if (!isSyncablePaidOrder(order)) continue;
     const appId = resolveApplicationIdFromOrder(order) || order.courseid;
     if (!appId || paidByAppId.has(appId)) continue;
     paidByAppId.set(appId, order);
@@ -234,7 +252,7 @@ export async function syncCertificatePaymentsFromOrders(
     .filter((id): id is string => Boolean(id));
 
   for (const order of await fetchOrdersByOrderIds(supabase, pendingOrderIds)) {
-    if (!isPaidOrderStatus(order.status)) continue;
+    if (!isSyncablePaidOrder(order)) continue;
     const appId = resolveApplicationIdFromOrder(order) || order.courseid;
     if (appId && !paidByAppId.has(appId)) paidByAppId.set(appId, order);
   }
@@ -246,7 +264,7 @@ export async function syncCertificatePaymentsFromOrders(
   const pendingById = new Map(pendingApps.map((a) => [a.id, a]));
 
   for (const order of ordersByEmail) {
-    if (!isPaidOrderStatus(order.status)) continue;
+    if (!isSyncablePaidOrder(order)) continue;
     const appIdFromOrder = resolveApplicationIdFromOrder(order);
     if (appIdFromOrder && pendingById.has(appIdFromOrder) && !paidByAppId.has(appIdFromOrder)) {
       paidByAppId.set(appIdFromOrder, order);
@@ -259,13 +277,22 @@ export async function syncCertificatePaymentsFromOrders(
     if (!order) continue;
 
     const submission = readSubmission(app.submission_data);
+    const syncedFrom = isCapturedButStuckOrder(order)
+      ? 'orders_payment_error_recovery'
+      : 'orders';
     const nextSubmission: SubmissionData = {
       ...submission,
       payment_status: 'paid',
       order_id: order.orderid,
       payment_method: order.paymentmethod || 'iyzico',
       paid_at: order.updated_at || order.created_at || new Date().toISOString(),
-      payment_synced_from: 'orders',
+      payment_synced_from: syncedFrom,
+      ...(isCapturedButStuckOrder(order)
+        ? {
+            payment_recovered_from_status: order.status,
+            payment_iyzico_status: order.custom_data?.iyzicoPaymentStatus || 'SUCCESS',
+          }
+        : {}),
     };
 
     const { error: updateError } = await supabase
@@ -388,6 +415,7 @@ export async function reconcileEventCertificatePayments(
     awaitingCheckout: number;
     checkoutStarted: number;
     notSynced: number;
+    capturedStuck: number;
     duplicates: number;
     doublePaymentApps: number;
   };
@@ -426,6 +454,7 @@ export async function reconcileEventCertificatePayments(
     const siblingId = paidSibling.get(`${eventKey}|${email}`) || null;
     const appOrders = ordersByApp.get(app.id) || [];
     const completed = appOrders.filter((o) => isPaidOrderStatus(o.status));
+    const stuckCaptured = appOrders.filter((o) => isCapturedButStuckOrder(o));
     const open = appOrders.filter(
       (o) => String(o.status || '').toLowerCase() === 'pending'
     );
@@ -433,6 +462,7 @@ export async function reconcileEventCertificatePayments(
     let reason: PendingPaymentReason = 'awaiting_checkout';
     if (siblingId) reason = 'duplicate_of_paid';
     else if (completed.length > 0) reason = 'order_completed_not_synced';
+    else if (stuckCaptured.length > 0) reason = 'order_captured_stuck';
     else if (open.length > 0) reason = 'checkout_started_not_completed';
 
     pending.push({
@@ -483,6 +513,7 @@ export async function reconcileEventCertificatePayments(
       checkoutStarted: pending.filter((p) => p.reason === 'checkout_started_not_completed')
         .length,
       notSynced: pending.filter((p) => p.reason === 'order_completed_not_synced').length,
+      capturedStuck: pending.filter((p) => p.reason === 'order_captured_stuck').length,
       duplicates: pending.filter((p) => p.reason === 'duplicate_of_paid').length,
       doublePaymentApps: doublePayments.length,
     },

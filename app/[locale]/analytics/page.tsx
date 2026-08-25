@@ -1044,10 +1044,14 @@ export default function AnalyticsPage({
 
       const uniqueOrders = dedupeOrders(orders).filter((order) => {
         const status = String(order.status || '').toLowerCase();
+        // completed sales + stuck/captured ops statuses (payment_error etc.)
         const paidLike =
           status === 'completed' ||
           status === 'success' ||
           status === 'paid' ||
+          status === 'payment_error' ||
+          status === 'payment_review' ||
+          status === 'processing' ||
           order.enrolled === true;
         return paidLike;
       });
@@ -1801,7 +1805,9 @@ export default function AnalyticsPage({
         .select(
           'id, orderid, courseid, coursename, amount, discountamount, discountcode, paymentmethod, status, created_at, updated_at, useremail, enrolled, custom_data'
         )
-        .or('enrolled.eq.true,status.eq.completed,paymentmethod.eq.free_discount')
+        .or(
+          'enrolled.eq.true,status.eq.completed,status.eq.payment_error,status.eq.payment_review,status.eq.processing,paymentmethod.eq.free_discount'
+        )
         .order('created_at', { ascending: false })
         .range(from, from + pageSize - 1);
 
