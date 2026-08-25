@@ -18,6 +18,7 @@ export interface TemplateDesignSettings {
     date?: string;
     signature?: string;
     course_name?: string;
+    duration?: string;
   };
   colors: {
     name: string;
@@ -31,6 +32,7 @@ export interface TemplateDesignSettings {
     signature: string;
     description: string;
     title: string;
+    duration: string;
   };
   layout: {
     date_position: PositionConfig;
@@ -41,6 +43,7 @@ export interface TemplateDesignSettings {
     institution_position: PositionConfig;
     certificate_no_position: PositionConfig;
     course_name_position: PositionConfig;
+    duration_position: PositionConfig;
   };
   font_sizes: {
     date: number;
@@ -51,6 +54,7 @@ export interface TemplateDesignSettings {
     certificate_no: number;
     description: number;
     course_name: number;
+    duration: number;
   };
 }
 
@@ -66,6 +70,7 @@ export interface CertificateRenderData {
   completion_text?: string;
   description?: string;
   certificate_number_label?: string;
+  duration?: string;
 }
 
 const REFERENCE_WIDTH = 1700;
@@ -91,6 +96,7 @@ export const DEFAULT_DESIGN_SETTINGS: TemplateDesignSettings = {
     date: 'sans_serif',
     signature: 'sans_serif',
     course_name: 'sans_serif',
+    duration: 'sans_serif',
   },
   colors: {
     primary: '#990000',
@@ -104,6 +110,7 @@ export const DEFAULT_DESIGN_SETTINGS: TemplateDesignSettings = {
     date: '#666666',
     signature: '#333333',
     course_name: '#333333',
+    duration: '#666666',
   },
   font_sizes: {
     title: 48,
@@ -114,18 +121,74 @@ export const DEFAULT_DESIGN_SETTINGS: TemplateDesignSettings = {
     date: 24,
     signature: 24,
     course_name: 36,
+    duration: 20,
   },
   layout: {
+    // Merkez: başlık / isim / kurs / açıklama
     title_position: DEFAULT_POSITION(50, 18),
     name_position: DEFAULT_POSITION(50, 38),
     course_name_position: DEFAULT_POSITION(50, 46),
     description_position: DEFAULT_POSITION(50, 56),
-    institution_position: DEFAULT_POSITION(30, 78, 'left'),
-    certificate_no_position: DEFAULT_POSITION(85, 90, 'right'),
-    date_position: DEFAULT_POSITION(20, 82, 'left'),
-    signature_position: DEFAULT_POSITION(70, 82, 'center'),
+    // Sol meta (şablon görselindeki Sertifika No / Tarih / Süre etiketlerinin değeri)
+    institution_position: { ...DEFAULT_POSITION(38, 71.5, 'left'), enabled: false },
+    certificate_no_position: DEFAULT_POSITION(38, 71.5, 'left'),
+    date_position: DEFAULT_POSITION(38, 77.5, 'left'),
+    duration_position: DEFAULT_POSITION(38, 83.5, 'left'),
+    // Sağ: imza
+    signature_position: DEFAULT_POSITION(76, 83.5, 'center'),
   },
 };
+
+/** Eski varsayılan (sağda sertifika no + solda dağınık meta) → sol/sağ dengeli yerleşim */
+const approxPos = (a: number | undefined, b: number, tol = 2.5) =>
+  typeof a === 'number' && Math.abs(a - b) <= tol;
+
+export const isLegacyScatteredMetaLayout = (
+  layout: Partial<TemplateDesignSettings['layout']> | null | undefined
+): boolean => {
+  if (!layout) return false;
+  const cert = layout.certificate_no_position;
+  const date = layout.date_position;
+  const duration = layout.duration_position;
+  const institution = layout.institution_position;
+  const signature = layout.signature_position;
+
+  const certOnRight =
+    approxPos(cert?.x ?? cert?.x_manual, 70) ||
+    approxPos(cert?.x ?? cert?.x_manual, 85) ||
+    approxPos(cert?.x ?? cert?.x_manual, 90);
+  const dateOnFarLeft =
+    approxPos(date?.x ?? date?.x_manual, 20) || approxPos(date?.x ?? date?.x_manual, 8.9);
+  const durationLegacy =
+    !duration ||
+    approxPos(duration?.x ?? duration?.x_manual, 20) ||
+    approxPos(duration?.x ?? duration?.x_manual, 8.9);
+  const institutionLegacy =
+    !institution ||
+    approxPos(institution?.x ?? institution?.x_manual, 30) ||
+    approxPos(institution?.x ?? institution?.x_manual, 23.5);
+  const signatureRightish =
+    !signature ||
+    approxPos(signature?.x ?? signature?.x_manual, 80) ||
+    approxPos(signature?.x ?? signature?.x_manual, 70);
+
+  return Boolean(certOnRight && dateOnFarLeft && durationLegacy && institutionLegacy && signatureRightish);
+};
+
+export const balancedMetaLayout = (): Pick<
+  TemplateDesignSettings['layout'],
+  | 'institution_position'
+  | 'certificate_no_position'
+  | 'date_position'
+  | 'duration_position'
+  | 'signature_position'
+> => ({
+  institution_position: { ...DEFAULT_DESIGN_SETTINGS.layout.institution_position },
+  certificate_no_position: { ...DEFAULT_DESIGN_SETTINGS.layout.certificate_no_position },
+  date_position: { ...DEFAULT_DESIGN_SETTINGS.layout.date_position },
+  duration_position: { ...DEFAULT_DESIGN_SETTINGS.layout.duration_position },
+  signature_position: { ...DEFAULT_DESIGN_SETTINGS.layout.signature_position },
+});
 
 function asFiniteNumber(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
@@ -158,6 +221,8 @@ export const normalizeDesignSettings = (
   const colors = { ...DEFAULT_DESIGN_SETTINGS.colors, ...(partial?.colors || {}) };
   const font_sizes = { ...DEFAULT_DESIGN_SETTINGS.font_sizes, ...(partial?.font_sizes || {}) };
   const layoutSrc = partial?.layout || ({} as TemplateDesignSettings['layout']);
+  const legacyMeta = isLegacyScatteredMetaLayout(layoutSrc);
+  const balanced = balancedMetaLayout();
 
   return {
     fonts,
@@ -176,33 +241,50 @@ export const normalizeDesignSettings = (
             DEFAULT_DESIGN_SETTINGS.layout.description_position
           )
         : { ...DEFAULT_DESIGN_SETTINGS.layout.description_position, enabled: false },
-      institution_position: layoutSrc.institution_position
-        ? normalizePosition(
-            layoutSrc.institution_position,
-            DEFAULT_DESIGN_SETTINGS.layout.institution_position
-          )
-        : { ...DEFAULT_DESIGN_SETTINGS.layout.institution_position, enabled: false },
-      certificate_no_position: layoutSrc.certificate_no_position
-        ? normalizePosition(
-            layoutSrc.certificate_no_position,
-            DEFAULT_DESIGN_SETTINGS.layout.certificate_no_position
-          )
-        : { ...DEFAULT_DESIGN_SETTINGS.layout.certificate_no_position, enabled: false },
-      date_position: layoutSrc.date_position
-        ? normalizePosition(layoutSrc.date_position, DEFAULT_DESIGN_SETTINGS.layout.date_position)
-        : { ...DEFAULT_DESIGN_SETTINGS.layout.date_position, enabled: false },
-      signature_position: layoutSrc.signature_position
-        ? normalizePosition(
-            layoutSrc.signature_position,
-            DEFAULT_DESIGN_SETTINGS.layout.signature_position
-          )
-        : { ...DEFAULT_DESIGN_SETTINGS.layout.signature_position, enabled: false },
+      institution_position: legacyMeta
+        ? { ...balanced.institution_position }
+        : layoutSrc.institution_position
+          ? normalizePosition(
+              layoutSrc.institution_position,
+              DEFAULT_DESIGN_SETTINGS.layout.institution_position
+            )
+          : { ...DEFAULT_DESIGN_SETTINGS.layout.institution_position, enabled: false },
+      certificate_no_position: legacyMeta
+        ? { ...balanced.certificate_no_position }
+        : layoutSrc.certificate_no_position
+          ? normalizePosition(
+              layoutSrc.certificate_no_position,
+              DEFAULT_DESIGN_SETTINGS.layout.certificate_no_position
+            )
+          : { ...DEFAULT_DESIGN_SETTINGS.layout.certificate_no_position, enabled: false },
+      date_position: legacyMeta
+        ? { ...balanced.date_position }
+        : layoutSrc.date_position
+          ? normalizePosition(layoutSrc.date_position, DEFAULT_DESIGN_SETTINGS.layout.date_position)
+          : { ...DEFAULT_DESIGN_SETTINGS.layout.date_position, enabled: false },
+      signature_position: legacyMeta
+        ? { ...balanced.signature_position }
+        : layoutSrc.signature_position
+          ? normalizePosition(
+              layoutSrc.signature_position,
+              DEFAULT_DESIGN_SETTINGS.layout.signature_position
+            )
+          : { ...DEFAULT_DESIGN_SETTINGS.layout.signature_position, enabled: false },
       course_name_position: layoutSrc.course_name_position
         ? normalizePosition(
             layoutSrc.course_name_position,
             DEFAULT_DESIGN_SETTINGS.layout.course_name_position
           )
         : { ...DEFAULT_DESIGN_SETTINGS.layout.course_name_position, enabled: false },
+      duration_position: legacyMeta || !layoutSrc.duration_position
+        ? {
+            ...balanced.duration_position,
+            enabled: layoutSrc.duration_position?.enabled !== false,
+          }
+        : normalizePosition(
+            layoutSrc.duration_position,
+            DEFAULT_DESIGN_SETTINGS.layout.duration_position
+          ),
     },
   };
 };
@@ -345,6 +427,7 @@ export const renderCertificateFields = (
   const dateFont = getFontFamily(fonts.date || fonts.body);
   const signatureFont = getFontFamily(fonts.signature || fonts.body);
   const courseNameFont = getFontFamily(fonts.course_name || fonts.title);
+  const durationFont = getFontFamily(fonts.duration || fonts.date || fonts.body);
   const institutionName = data.organization || '';
 
   const maxTextWidth = (
@@ -379,6 +462,17 @@ export const renderCertificateFields = (
     ctx.fillText(formatCertificateDate(data.issuedate, data.language), datePos.x, datePos.y);
   }
 
+  const durationPos = calculatePosition(layout.duration_position, canvasWidth, canvasHeight);
+  const durationValue = String(data.duration || '').trim();
+  if (durationPos && durationValue) {
+    // Şablon görselinde "Süre :" etiketi varsa sadece değeri çiz (çift etiket olmasın)
+    ctx.fillStyle = colors.duration || colors.secondary;
+    ctx.font = `500 ${Math.round((fontSizes.duration || fontSizes.date || 14) * fontScale)}px ${durationFont}`;
+    ctx.textAlign = durationPos.align as CanvasTextAlign;
+    ctx.textBaseline = 'middle';
+    ctx.fillText(durationValue, durationPos.x, durationPos.y);
+  }
+
   const titlePos = calculatePosition(layout.title_position, canvasWidth, canvasHeight);
   if (titlePos) {
     ctx.fillStyle = colors.title || colors.primary;
@@ -399,9 +493,8 @@ export const renderCertificateFields = (
 
   const certNoPos = calculatePosition(layout.certificate_no_position, canvasWidth, canvasHeight);
   if (certNoPos && data.certificatenumber) {
-    const label =
-      (data.certificate_number_label || '').trim() ||
-      (data.language === 'en' || data.language === 'global' ? 'Certificate No' : 'Sertifika No');
+    // Etiket yalnızca açıkça verilmişse; aksi halde şablon görselindeki "Sertifika No :" ile çakışmaz
+    const label = (data.certificate_number_label || '').trim();
     const certNoText = label ? `${label}: ${data.certificatenumber}` : data.certificatenumber;
     ctx.fillStyle = colors.certificate_no || colors.secondary;
     ctx.font = `500 ${Math.round((fontSizes.certificate_no || 14) * fontScale)}px ${certNoFont}`;

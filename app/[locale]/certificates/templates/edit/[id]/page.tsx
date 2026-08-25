@@ -15,6 +15,10 @@ import { certificatesSupabase as supabase } from '@/app/_services/certificatesSu
 import { getCertificateOrganizationSlugs } from '@/app/_services/organizationAccessService';
 import { useUserModules } from '@/app/hooks/useUserModules';
 import { useLiveCertificatePreview } from '@/app/hooks/useLiveCertificatePreview';
+import {
+  isLegacyScatteredMetaLayout,
+  balancedMetaLayout,
+} from '@/utils/certificateCanvasRenderer';
 
 // Types
 interface Organization {
@@ -55,6 +59,8 @@ interface CertificateTemplate {
       certificate_no: string;
       date: string;
       signature: string;
+      course_name?: string;
+      duration?: string;
     };
     fonts: {
       title: string;
@@ -66,6 +72,7 @@ interface CertificateTemplate {
       date: string;
       signature: string;
       course_name: string;
+      duration?: string;
     };
     font_sizes: {
       title: number;
@@ -76,6 +83,7 @@ interface CertificateTemplate {
       date: number;
       signature: number;
       course_name: number;
+      duration?: number;
     };
     layout: {
       title_position: { x: number; y: number; enabled?: boolean; align?: 'left' | 'center' | 'right'; x_manual?: number; y_manual?: number };
@@ -86,6 +94,7 @@ interface CertificateTemplate {
       date_position: { x: number; y: number; enabled?: boolean; align?: 'left' | 'center' | 'right'; x_manual?: number; y_manual?: number };
       signature_position: { x: number; y: number; enabled?: boolean; align?: 'left' | 'center' | 'right'; x_manual?: number; y_manual?: number };
       course_name_position: { x: number; y: number; enabled?: boolean; align?: 'left' | 'center' | 'right'; x_manual?: number; y_manual?: number };
+      duration_position?: { x: number; y: number; enabled?: boolean; align?: 'left' | 'center' | 'right'; x_manual?: number; y_manual?: number };
     };
   };
 }
@@ -109,6 +118,7 @@ interface TemplateFormData {
       date: string;
       signature: string;
       course_name: string;
+      duration: string;
     };
     fonts: {
       title: string;
@@ -120,6 +130,7 @@ interface TemplateFormData {
       date: string;
       signature: string;
       course_name: string;
+      duration: string;
     };
     font_sizes: {
       title: number;
@@ -130,6 +141,7 @@ interface TemplateFormData {
       date: number;
       signature: number;
       course_name: number;
+      duration: number;
     };
     layout: {
       title_position: { x: number; y: number; enabled?: boolean; align?: 'left' | 'center' | 'right'; x_manual?: number; y_manual?: number };
@@ -140,6 +152,7 @@ interface TemplateFormData {
       date_position: { x: number; y: number; enabled?: boolean; align?: 'left' | 'center' | 'right'; x_manual?: number; y_manual?: number };
       signature_position: { x: number; y: number; enabled?: boolean; align?: 'left' | 'center' | 'right'; x_manual?: number; y_manual?: number };
       course_name_position: { x: number; y: number; enabled?: boolean; align?: 'left' | 'center' | 'right'; x_manual?: number; y_manual?: number };
+      duration_position: { x: number; y: number; enabled?: boolean; align?: 'left' | 'center' | 'right'; x_manual?: number; y_manual?: number };
     };
   };
 }
@@ -177,6 +190,7 @@ const texts = {
     dateFont: "Tarih Yazı Tipi",
     signatureFont: "İmza Yazı Tipi",
     courseNameFont: "Kurs Adı Yazı Tipi",
+    durationFont: "Süre Yazı Tipi",
     fontSizes: "Yazı Boyutları",
     titleSize: "Başlık Boyutu (px)",
     nameSize: "İsim Boyutu (px)",
@@ -186,6 +200,7 @@ const texts = {
     dateSize: "Tarih Boyutu (px)",
     signatureSize: "İmza Boyutu (px)",
     courseNameSize: "Kurs Adı Boyutu (px)",
+    durationSize: "Süre Boyutu (px)",
     layout: "Yerleşim",
     titlePosition: "Başlık Pozisyonu",
     namePosition: "İsim Pozisyonu",
@@ -195,6 +210,7 @@ const texts = {
     datePosition: "Tarih Pozisyonu",
     signaturePosition: "İmza Pozisyonu",
     courseNamePosition: "Kurs Adı Pozisyonu",
+    durationPosition: "Süre Pozisyonu",
     positionX: "X Pozisyonu (%)",
     positionY: "Y Pozisyonu (%)",
     previewTemplate: "Şablon Önizlemesi",
@@ -264,6 +280,7 @@ const texts = {
     dateFont: "Date Font",
     signatureFont: "Signature Font",
     courseNameFont: "Course Name Font",
+    durationFont: "Duration Font",
     fontSizes: "Font Sizes",
     titleSize: "Title Size (px)",
     nameSize: "Name Size (px)",
@@ -273,6 +290,7 @@ const texts = {
     dateSize: "Date Size (px)",
     signatureSize: "Signature Size (px)",
     courseNameSize: "Course Name Size (px)",
+    durationSize: "Duration Size (px)",
     layout: "Layout",
     titlePosition: "Title Position",
     namePosition: "Name Position",
@@ -282,6 +300,7 @@ const texts = {
     datePosition: "Date Position",
     signaturePosition: "Signature Position",
     courseNamePosition: "Course Name Position",
+    durationPosition: "Duration Position",
     positionX: "X Position (%)",
     positionY: "Y Position (%)",
     previewTemplate: "Template Preview",
@@ -359,7 +378,8 @@ export default function EditTemplatePage() {
         certificate_no: '#666666',
         date: '#666666',
         signature: '#333333',
-        course_name: '#333333'
+        course_name: '#333333',
+        duration: '#666666'
       },
       fonts: {
         title: 'serif',
@@ -370,7 +390,8 @@ export default function EditTemplatePage() {
         certificate_no: 'sans_serif',
         date: 'sans_serif',
         signature: 'sans_serif',
-        course_name: 'sans_serif'
+        course_name: 'sans_serif',
+        duration: 'sans_serif'
       },
       font_sizes: {
         title: 24,
@@ -380,17 +401,15 @@ export default function EditTemplatePage() {
         certificate_no: 12,
         date: 14,
         signature: 14,
-        course_name: 20
+        course_name: 20,
+        duration: 14
       },
       layout: {
-        title_position: { x: 50, y: 20, enabled: true },
-        name_position: { x: 50, y: 40, enabled: true },
-        description_position: { x: 50, y: 55, enabled: true },
-        institution_position: { x: 30, y: 75, enabled: true },
-        certificate_no_position: { x: 70, y: 75, enabled: true },
-        date_position: { x: 20, y: 80, enabled: true },
-        signature_position: { x: 80, y: 80, enabled: true },
-        course_name_position: { x: 50, y: 45, enabled: true }
+        title_position: { x: 50, y: 20, enabled: true, align: 'center', x_manual: 50, y_manual: 20 },
+        name_position: { x: 50, y: 40, enabled: true, align: 'center', x_manual: 50, y_manual: 40 },
+        description_position: { x: 50, y: 55, enabled: true, align: 'center', x_manual: 50, y_manual: 55 },
+        course_name_position: { x: 50, y: 45, enabled: true, align: 'center', x_manual: 50, y_manual: 45 },
+        ...balancedMetaLayout(),
       }
     }
   });
@@ -533,82 +552,110 @@ export default function EditTemplatePage() {
         setTemplate(templateData);
         
         // Set form data from template
-        const existingDesignSettings = templateData.design_settings || {};
+        let existingDesignSettings = templateData.design_settings || {};
+        if (typeof existingDesignSettings === 'string') {
+          try {
+            existingDesignSettings = JSON.parse(existingDesignSettings);
+          } catch {
+            existingDesignSettings = {};
+          }
+        }
         const defaultLayout = {
-          title_position: { x: 50, y: 20, enabled: true, align: 'center', x_manual: 50, y_manual: 20 },
-          name_position: { x: 50, y: 40, enabled: true, align: 'center', x_manual: 50, y_manual: 40 },
-          description_position: { x: 50, y: 55, enabled: true, align: 'center', x_manual: 50, y_manual: 55 },
-          institution_position: { x: 30, y: 75, enabled: true, align: 'left', x_manual: 30, y_manual: 75 },
-          certificate_no_position: { x: 70, y: 75, enabled: true, align: 'right', x_manual: 70, y_manual: 75 },
-          date_position: { x: 20, y: 80, enabled: true, align: 'left', x_manual: 20, y_manual: 80 },
-          signature_position: { x: 80, y: 80, enabled: true, align: 'center', x_manual: 80, y_manual: 80 }
+          title_position: { x: 50, y: 20, enabled: true, align: 'center' as const, x_manual: 50, y_manual: 20 },
+          name_position: { x: 50, y: 40, enabled: true, align: 'center' as const, x_manual: 50, y_manual: 40 },
+          description_position: { x: 50, y: 55, enabled: true, align: 'center' as const, x_manual: 50, y_manual: 55 },
+          course_name_position: { x: 50, y: 45, enabled: true, align: 'center' as const, x_manual: 50, y_manual: 45 },
+          ...balancedMetaLayout(),
         };
+
+        const existingLayout = existingDesignSettings.layout || {};
+        const metaDefaults = isLegacyScatteredMetaLayout(existingLayout)
+          ? balancedMetaLayout()
+          : null;
 
         // Merge existing layout with defaults, ensuring enabled property exists
         const layout = {
           title_position: {
-            x: existingDesignSettings.layout?.title_position?.x ?? defaultLayout.title_position.x,
-            y: existingDesignSettings.layout?.title_position?.y ?? defaultLayout.title_position.y,
-            enabled: existingDesignSettings.layout?.title_position?.enabled ?? true,
-            align: existingDesignSettings.layout?.title_position?.align ?? 'center',
-            x_manual: existingDesignSettings.layout?.title_position?.x_manual ?? existingDesignSettings.layout?.title_position?.x ?? defaultLayout.title_position.x,
-            y_manual: existingDesignSettings.layout?.title_position?.y_manual ?? existingDesignSettings.layout?.title_position?.y ?? defaultLayout.title_position.y
+            x: existingLayout.title_position?.x ?? defaultLayout.title_position.x,
+            y: existingLayout.title_position?.y ?? defaultLayout.title_position.y,
+            enabled: existingLayout.title_position?.enabled ?? true,
+            align: existingLayout.title_position?.align ?? 'center',
+            x_manual: existingLayout.title_position?.x_manual ?? existingLayout.title_position?.x ?? defaultLayout.title_position.x,
+            y_manual: existingLayout.title_position?.y_manual ?? existingLayout.title_position?.y ?? defaultLayout.title_position.y
           },
           name_position: {
-            x: existingDesignSettings.layout?.name_position?.x ?? defaultLayout.name_position.x,
-            y: existingDesignSettings.layout?.name_position?.y ?? defaultLayout.name_position.y,
-            enabled: existingDesignSettings.layout?.name_position?.enabled ?? true,
-            align: existingDesignSettings.layout?.name_position?.align ?? 'center',
-            x_manual: existingDesignSettings.layout?.name_position?.x_manual ?? existingDesignSettings.layout?.name_position?.x ?? defaultLayout.name_position.x,
-            y_manual: existingDesignSettings.layout?.name_position?.y_manual ?? existingDesignSettings.layout?.name_position?.y ?? defaultLayout.name_position.y
+            x: existingLayout.name_position?.x ?? defaultLayout.name_position.x,
+            y: existingLayout.name_position?.y ?? defaultLayout.name_position.y,
+            enabled: existingLayout.name_position?.enabled ?? true,
+            align: existingLayout.name_position?.align ?? 'center',
+            x_manual: existingLayout.name_position?.x_manual ?? existingLayout.name_position?.x ?? defaultLayout.name_position.x,
+            y_manual: existingLayout.name_position?.y_manual ?? existingLayout.name_position?.y ?? defaultLayout.name_position.y
           },
           description_position: {
-            x: existingDesignSettings.layout?.description_position?.x ?? defaultLayout.description_position.x,
-            y: existingDesignSettings.layout?.description_position?.y ?? defaultLayout.description_position.y,
-            enabled: existingDesignSettings.layout?.description_position?.enabled ?? true,
-            align: existingDesignSettings.layout?.description_position?.align ?? 'center',
-            x_manual: existingDesignSettings.layout?.description_position?.x_manual ?? existingDesignSettings.layout?.description_position?.x ?? defaultLayout.description_position.x,
-            y_manual: existingDesignSettings.layout?.description_position?.y_manual ?? existingDesignSettings.layout?.description_position?.y ?? defaultLayout.description_position.y
+            x: existingLayout.description_position?.x ?? defaultLayout.description_position.x,
+            y: existingLayout.description_position?.y ?? defaultLayout.description_position.y,
+            enabled: existingLayout.description_position?.enabled ?? true,
+            align: existingLayout.description_position?.align ?? 'center',
+            x_manual: existingLayout.description_position?.x_manual ?? existingLayout.description_position?.x ?? defaultLayout.description_position.x,
+            y_manual: existingLayout.description_position?.y_manual ?? existingLayout.description_position?.y ?? defaultLayout.description_position.y
           },
-          institution_position: {
-            x: existingDesignSettings.layout?.institution_position?.x ?? defaultLayout.institution_position.x,
-            y: existingDesignSettings.layout?.institution_position?.y ?? defaultLayout.institution_position.y,
-            enabled: existingDesignSettings.layout?.institution_position?.enabled ?? true,
-            align: existingDesignSettings.layout?.institution_position?.align ?? 'left',
-            x_manual: existingDesignSettings.layout?.institution_position?.x_manual ?? existingDesignSettings.layout?.institution_position?.x ?? defaultLayout.institution_position.x,
-            y_manual: existingDesignSettings.layout?.institution_position?.y_manual ?? existingDesignSettings.layout?.institution_position?.y ?? defaultLayout.institution_position.y
+          institution_position: metaDefaults
+            ? { ...metaDefaults.institution_position }
+            : {
+            x: existingLayout.institution_position?.x ?? defaultLayout.institution_position.x,
+            y: existingLayout.institution_position?.y ?? defaultLayout.institution_position.y,
+            enabled: existingLayout.institution_position?.enabled ?? defaultLayout.institution_position.enabled !== false,
+            align: existingLayout.institution_position?.align ?? 'left',
+            x_manual: existingLayout.institution_position?.x_manual ?? existingLayout.institution_position?.x ?? defaultLayout.institution_position.x,
+            y_manual: existingLayout.institution_position?.y_manual ?? existingLayout.institution_position?.y ?? defaultLayout.institution_position.y
           },
-          certificate_no_position: {
-            x: existingDesignSettings.layout?.certificate_no_position?.x ?? defaultLayout.certificate_no_position.x,
-            y: existingDesignSettings.layout?.certificate_no_position?.y ?? defaultLayout.certificate_no_position.y,
-            enabled: existingDesignSettings.layout?.certificate_no_position?.enabled ?? true,
-            align: existingDesignSettings.layout?.certificate_no_position?.align ?? 'right',
-            x_manual: existingDesignSettings.layout?.certificate_no_position?.x_manual ?? existingDesignSettings.layout?.certificate_no_position?.x ?? defaultLayout.certificate_no_position.x,
-            y_manual: existingDesignSettings.layout?.certificate_no_position?.y_manual ?? existingDesignSettings.layout?.certificate_no_position?.y ?? defaultLayout.certificate_no_position.y
+          certificate_no_position: metaDefaults
+            ? { ...metaDefaults.certificate_no_position }
+            : {
+            x: existingLayout.certificate_no_position?.x ?? defaultLayout.certificate_no_position.x,
+            y: existingLayout.certificate_no_position?.y ?? defaultLayout.certificate_no_position.y,
+            enabled: existingLayout.certificate_no_position?.enabled ?? true,
+            align: existingLayout.certificate_no_position?.align ?? 'left',
+            x_manual: existingLayout.certificate_no_position?.x_manual ?? existingLayout.certificate_no_position?.x ?? defaultLayout.certificate_no_position.x,
+            y_manual: existingLayout.certificate_no_position?.y_manual ?? existingLayout.certificate_no_position?.y ?? defaultLayout.certificate_no_position.y
           },
-          date_position: {
-            x: existingDesignSettings.layout?.date_position?.x ?? defaultLayout.date_position.x,
-            y: existingDesignSettings.layout?.date_position?.y ?? defaultLayout.date_position.y,
-            enabled: existingDesignSettings.layout?.date_position?.enabled ?? true,
-            align: existingDesignSettings.layout?.date_position?.align ?? 'left',
-            x_manual: existingDesignSettings.layout?.date_position?.x_manual ?? existingDesignSettings.layout?.date_position?.x ?? defaultLayout.date_position.x,
-            y_manual: existingDesignSettings.layout?.date_position?.y_manual ?? existingDesignSettings.layout?.date_position?.y ?? defaultLayout.date_position.y
+          date_position: metaDefaults
+            ? { ...metaDefaults.date_position }
+            : {
+            x: existingLayout.date_position?.x ?? defaultLayout.date_position.x,
+            y: existingLayout.date_position?.y ?? defaultLayout.date_position.y,
+            enabled: existingLayout.date_position?.enabled ?? true,
+            align: existingLayout.date_position?.align ?? 'left',
+            x_manual: existingLayout.date_position?.x_manual ?? existingLayout.date_position?.x ?? defaultLayout.date_position.x,
+            y_manual: existingLayout.date_position?.y_manual ?? existingLayout.date_position?.y ?? defaultLayout.date_position.y
           },
-          signature_position: {
-            x: existingDesignSettings.layout?.signature_position?.x ?? defaultLayout.signature_position.x,
-            y: existingDesignSettings.layout?.signature_position?.y ?? defaultLayout.signature_position.y,
-            enabled: existingDesignSettings.layout?.signature_position?.enabled ?? true,
-            align: existingDesignSettings.layout?.signature_position?.align ?? 'center',
-            x_manual: existingDesignSettings.layout?.signature_position?.x_manual ?? existingDesignSettings.layout?.signature_position?.x ?? defaultLayout.signature_position.x,
-            y_manual: existingDesignSettings.layout?.signature_position?.y_manual ?? existingDesignSettings.layout?.signature_position?.y ?? defaultLayout.signature_position.y
+          signature_position: metaDefaults
+            ? { ...metaDefaults.signature_position }
+            : {
+            x: existingLayout.signature_position?.x ?? defaultLayout.signature_position.x,
+            y: existingLayout.signature_position?.y ?? defaultLayout.signature_position.y,
+            enabled: existingLayout.signature_position?.enabled ?? true,
+            align: existingLayout.signature_position?.align ?? 'center',
+            x_manual: existingLayout.signature_position?.x_manual ?? existingLayout.signature_position?.x ?? defaultLayout.signature_position.x,
+            y_manual: existingLayout.signature_position?.y_manual ?? existingLayout.signature_position?.y ?? defaultLayout.signature_position.y
           },
           course_name_position: {
-            x: existingDesignSettings.layout?.course_name_position?.x ?? 50,
-            y: existingDesignSettings.layout?.course_name_position?.y ?? 45,
-            enabled: existingDesignSettings.layout?.course_name_position?.enabled ?? true,
-            align: existingDesignSettings.layout?.course_name_position?.align ?? 'center',
-            x_manual: existingDesignSettings.layout?.course_name_position?.x_manual ?? existingDesignSettings.layout?.course_name_position?.x ?? 50,
-            y_manual: existingDesignSettings.layout?.course_name_position?.y_manual ?? existingDesignSettings.layout?.course_name_position?.y ?? 45
+            x: existingLayout.course_name_position?.x ?? defaultLayout.course_name_position.x,
+            y: existingLayout.course_name_position?.y ?? defaultLayout.course_name_position.y,
+            enabled: existingLayout.course_name_position?.enabled ?? true,
+            align: existingLayout.course_name_position?.align ?? 'center',
+            x_manual: existingLayout.course_name_position?.x_manual ?? existingLayout.course_name_position?.x ?? defaultLayout.course_name_position.x,
+            y_manual: existingLayout.course_name_position?.y_manual ?? existingLayout.course_name_position?.y ?? defaultLayout.course_name_position.y
+          },
+          duration_position: metaDefaults
+            ? { ...metaDefaults.duration_position }
+            : {
+            x: existingLayout.duration_position?.x ?? defaultLayout.duration_position.x,
+            y: existingLayout.duration_position?.y ?? defaultLayout.duration_position.y,
+            enabled: existingLayout.duration_position?.enabled ?? true,
+            align: existingLayout.duration_position?.align ?? 'left',
+            x_manual: existingLayout.duration_position?.x_manual ?? existingLayout.duration_position?.x ?? defaultLayout.duration_position.x,
+            y_manual: existingLayout.duration_position?.y_manual ?? existingLayout.duration_position?.y ?? defaultLayout.duration_position.y
           }
         };
 
@@ -619,7 +666,7 @@ export default function EditTemplatePage() {
           background_image: templateData.background_image,
           is_default: templateData.is_default,
           design_settings: {
-            colors: existingDesignSettings.colors || {
+            colors: {
               primary: '#990000',
               secondary: '#666666',
               text: '#333333',
@@ -630,9 +677,11 @@ export default function EditTemplatePage() {
               certificate_no: '#666666',
               date: '#666666',
               signature: '#333333',
-              course_name: '#333333'
+              course_name: '#333333',
+              duration: '#666666',
+              ...(existingDesignSettings.colors || {}),
             },
-            fonts: existingDesignSettings.fonts || {
+            fonts: {
               title: 'serif',
               body: 'sans_serif',
               name: 'sans_serif',
@@ -641,9 +690,11 @@ export default function EditTemplatePage() {
               certificate_no: 'sans_serif',
               date: 'sans_serif',
               signature: 'sans_serif',
-              course_name: 'sans_serif'
+              course_name: 'sans_serif',
+              duration: 'sans_serif',
+              ...(existingDesignSettings.fonts || {}),
             },
-            font_sizes: existingDesignSettings.font_sizes || {
+            font_sizes: {
               title: 24,
               name: 18,
               description: 16,
@@ -651,7 +702,9 @@ export default function EditTemplatePage() {
               certificate_no: 12,
               date: 14,
               signature: 14,
-              course_name: 20
+              course_name: 20,
+              duration: 14,
+              ...(existingDesignSettings.font_sizes || {}),
             },
             layout: layout
           }
@@ -779,7 +832,8 @@ export default function EditTemplatePage() {
           certificate_no: '#666666',
           date: '#666666',
           signature: '#333333',
-          course_name: '#333333'
+          course_name: '#333333',
+          duration: '#666666'
         },
         fonts: {
           title: 'serif',
@@ -790,7 +844,8 @@ export default function EditTemplatePage() {
           certificate_no: 'sans_serif',
           date: 'sans_serif',
           signature: 'sans_serif',
-          course_name: 'sans_serif'
+          course_name: 'sans_serif',
+          duration: 'sans_serif'
         },
         font_sizes: {
           title: 24,
@@ -800,17 +855,15 @@ export default function EditTemplatePage() {
           certificate_no: 12,
           date: 14,
           signature: 14,
-          course_name: 20
+          course_name: 20,
+          duration: 14
         },
         layout: {
           title_position: { x: 50, y: 20, enabled: true, align: 'center', x_manual: 50, y_manual: 20 },
           name_position: { x: 50, y: 40, enabled: true, align: 'center', x_manual: 50, y_manual: 40 },
           description_position: { x: 50, y: 55, enabled: true, align: 'center', x_manual: 50, y_manual: 55 },
-          institution_position: { x: 30, y: 75, enabled: true, align: 'left', x_manual: 30, y_manual: 75 },
-          certificate_no_position: { x: 70, y: 75, enabled: true, align: 'right', x_manual: 70, y_manual: 75 },
-          date_position: { x: 20, y: 80, enabled: true, align: 'left', x_manual: 20, y_manual: 80 },
-          signature_position: { x: 80, y: 80, enabled: true, align: 'center', x_manual: 80, y_manual: 80 },
-          course_name_position: { x: 50, y: 45, enabled: true, align: 'center', x_manual: 50, y_manual: 45 }
+          course_name_position: { x: 50, y: 45, enabled: true, align: 'center', x_manual: 50, y_manual: 45 },
+          ...balancedMetaLayout(),
         }
       }
     }));
@@ -881,11 +934,11 @@ export default function EditTemplatePage() {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 py-8 sm:py-12">
-      <div className="max-w-full xl:max-w-[1500px] 2xl:max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 py-4 sm:py-6">
+      <div className="max-w-full xl:max-w-[1600px] 2xl:max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center mb-4">
+        <div className="mb-4 sm:mb-6">
+          <div className="flex items-center mb-2">
             <Link 
               href={`/${locale}/certificates/templates`}
               className="mr-4 p-2 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
@@ -899,14 +952,17 @@ export default function EditTemplatePage() {
               <div className="w-12 h-px bg-[#990000] mt-2"></div>
             </div>
           </div>
-          <p className="text-base text-neutral-600 dark:text-neutral-400 max-w-2xl">
+          <p className="text-sm sm:text-base text-neutral-600 dark:text-neutral-400 max-w-2xl">
             {t.subtitle}
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left Column - Form */}
-          <div className="space-y-6">
+        <form
+          onSubmit={handleSubmit}
+          className="flex flex-col lg:grid lg:grid-cols-[minmax(320px,40%)_minmax(0,60%)] lg:gap-6 lg:items-start"
+        >
+          {/* Controls scroll in-pane so preview stays visible (main overflow-x breaks sticky) */}
+          <div className="order-2 lg:order-1 space-y-6 lg:max-h-[calc(100dvh-5.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-2 lg:pb-8">
             {/* Basic Information */}
             <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6">
               <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-4 flex items-center">
@@ -1233,6 +1289,29 @@ export default function EditTemplatePage() {
                         <option value="monospace">{t.fontOptions.monospace}</option>
                       </select>
                     </div>
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1">
+                        {t.durationFont}
+                      </label>
+                      <select
+                        value={formData.design_settings.fonts.duration}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          design_settings: {
+                            ...prev.design_settings,
+                            fonts: {
+                              ...prev.design_settings.fonts,
+                              duration: e.target.value
+                            }
+                          }
+                        }))}
+                        className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100"
+                      >
+                        <option value="serif">{t.fontOptions.serif}</option>
+                        <option value="sans_serif">{t.fontOptions.sans_serif}</option>
+                        <option value="monospace">{t.fontOptions.monospace}</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
 
@@ -1429,7 +1508,8 @@ export default function EditTemplatePage() {
                                     ...prev.design_settings.layout,
                                     title_position: {
                                       ...prev.design_settings.layout.title_position,
-                                      x: Number(e.target.value)
+                                      x: Number(e.target.value),
+                                      x_manual: Number(e.target.value)
                                     }
                                   }
                                 }
@@ -1460,7 +1540,8 @@ export default function EditTemplatePage() {
                                     ...prev.design_settings.layout,
                                     title_position: {
                                       ...prev.design_settings.layout.title_position,
-                                      y: Number(e.target.value)
+                                      y: Number(e.target.value),
+                                      y_manual: Number(e.target.value)
                                     }
                                   }
                                 }
@@ -1664,7 +1745,8 @@ export default function EditTemplatePage() {
                                     ...prev.design_settings.layout,
                                     name_position: {
                                       ...prev.design_settings.layout.name_position,
-                                      x: Number(e.target.value)
+                                      x: Number(e.target.value),
+                                      x_manual: Number(e.target.value)
                                     }
                                   }
                                 }
@@ -1695,7 +1777,8 @@ export default function EditTemplatePage() {
                                     ...prev.design_settings.layout,
                                     name_position: {
                                       ...prev.design_settings.layout.name_position,
-                                      y: Number(e.target.value)
+                                      y: Number(e.target.value),
+                                      y_manual: Number(e.target.value)
                                     }
                                   }
                                 }
@@ -1821,7 +1904,7 @@ export default function EditTemplatePage() {
                               min="0"
                               max="100"
                               step="0.1"
-                              value={formData.design_settings.layout.description_position.x_manual || formData.design_settings.layout.description_position.x}
+                              value={formData.design_settings.layout.description_position.x_manual ?? formData.design_settings.layout.description_position.x}
                               onChange={(e) => {
                                 const value = Number(e.target.value);
                                 setFormData(prev => ({
@@ -1851,7 +1934,7 @@ export default function EditTemplatePage() {
                               min="0"
                               max="100"
                               step="0.1"
-                              value={formData.design_settings.layout.description_position.y_manual || formData.design_settings.layout.description_position.y}
+                              value={formData.design_settings.layout.description_position.y_manual ?? formData.design_settings.layout.description_position.y}
                               onChange={(e) => {
                                 const value = Number(e.target.value);
                                 setFormData(prev => ({
@@ -1899,7 +1982,8 @@ export default function EditTemplatePage() {
                                     ...prev.design_settings.layout,
                                     description_position: {
                                       ...prev.design_settings.layout.description_position,
-                                      x: Number(e.target.value)
+                                      x: Number(e.target.value),
+                                      x_manual: Number(e.target.value)
                                     }
                                   }
                                 }
@@ -1930,7 +2014,8 @@ export default function EditTemplatePage() {
                                     ...prev.design_settings.layout,
                                     description_position: {
                                       ...prev.design_settings.layout.description_position,
-                                      y: Number(e.target.value)
+                                      y: Number(e.target.value),
+                                      y_manual: Number(e.target.value)
                                     }
                                   }
                                 }
@@ -2056,7 +2141,7 @@ export default function EditTemplatePage() {
                               min="0"
                               max="100"
                               step="0.1"
-                              value={formData.design_settings.layout.course_name_position.x_manual || formData.design_settings.layout.course_name_position.x}
+                              value={formData.design_settings.layout.course_name_position.x_manual ?? formData.design_settings.layout.course_name_position.x}
                               onChange={(e) => {
                                 const value = Number(e.target.value);
                                 setFormData(prev => ({
@@ -2086,7 +2171,7 @@ export default function EditTemplatePage() {
                               min="0"
                               max="100"
                               step="0.1"
-                              value={formData.design_settings.layout.course_name_position.y_manual || formData.design_settings.layout.course_name_position.y}
+                              value={formData.design_settings.layout.course_name_position.y_manual ?? formData.design_settings.layout.course_name_position.y}
                               onChange={(e) => {
                                 const value = Number(e.target.value);
                                 setFormData(prev => ({
@@ -2134,7 +2219,8 @@ export default function EditTemplatePage() {
                                     ...prev.design_settings.layout,
                                     course_name_position: {
                                       ...prev.design_settings.layout.course_name_position,
-                                      x: Number(e.target.value)
+                                      x: Number(e.target.value),
+                                      x_manual: Number(e.target.value)
                                     }
                                   }
                                 }
@@ -2165,7 +2251,236 @@ export default function EditTemplatePage() {
                                     ...prev.design_settings.layout,
                                     course_name_position: {
                                       ...prev.design_settings.layout.course_name_position,
-                                      y: Number(e.target.value)
+                                      y: Number(e.target.value),
+                                      y_manual: Number(e.target.value)
+                                    }
+                                  }
+                                }
+                              }))}
+                              className="w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-lg appearance-none cursor-pointer slider"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Duration Element */}
+                  <div className="border border-neutral-200 dark:border-neutral-600 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-base font-medium text-neutral-900 dark:text-neutral-100">
+                        {t.durationPosition}
+                      </h3>
+                      <input
+                        type="checkbox"
+                        id="enable_duration"
+                        checked={formData.design_settings.layout.duration_position.enabled !== false}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          design_settings: {
+                            ...prev.design_settings,
+                            layout: {
+                              ...prev.design_settings.layout,
+                              duration_position: {
+                                ...prev.design_settings.layout.duration_position,
+                                enabled: e.target.checked
+                              }
+                            }
+                          }
+                        }))}
+                        className="w-4 h-4 text-[#990000] bg-white dark:bg-neutral-800 border-neutral-300 dark:border-neutral-600 rounded focus:ring-[#990000] focus:ring-2"
+                      />
+                    </div>
+                    {formData.design_settings.layout.duration_position.enabled !== false && (
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            Renk
+                          </label>
+                          <input
+                            type="color"
+                            value={formData.design_settings.colors.duration}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                colors: {
+                                  ...prev.design_settings.colors,
+                                  duration: e.target.value
+                                }
+                              }
+                            }))}
+                            className="w-20 h-10 border border-neutral-300 dark:border-neutral-600 rounded cursor-pointer"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            {t.durationSize}
+                          </label>
+                          <input
+                            type="number"
+                            min="8"
+                            max="72"
+                            value={formData.design_settings.font_sizes.duration}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                font_sizes: {
+                                  ...prev.design_settings.font_sizes,
+                                  duration: Number(e.target.value)
+                                }
+                              }
+                            }))}
+                            className="w-20 px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            Metin Hizalama
+                          </label>
+                          <select
+                            value={formData.design_settings.layout.duration_position.align || 'left'}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                layout: {
+                                  ...prev.design_settings.layout,
+                                  duration_position: {
+                                    ...prev.design_settings.layout.duration_position,
+                                    align: e.target.value as 'left' | 'center' | 'right'
+                                  }
+                                }
+                              }
+                            }))}
+                            className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                          >
+                            <option value="left">Sol</option>
+                            <option value="center">Orta</option>
+                            <option value="right">Sağ</option>
+                          </select>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                              X Pozisyonu (Manuel)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={formData.design_settings.layout.duration_position.x_manual ?? formData.design_settings.layout.duration_position.x}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      duration_position: {
+                                        ...prev.design_settings.layout.duration_position,
+                                        x: value,
+                                        x_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                              Y Pozisyonu (Manuel)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={formData.design_settings.layout.duration_position.y_manual ?? formData.design_settings.layout.duration_position.y}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      duration_position: {
+                                        ...prev.design_settings.layout.duration_position,
+                                        y: value,
+                                        y_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-3">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                {t.positionX}
+                              </label>
+                              <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                                {formData.design_settings.layout.duration_position.x}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={formData.design_settings.layout.duration_position.x}
+                              onChange={(e) => setFormData(prev => ({
+                                ...prev,
+                                design_settings: {
+                                  ...prev.design_settings,
+                                  layout: {
+                                    ...prev.design_settings.layout,
+                                    duration_position: {
+                                      ...prev.design_settings.layout.duration_position,
+                                      x: Number(e.target.value),
+                                      x_manual: Number(e.target.value)
+                                    }
+                                  }
+                                }
+                              }))}
+                              className="w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-lg appearance-none cursor-pointer slider"
+                            />
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                {t.positionY}
+                              </label>
+                              <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                                {formData.design_settings.layout.duration_position.y}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={formData.design_settings.layout.duration_position.y}
+                              onChange={(e) => setFormData(prev => ({
+                                ...prev,
+                                design_settings: {
+                                  ...prev.design_settings,
+                                  layout: {
+                                    ...prev.design_settings.layout,
+                                    duration_position: {
+                                      ...prev.design_settings.layout.duration_position,
+                                      y: Number(e.target.value),
+                                      y_manual: Number(e.target.value)
                                     }
                                   }
                                 }
@@ -2291,7 +2606,7 @@ export default function EditTemplatePage() {
                               min="0"
                               max="100"
                               step="0.1"
-                              value={formData.design_settings.layout.institution_position.x_manual || formData.design_settings.layout.institution_position.x}
+                              value={formData.design_settings.layout.institution_position.x_manual ?? formData.design_settings.layout.institution_position.x}
                               onChange={(e) => {
                                 const value = Number(e.target.value);
                                 setFormData(prev => ({
@@ -2321,7 +2636,7 @@ export default function EditTemplatePage() {
                               min="0"
                               max="100"
                               step="0.1"
-                              value={formData.design_settings.layout.institution_position.y_manual || formData.design_settings.layout.institution_position.y}
+                              value={formData.design_settings.layout.institution_position.y_manual ?? formData.design_settings.layout.institution_position.y}
                               onChange={(e) => {
                                 const value = Number(e.target.value);
                                 setFormData(prev => ({
@@ -2369,7 +2684,8 @@ export default function EditTemplatePage() {
                                     ...prev.design_settings.layout,
                                     institution_position: {
                                       ...prev.design_settings.layout.institution_position,
-                                      x: Number(e.target.value)
+                                      x: Number(e.target.value),
+                                      x_manual: Number(e.target.value)
                                     }
                                   }
                                 }
@@ -2400,7 +2716,8 @@ export default function EditTemplatePage() {
                                     ...prev.design_settings.layout,
                                     institution_position: {
                                       ...prev.design_settings.layout.institution_position,
-                                      y: Number(e.target.value)
+                                      y: Number(e.target.value),
+                                      y_manual: Number(e.target.value)
                                     }
                                   }
                                 }
@@ -2526,7 +2843,7 @@ export default function EditTemplatePage() {
                               min="0"
                               max="100"
                               step="0.1"
-                              value={formData.design_settings.layout.certificate_no_position.x_manual || formData.design_settings.layout.certificate_no_position.x}
+                              value={formData.design_settings.layout.certificate_no_position.x_manual ?? formData.design_settings.layout.certificate_no_position.x}
                               onChange={(e) => {
                                 const value = Number(e.target.value);
                                 setFormData(prev => ({
@@ -2556,7 +2873,7 @@ export default function EditTemplatePage() {
                               min="0"
                               max="100"
                               step="0.1"
-                              value={formData.design_settings.layout.certificate_no_position.y_manual || formData.design_settings.layout.certificate_no_position.y}
+                              value={formData.design_settings.layout.certificate_no_position.y_manual ?? formData.design_settings.layout.certificate_no_position.y}
                               onChange={(e) => {
                                 const value = Number(e.target.value);
                                 setFormData(prev => ({
@@ -2604,7 +2921,8 @@ export default function EditTemplatePage() {
                                     ...prev.design_settings.layout,
                                     certificate_no_position: {
                                       ...prev.design_settings.layout.certificate_no_position,
-                                      x: Number(e.target.value)
+                                      x: Number(e.target.value),
+                                      x_manual: Number(e.target.value)
                                     }
                                   }
                                 }
@@ -2635,7 +2953,8 @@ export default function EditTemplatePage() {
                                     ...prev.design_settings.layout,
                                     certificate_no_position: {
                                       ...prev.design_settings.layout.certificate_no_position,
-                                      y: Number(e.target.value)
+                                      y: Number(e.target.value),
+                                      y_manual: Number(e.target.value)
                                     }
                                   }
                                 }
@@ -2761,7 +3080,7 @@ export default function EditTemplatePage() {
                               min="0"
                               max="100"
                               step="0.1"
-                              value={formData.design_settings.layout.date_position.x_manual || formData.design_settings.layout.date_position.x}
+                              value={formData.design_settings.layout.date_position.x_manual ?? formData.design_settings.layout.date_position.x}
                               onChange={(e) => {
                                 const value = Number(e.target.value);
                                 setFormData(prev => ({
@@ -2791,7 +3110,7 @@ export default function EditTemplatePage() {
                               min="0"
                               max="100"
                               step="0.1"
-                              value={formData.design_settings.layout.date_position.y_manual || formData.design_settings.layout.date_position.y}
+                              value={formData.design_settings.layout.date_position.y_manual ?? formData.design_settings.layout.date_position.y}
                               onChange={(e) => {
                                 const value = Number(e.target.value);
                                 setFormData(prev => ({
@@ -2839,7 +3158,8 @@ export default function EditTemplatePage() {
                                     ...prev.design_settings.layout,
                                     date_position: {
                                       ...prev.design_settings.layout.date_position,
-                                      x: Number(e.target.value)
+                                      x: Number(e.target.value),
+                                      x_manual: Number(e.target.value)
                                     }
                                   }
                                 }
@@ -2870,7 +3190,8 @@ export default function EditTemplatePage() {
                                     ...prev.design_settings.layout,
                                     date_position: {
                                       ...prev.design_settings.layout.date_position,
-                                      y: Number(e.target.value)
+                                      y: Number(e.target.value),
+                                      y_manual: Number(e.target.value)
                                     }
                                   }
                                 }
@@ -2996,7 +3317,7 @@ export default function EditTemplatePage() {
                               min="0"
                               max="100"
                               step="0.1"
-                              value={formData.design_settings.layout.signature_position.x_manual || formData.design_settings.layout.signature_position.x}
+                              value={formData.design_settings.layout.signature_position.x_manual ?? formData.design_settings.layout.signature_position.x}
                               onChange={(e) => {
                                 const value = Number(e.target.value);
                                 setFormData(prev => ({
@@ -3026,7 +3347,7 @@ export default function EditTemplatePage() {
                               min="0"
                               max="100"
                               step="0.1"
-                              value={formData.design_settings.layout.signature_position.y_manual || formData.design_settings.layout.signature_position.y}
+                              value={formData.design_settings.layout.signature_position.y_manual ?? formData.design_settings.layout.signature_position.y}
                               onChange={(e) => {
                                 const value = Number(e.target.value);
                                 setFormData(prev => ({
@@ -3074,7 +3395,8 @@ export default function EditTemplatePage() {
                                     ...prev.design_settings.layout,
                                     signature_position: {
                                       ...prev.design_settings.layout.signature_position,
-                                      x: Number(e.target.value)
+                                      x: Number(e.target.value),
+                                      x_manual: Number(e.target.value)
                                     }
                                   }
                                 }
@@ -3105,7 +3427,8 @@ export default function EditTemplatePage() {
                                     ...prev.design_settings.layout,
                                     signature_position: {
                                       ...prev.design_settings.layout.signature_position,
-                                      y: Number(e.target.value)
+                                      y: Number(e.target.value),
+                                      y_manual: Number(e.target.value)
                                     }
                                   }
                                 }
@@ -3154,19 +3477,19 @@ export default function EditTemplatePage() {
             </div>
           </div>
 
-          {/* Right Column - Preview */}
-          <div className="lg:sticky lg:top-8 lg:h-fit">
-            <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 flex items-center">
-                  <Eye className="w-5 h-5 mr-2 text-[#990000]" />
-                  {t.previewTemplate}
+          {/* Preview — mobile above form; desktop beside (no sticky needed with in-pane form scroll) */}
+          <div className="order-1 lg:order-2 mb-6 lg:mb-0 lg:self-start lg:sticky lg:top-4">
+            <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4 sm:p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-3 gap-2">
+                <h2 className="text-base sm:text-lg font-semibold text-neutral-900 dark:text-neutral-100 flex items-center min-w-0">
+                  <Eye className="w-5 h-5 mr-2 text-[#990000] shrink-0" />
+                  <span className="truncate">{t.previewTemplate}</span>
                 </h2>
                 <button
                   type="button"
                   onClick={generatePreview}
                   disabled={isGeneratingPreview || !formData.background_image}
-                  className="px-3 py-1 text-sm bg-[#990000] hover:bg-[#880000] text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="shrink-0 px-3 py-1 text-sm bg-[#990000] hover:bg-[#880000] text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isGeneratingPreview ? (
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
@@ -3178,15 +3501,15 @@ export default function EditTemplatePage() {
               
               {/* Certificate Preview */}
               <div 
-                className="relative bg-neutral-100 dark:bg-neutral-700 rounded-lg overflow-hidden border-2 border-dashed border-neutral-300 dark:border-neutral-600"
+                className="relative bg-neutral-100 dark:bg-neutral-700 rounded-lg overflow-hidden border border-neutral-300 dark:border-neutral-600"
                 style={{ 
                   aspectRatio: imageAspectRatio,
-                  minHeight: '300px',
-                  maxHeight: '500px'
+                  minHeight: '220px',
+                  maxHeight: 'min(72dvh, 720px)'
                 }}
               >
                 {formData.background_image ? (
-                  <div className="w-full h-full relative flex items-center justify-center">
+                  <div className="w-full h-full relative flex items-center justify-center p-1">
                     <canvas
                       ref={canvasRef}
                       className="max-w-full max-h-full object-contain"
@@ -3227,16 +3550,13 @@ export default function EditTemplatePage() {
                 )}
               </div>
               
-              {/* Preview Info */}
-              <div className="mt-4 text-xs text-neutral-500 dark:text-neutral-400 space-y-1">
-                <p><strong>Şablon:</strong> {formData.name || 'Şablon Adı'}</p>
-                <p><strong>Kurs:</strong> {t.sampleCourse}</p>
-                <p><strong>Kuruluş:</strong> {organizations.find(org => org.slug === formData.organization_slug)?.name || 'Kuruluş'}</p>
+              {/* Preview Info — compact */}
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-neutral-500 dark:text-neutral-400">
+                <p className="truncate"><strong>Şablon:</strong> {formData.name || 'Şablon Adı'}</p>
+                <p className="truncate"><strong>Kurs:</strong> {t.sampleCourse}</p>
+                <p className="truncate"><strong>Kuruluş:</strong> {organizations.find(org => org.slug === formData.organization_slug)?.name || 'Kuruluş'}</p>
                 {template && (
-                  <>
-                    <p><strong>Oluşturulma:</strong> {new Date(template.created_at).toLocaleDateString('tr-TR')}</p>
-                    <p><strong>Son Güncelleme:</strong> {new Date(template.updated_at).toLocaleDateString('tr-TR')}</p>
-                  </>
+                  <p className="truncate"><strong>Güncelleme:</strong> {new Date(template.updated_at).toLocaleDateString('tr-TR')}</p>
                 )}
               </div>
             </div>

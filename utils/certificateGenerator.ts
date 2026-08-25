@@ -4,10 +4,13 @@ import {
   parseDesignSettings,
   renderCertificateFields,
   TemplateDesignSettings,
+  balancedMetaLayout,
+  DEFAULT_DESIGN_SETTINGS,
 } from './certificateCanvasRenderer';
 
 interface Certificate extends CertificateRenderData {
   id: number;
+  duration?: string;
   instructor_bio?: string;
   organization_description?: string;
   skills?: string[];
@@ -219,8 +222,9 @@ export const generateCertificate = async (
         date: '#666666',
         signature: '#333333',
         course_name: '#333333',
+        duration: '#666666',
       },
-      fonts: { title: 'serif', body: 'sans_serif', name: 'sans_serif' },
+      fonts: { title: 'serif', body: 'sans_serif', name: 'sans_serif', duration: 'sans_serif' },
       font_sizes: {
         title: 24,
         name: 18,
@@ -230,16 +234,14 @@ export const generateCertificate = async (
         certificate_no: 14,
         description: 14,
         course_name: 18,
+        duration: 14,
       },
       layout: {
-        title_position: { x: 50, y: 20, enabled: true, align: 'center' },
-        name_position: { x: 50, y: 50, enabled: true, align: 'center' },
-        date_position: { x: 50, y: 80, enabled: true, align: 'center' },
-        signature_position: { x: 50, y: 90, enabled: true, align: 'center' },
-        description_position: { x: 50, y: 60, enabled: false, align: 'center' },
-        institution_position: { x: 50, y: 70, enabled: false, align: 'center' },
-        certificate_no_position: { x: 90, y: 95, enabled: false, align: 'right' },
-        course_name_position: { x: 50, y: 40, enabled: false, align: 'center' },
+        title_position: { ...DEFAULT_DESIGN_SETTINGS.layout.title_position },
+        name_position: { ...DEFAULT_DESIGN_SETTINGS.layout.name_position },
+        description_position: { ...DEFAULT_DESIGN_SETTINGS.layout.description_position },
+        course_name_position: { ...DEFAULT_DESIGN_SETTINGS.layout.course_name_position },
+        ...balancedMetaLayout(),
       },
     },
   });

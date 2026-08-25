@@ -157,6 +157,7 @@ export const generateSampleCertificateData = (language: string = 'tr'): Certific
       language === 'en'
         ? 'This is a sample description for preview purposes only. The actual certificate content will be different.'
         : 'Bu sadece önizleme amaçlı örnek bir açıklamadır. Gerçek sertifika içeriği farklı olacaktır.',
+    duration: language === 'en' ? '40 hours' : '40 saat',
   };
 };
 

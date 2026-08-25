@@ -53,6 +53,7 @@ interface TemplateFormData {
       date: string;
       signature: string;
       course_name: string;
+      duration: string;
     };
     fonts: {
       title: string;
@@ -64,6 +65,7 @@ interface TemplateFormData {
       date: string;
       signature: string;
       course_name: string;
+      duration: string;
     };
     font_sizes: {
       title: number;
@@ -74,6 +76,7 @@ interface TemplateFormData {
       date: number;
       signature: number;
       course_name: number;
+      duration: number;
     };
     layout: {
       title_position: { x: number; y: number; enabled?: boolean; align?: 'left' | 'center' | 'right'; x_manual?: number; y_manual?: number };
@@ -84,6 +87,7 @@ interface TemplateFormData {
       date_position: { x: number; y: number; enabled?: boolean; align?: 'left' | 'center' | 'right'; x_manual?: number; y_manual?: number };
       signature_position: { x: number; y: number; enabled?: boolean; align?: 'left' | 'center' | 'right'; x_manual?: number; y_manual?: number };
       course_name_position: { x: number; y: number; enabled?: boolean; align?: 'left' | 'center' | 'right'; x_manual?: number; y_manual?: number };
+      duration_position: { x: number; y: number; enabled?: boolean; align?: 'left' | 'center' | 'right'; x_manual?: number; y_manual?: number };
     };
   };
 }
@@ -119,6 +123,7 @@ const texts = {
     nameSize: "İsim Boyutu (px)",
     descriptionSize: "Açıklama Boyutu (px)",
     courseNameSize: "Kurs Adı Boyutu (px)",
+    durationSize: "Süre Boyutu (px)",
     dateSize: "Tarih Boyutu (px)",
     signatureSize: "İmza Boyutu (px)",
     institutionSize: "Kurum/Eğitmen Boyutu (px)",
@@ -128,6 +133,7 @@ const texts = {
     namePosition: "İsim Pozisyonu",
     descriptionPosition: "Açıklama Pozisyonu",
     courseNamePosition: "Kurs Adı Pozisyonu",
+    durationPosition: "Süre Pozisyonu",
     institutionPosition: "Kurum/Eğitmen Pozisyonu",
     certificateNoPosition: "Sertifika No Pozisyonu",
     datePosition: "Tarih Pozisyonu",
@@ -193,6 +199,7 @@ const texts = {
     nameSize: "Name Size (px)",
     descriptionSize: "Description Size (px)",
     courseNameSize: "Course Name Size (px)",
+    durationSize: "Duration Size (px)",
     dateSize: "Date Size (px)",
     signatureSize: "Signature Size (px)",
     institutionSize: "Institution/Instructor Size (px)",
@@ -202,6 +209,7 @@ const texts = {
     namePosition: "Name Position",
     descriptionPosition: "Description Position",
     courseNamePosition: "Course Name Position",
+    durationPosition: "Duration Position",
     institutionPosition: "Institution/Instructor Position",
     certificateNoPosition: "Certificate No Position",
     datePosition: "Date Position",
@@ -273,7 +281,8 @@ export default function CreateTemplatePage() {
         certificate_no: '#666666',
         date: '#000',
         signature: '#000',
-        course_name: '#000'
+        course_name: '#000',
+        duration: '#666666'
       },
       fonts: {
         title: 'sans_serif',
@@ -284,7 +293,8 @@ export default function CreateTemplatePage() {
         certificate_no: 'sans_serif',
         date: 'sans_serif',
         signature: 'sans_serif',
-        course_name: 'sans_serif'
+        course_name: 'sans_serif',
+        duration: 'sans_serif'
       },
       font_sizes: {
         title: 26,
@@ -294,7 +304,8 @@ export default function CreateTemplatePage() {
         certificate_no: 22,
         date: 30,
         signature: 30,
-        course_name: 34
+        course_name: 34,
+        duration: 22
       },
       layout: {
         title_position: { x: 42, y: 20, enabled: false, align: 'center', x_manual: 42, y_manual: 20 },
@@ -304,7 +315,8 @@ export default function CreateTemplatePage() {
         certificate_no_position: { x: 96, y: 93, enabled: false, align: 'right', x_manual: 96, y_manual: 93 },
         date_position: { x: 8.9, y: 64, enabled: false, align: 'left', x_manual: 8.9, y_manual: 64 },
         signature_position: { x: 35.3, y: 64, enabled: false, align: 'center', x_manual: 35.3, y_manual: 64 },
-        course_name_position: { x: 15.3, y: 42.7, enabled: false, align: 'left', x_manual: 15.3, y_manual: 42.7 }
+        course_name_position: { x: 15.3, y: 42.7, enabled: false, align: 'left', x_manual: 15.3, y_manual: 42.7 },
+        duration_position: { x: 8.9, y: 70, enabled: false, align: 'left', x_manual: 8.9, y_manual: 70 }
       }
     }
   });
@@ -361,7 +373,8 @@ export default function CreateTemplatePage() {
               certificate_no_position: { ...prev.design_settings.layout.certificate_no_position, enabled: false },
               date_position: { ...prev.design_settings.layout.date_position, enabled: false },
               signature_position: { ...prev.design_settings.layout.signature_position, enabled: false },
-              course_name_position: { ...prev.design_settings.layout.course_name_position, enabled: false }
+              course_name_position: { ...prev.design_settings.layout.course_name_position, enabled: false },
+              duration_position: { ...prev.design_settings.layout.duration_position, enabled: false }
             }
           }
         }));
@@ -567,7 +580,8 @@ export default function CreateTemplatePage() {
           certificate_no: '#fff',
           date: '#000',
           signature: '#000',
-          course_name: '#000'
+          course_name: '#000',
+          duration: '#666666'
         },
         fonts: {
           title: 'sans_serif',
@@ -578,7 +592,8 @@ export default function CreateTemplatePage() {
           certificate_no: 'sans_serif',
           date: 'sans_serif',
           signature: 'sans_serif',
-          course_name: 'sans_serif'
+          course_name: 'sans_serif',
+          duration: 'sans_serif'
         },
         font_sizes: {
           title: 26,
@@ -588,7 +603,8 @@ export default function CreateTemplatePage() {
           certificate_no: 22,
           date: 30,
           signature: 30,
-          course_name: 34
+          course_name: 34,
+          duration: 22
         },
         layout: {
           title_position: { x: 42, y: 20, enabled: false, align: 'center', x_manual: 42, y_manual: 20 },
@@ -598,7 +614,8 @@ export default function CreateTemplatePage() {
           certificate_no_position: { x: 96, y: 93, enabled: true, align: 'right', x_manual: 96, y_manual: 93 },
           date_position: { x: 8.9, y: 64, enabled: true, align: 'left', x_manual: 8.9, y_manual: 64 },
           signature_position: { x: 35.3, y: 64, enabled: true, align: 'center', x_manual: 35.3, y_manual: 64 },
-          course_name_position: { x: 15.3, y: 42.7, enabled: true, align: 'left', x_manual: 15.3, y_manual: 42.7 }
+          course_name_position: { x: 15.3, y: 42.7, enabled: true, align: 'left', x_manual: 15.3, y_manual: 42.7 },
+          duration_position: { x: 8.9, y: 70, enabled: true, align: 'left', x_manual: 8.9, y_manual: 70 }
         }
       }
     }));
@@ -660,11 +677,11 @@ export default function CreateTemplatePage() {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 py-8 sm:py-12">
-      <div className="max-w-full xl:max-w-[1500px] 2xl:max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12">
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 py-4 sm:py-6">
+      <div className="max-w-full xl:max-w-[1600px] 2xl:max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center mb-4">
+        <div className="mb-4 sm:mb-6">
+          <div className="flex items-center mb-2">
             <Link 
               href={`/${locale}/certificates/templates`}
               className="mr-4 p-2 text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200 rounded-full hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
@@ -678,14 +695,17 @@ export default function CreateTemplatePage() {
               <div className="w-12 h-px bg-[#990000] mt-2"></div>
             </div>
           </div>
-          <p className="text-base text-neutral-600 dark:text-neutral-400 max-w-2xl">
+          <p className="text-sm sm:text-base text-neutral-600 dark:text-neutral-400 max-w-2xl">
             {t.subtitle}
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left Column - Form */}
-          <div className="space-y-6">
+        <form
+          onSubmit={handleSubmit}
+          className="flex flex-col lg:grid lg:grid-cols-[minmax(320px,40%)_minmax(0,60%)] lg:gap-6 lg:items-start"
+        >
+          {/* Controls scroll in-pane so preview stays visible (main overflow-x breaks sticky) */}
+          <div className="order-2 lg:order-1 space-y-6 lg:max-h-[calc(100dvh-5.5rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-2 lg:pb-8">
             {/* Basic Information */}
             <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6">
               <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-4 flex items-center">
@@ -1920,6 +1940,255 @@ export default function CreateTemplatePage() {
                     )}
                   </div>
 
+                  {/* Duration Element */}
+                  <div className="border border-neutral-200 dark:border-neutral-600 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3
+                        className="text-base font-medium text-neutral-900 dark:text-neutral-100 cursor-pointer hover:text-[#990000] dark:hover:text-red-400 transition-colors"
+                        onClick={() => setFormData(prev => ({
+                          ...prev,
+                          design_settings: {
+                            ...prev.design_settings,
+                            layout: {
+                              ...prev.design_settings.layout,
+                              duration_position: {
+                                ...prev.design_settings.layout.duration_position,
+                                enabled: !(prev.design_settings.layout.duration_position.enabled !== false)
+                              }
+                            }
+                          }
+                        }))}
+                      >
+                        {t.durationPosition}
+                      </h3>
+                      <input
+                        type="checkbox"
+                        id="enable_duration"
+                        checked={formData.design_settings.layout.duration_position.enabled !== false}
+                        onChange={(e) => setFormData(prev => ({
+                          ...prev,
+                          design_settings: {
+                            ...prev.design_settings,
+                            layout: {
+                              ...prev.design_settings.layout,
+                              duration_position: {
+                                ...prev.design_settings.layout.duration_position,
+                                enabled: e.target.checked
+                              }
+                            }
+                          }
+                        }))}
+                        className="w-4 h-4 text-[#990000] bg-white dark:bg-neutral-800 border-neutral-300 dark:border-neutral-600 rounded focus:ring-[#990000] focus:ring-2"
+                      />
+                    </div>
+                    {formData.design_settings.layout.duration_position.enabled !== false && (
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            Renk
+                          </label>
+                          <input
+                            type="color"
+                            value={formData.design_settings.colors.duration}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                colors: {
+                                  ...prev.design_settings.colors,
+                                  duration: e.target.value
+                                }
+                              }
+                            }))}
+                            className="w-20 h-10 border border-neutral-300 dark:border-neutral-600 rounded cursor-pointer"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            {t.durationSize}
+                          </label>
+                          <input
+                            type="number"
+                            min="8"
+                            max="72"
+                            value={formData.design_settings.font_sizes.duration}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                font_sizes: {
+                                  ...prev.design_settings.font_sizes,
+                                  duration: Number(e.target.value)
+                                }
+                              }
+                            }))}
+                            className="w-20 px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                            Metin Hizalama
+                          </label>
+                          <select
+                            value={formData.design_settings.layout.duration_position.align || 'left'}
+                            onChange={(e) => setFormData(prev => ({
+                              ...prev,
+                              design_settings: {
+                                ...prev.design_settings,
+                                layout: {
+                                  ...prev.design_settings.layout,
+                                  duration_position: {
+                                    ...prev.design_settings.layout.duration_position,
+                                    align: e.target.value as 'left' | 'center' | 'right'
+                                  }
+                                }
+                              }
+                            }))}
+                            className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                          >
+                            <option value="left">Sol</option>
+                            <option value="center">Orta</option>
+                            <option value="right">Sağ</option>
+                          </select>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                              X Pozisyonu (Manuel)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={formData.design_settings.layout.duration_position.x_manual ?? formData.design_settings.layout.duration_position.x}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      duration_position: {
+                                        ...prev.design_settings.layout.duration_position,
+                                        x: value,
+                                        x_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-2">
+                              Y Pozisyonu (Manuel)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={formData.design_settings.layout.duration_position.y_manual ?? formData.design_settings.layout.duration_position.y}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      duration_position: {
+                                        ...prev.design_settings.layout.duration_position,
+                                        y: value,
+                                        y_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 text-sm"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-3">
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                {t.positionX}
+                              </label>
+                              <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                                {formData.design_settings.layout.duration_position.x}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={formData.design_settings.layout.duration_position.x}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      duration_position: {
+                                        ...prev.design_settings.layout.duration_position,
+                                        x: value,
+                                        x_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-lg appearance-none cursor-pointer slider"
+                            />
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-medium text-neutral-600 dark:text-neutral-400">
+                                {t.positionY}
+                              </label>
+                              <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                                {formData.design_settings.layout.duration_position.y}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={formData.design_settings.layout.duration_position.y}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setFormData(prev => ({
+                                  ...prev,
+                                  design_settings: {
+                                    ...prev.design_settings,
+                                    layout: {
+                                      ...prev.design_settings.layout,
+                                      duration_position: {
+                                        ...prev.design_settings.layout.duration_position,
+                                        y: value,
+                                        y_manual: value
+                                      }
+                                    }
+                                  }
+                                }))
+                              }}
+                              className="w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-lg appearance-none cursor-pointer slider"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Institution Element */}
                   <div className="border border-neutral-200 dark:border-neutral-600 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-3">
@@ -2988,19 +3257,19 @@ export default function CreateTemplatePage() {
             </div>
           </div>
 
-          {/* Right Column - Preview */}
-          <div className="lg:sticky lg:top-8 lg:h-fit">
-            <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 flex items-center">
-                  <Eye className="w-5 h-5 mr-2 text-[#990000]" />
-                  {t.previewTemplate}
+          {/* Preview — mobile above form; desktop beside (no sticky needed with in-pane form scroll) */}
+          <div className="order-1 lg:order-2 mb-6 lg:mb-0 lg:self-start lg:sticky lg:top-4">
+            <div className="bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 p-4 sm:p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-3 gap-2">
+                <h2 className="text-base sm:text-lg font-semibold text-neutral-900 dark:text-neutral-100 flex items-center min-w-0">
+                  <Eye className="w-5 h-5 mr-2 text-[#990000] shrink-0" />
+                  <span className="truncate">{t.previewTemplate}</span>
                 </h2>
                 <button
                   type="button"
                   onClick={generatePreview}
                   disabled={isGeneratingPreview || !formData.background_image}
-                  className="px-3 py-1 text-sm bg-[#990000] hover:bg-[#880000] text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="shrink-0 px-3 py-1 text-sm bg-[#990000] hover:bg-[#880000] text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isGeneratingPreview ? (
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
@@ -3012,15 +3281,15 @@ export default function CreateTemplatePage() {
               
               {/* Certificate Preview */}
               <div 
-                className="relative bg-neutral-100 dark:bg-neutral-700 rounded-lg overflow-hidden border-2 border-dashed border-neutral-300 dark:border-neutral-600"
+                className="relative bg-neutral-100 dark:bg-neutral-700 rounded-lg overflow-hidden border border-neutral-300 dark:border-neutral-600"
                 style={{ 
                   aspectRatio: imageAspectRatio,
-                  minHeight: '300px',
-                  maxHeight: '500px'
+                  minHeight: '220px',
+                  maxHeight: 'min(72dvh, 720px)'
                 }}
               >
                 {formData.background_image ? (
-                  <div className="w-full h-full relative flex items-center justify-center">
+                  <div className="w-full h-full relative flex items-center justify-center p-1">
                     <canvas
                       ref={canvasRef}
                       className="max-w-full max-h-full object-contain"
@@ -3058,14 +3327,13 @@ export default function CreateTemplatePage() {
                     </div>
                   </div>
                 )}
-                
               </div>
               
-              {/* Preview Info */}
-              <div className="mt-4 text-xs text-neutral-500 dark:text-neutral-400 space-y-1">
-                <p><strong>Şablon:</strong> {formData.name || 'Şablon Adı'}</p>
-                <p><strong>Kurs:</strong> {t.sampleCourse}</p>
-                <p><strong>Kuruluş:</strong> {organizations.find(org => org.slug === formData.organization_slug)?.name || 'Kuruluş'}</p>
+              {/* Preview Info — compact */}
+              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-neutral-500 dark:text-neutral-400">
+                <p className="truncate"><strong>Şablon:</strong> {formData.name || 'Şablon Adı'}</p>
+                <p className="truncate"><strong>Kurs:</strong> {t.sampleCourse}</p>
+                <p className="truncate"><strong>Kuruluş:</strong> {organizations.find(org => org.slug === formData.organization_slug)?.name || 'Kuruluş'}</p>
               </div>
             </div>
           </div>
