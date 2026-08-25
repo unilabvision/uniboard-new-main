@@ -1688,6 +1688,11 @@ export default function CreateCertificatePage() {
                             rows={4}
                             disabled={sendingEmails}
                           />
+                          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1.5">
+                            {locale === 'tr'
+                              ? 'Sertifika formu “Açıklama” alanı maile otomatik eklenir; burası ekstra not içindir.'
+                              : 'The form description is included in the email automatically; use this for an extra note.'}
+                          </p>
                         </div>
 
                         {/* Email List */}
@@ -2053,10 +2058,34 @@ export default function CreateCertificatePage() {
                             Sertifikaları oluşturduktan sonra e-posta ile gönder
                           </span>
                           <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
-                            Excel dosyasındaki e-posta adreslerine her kişinin adıyla kişisel sertifika bağlantısı gönderilir.
+                            Excel dosyasındaki e-posta adreslerine her kişinin adıyla kişisel sertifika bağlantısı gönderilir. Formdaki sertifika açıklaması mail içeriğine eklenir.
                           </p>
                         </div>
                       </label>
+                      {autoSendEmails && (
+                        <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-700">
+                          <label className="block text-sm font-medium text-neutral-800 dark:text-neutral-200 mb-1.5">
+                            {locale === 'tr' ? 'Özel e-posta mesajı (isteğe bağlı)' : 'Custom email message (optional)'}
+                          </label>
+                          <textarea
+                            value={customEmailMessage}
+                            onChange={(e) => setCustomEmailMessage(e.target.value)}
+                            placeholder={
+                              locale === 'tr'
+                                ? 'Alıcılara gidecek ekstra not (sertifika açıklamasından ayrıdır)...'
+                                : 'Extra note for recipients (separate from certificate description)...'
+                            }
+                            className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 focus:ring-2 focus:ring-[#990000] focus:border-transparent resize-none text-sm"
+                            rows={3}
+                            disabled={submitting}
+                          />
+                          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1.5">
+                            {locale === 'tr'
+                              ? 'Bu alan mailde vurgulu kutu olarak görünür. Sertifika “Açıklama” alanı da ayrıca maile eklenir.'
+                              : 'This appears as a highlighted box in the email. The certificate description is also included separately.'}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </>
                 ) : (

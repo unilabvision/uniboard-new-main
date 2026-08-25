@@ -1,6 +1,21 @@
 // app/_services/emailService.js
 import nodemailer from 'nodemailer';
 
+/** Escape user-provided strings before injecting into HTML email bodies. */
+function escapeHtml(value) {
+  if (value == null) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatMultilineHtml(value) {
+  return escapeHtml(value).replace(/\r\n|\r|\n/g, '<br>');
+}
+
 /** Reuse one SMTP connection — Gmail rate-limits repeated login/verify. */
 let cachedTransporter = null;
 let transporterVerified = false;
@@ -60,6 +75,9 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
     const greeting = isTurkish 
       ? `Sayın ${userInfo.name}`
       : `Dear ${userInfo.name}`;
+    const greetingHtml = isTurkish 
+      ? `Sayın ${escapeHtml(userInfo.name)}`
+      : `Dear ${escapeHtml(userInfo.name)}`;
     
     // Main message based on type
     let thankYou, courseReady;
@@ -301,23 +319,32 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
 <body>
   <div class="container">
     <div class="header">
-      <div class="logo">${orderInfo.organizationName || 'MyUNI'}</div>
+      <div class="logo">${escapeHtml(orderInfo.organizationName || 'MyUNI')}</div>
     </div>
     
     <div class="content">
       <div class="greeting">
-        ${greeting},
+        ${greetingHtml},
       </div>
       
       <div class="message">
         <span class="highlight">${thankYou}</span><br>
         ${courseReady}
-        ${orderInfo.customMessage ? `<br><br><div style="margin-top: 15px; padding: 15px; background-color: #f8f8f8; border-left: 4px solid #990000; font-style: italic;">${orderInfo.customMessage}</div>` : ''}
+        ${orderInfo.customMessage ? `<br><br><div style="margin-top: 15px; padding: 15px; background-color: #f8f8f8; border-left: 4px solid #990000; font-style: italic;">${formatMultilineHtml(orderInfo.customMessage)}</div>` : ''}
       </div>
       
       <div class="course-title">
-        ${courseInfo.title}
+        ${escapeHtml(courseInfo.title)}
       </div>
+      
+      ${isCertificate && courseInfo.description ? `
+      <div style="margin: 0 0 20px; padding: 12px 14px; background-color: #fafafa; border: 1px solid #eeeeee; font-size: 14px; color: #444444; line-height: 1.5;">
+        <div style="font-size: 12px; color: #888888; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em;">
+          ${isTurkish ? 'Açıklama' : 'Description'}
+        </div>
+        ${formatMultilineHtml(courseInfo.description)}
+      </div>
+      ` : ''}
       
       ${isCertificate ? `
       <div class="certificate-section">
@@ -325,18 +352,18 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
         <div style="font-size: 14px; color: #666666; margin-bottom: 10px;">
           ${isTurkish ? 'Sertifika Numarası' : 'Certificate Number'}
         </div>
-        <div class="certificate-number">${orderInfo.orderId}</div>
+        <div class="certificate-number">${escapeHtml(orderInfo.orderId)}</div>
       </div>
       ` : ''}
       
       <div class="details-section">
         <div class="detail-row">
           <div class="detail-label">${isTurkish ? 'Kurs' : 'Course'}:</div>
-          <div class="detail-value">${courseInfo.title}</div>
+          <div class="detail-value">${escapeHtml(courseInfo.title)}</div>
         </div>
         <div class="detail-row">
           <div class="detail-label">${isCertificate ? (isTurkish ? 'Sertifika No' : 'Certificate No') : (isTurkish ? 'Sipariş No' : 'Order ID')}:</div>
-          <div class="detail-value">${orderInfo.orderId}</div>
+          <div class="detail-value">${escapeHtml(orderInfo.orderId)}</div>
         </div>
         <div class="detail-row">
           <div class="detail-label">${isTurkish ? 'Tarih' : 'Date'}:</div>
@@ -344,7 +371,7 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
         </div>
         <div class="detail-row">
           <div class="detail-label">${isTurkish ? 'E-posta' : 'Email'}:</div>
-          <div class="detail-value">${userInfo.email}</div>
+          <div class="detail-value">${escapeHtml(userInfo.email)}</div>
         </div>
         ${!isCertificate ? `
         <div class="detail-row">
@@ -416,6 +443,7 @@ ${greeting},
 ${thankYou}
 ${courseReady}
 ${orderInfo.customMessage ? `\n\n${orderInfo.customMessage}\n` : ''}
+${isCertificate && courseInfo.description ? `\n${isTurkish ? 'Açıklama' : 'Description'}:\n${courseInfo.description}\n` : ''}
 
 --- ${isCertificate ? (isTurkish ? 'SERTİFİKA DETAYLARI' : 'CERTIFICATE DETAILS') : (isTurkish ? 'SİPARİŞ DETAYLARI' : 'ORDER DETAILS')} ---
 ${isTurkish ? 'Kurs' : 'Course'}: ${courseInfo.title}
