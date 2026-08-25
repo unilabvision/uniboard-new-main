@@ -329,6 +329,13 @@ export function getAppBaseUrl() {
     const value = (raw || '').trim().replace(/\/$/, '');
     if (!value) continue;
     if (/vercel\.app|vercel\.com/i.test(value)) continue;
+    // Production must never use a local dashboard origin
+    if (
+      process.env.NODE_ENV === 'production' &&
+      /localhost|127\.0\.0\.1|0\.0\.0\.0/i.test(value)
+    ) {
+      continue;
+    }
     return value.startsWith('http') ? value : `https://${value}`;
   }
 

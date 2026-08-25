@@ -83,7 +83,20 @@ const sendPurchaseConfirmationEmail = async (userInfo, courseInfo, orderInfo, lo
             : 'Your course is ready. You can start immediately.');
     }
     
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://myunilab.net';
+    const baseUrl = (() => {
+      const raw = String(process.env.NEXT_PUBLIC_BASE_URL || '')
+        .trim()
+        .replace(/\/$/, '');
+      const isProd =
+        process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
+      if (isProd && (!raw || /localhost|127\.0\.0\.1/i.test(raw))) {
+        console.error(
+          '[emailService] NEXT_PUBLIC_BASE_URL is local/missing in production — using https://myunilab.net'
+        );
+        return 'https://myunilab.net';
+      }
+      return raw || 'https://myunilab.net';
+    })();
     const courseUrl = isCertificate && orderInfo.certificateUrl 
       ? orderInfo.certificateUrl 
       : `${baseUrl}/${locale}/dashboard`;

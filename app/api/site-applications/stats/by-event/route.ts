@@ -135,7 +135,7 @@ export async function GET() {
       if (paymentStatus === 'paid') {
         row.certificate_paid += 1;
         row.certificate_revenue += packagePrice;
-      } else if (paymentStatus === 'pending') {
+      } else if (paymentStatus === 'pending' || paymentStatus === 'failed') {
         row.certificate_pending += 1;
       } else if (paymentStatus === 'superseded') {
         row.certificate_superseded += 1;

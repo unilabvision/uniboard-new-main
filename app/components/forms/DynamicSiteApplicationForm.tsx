@@ -38,6 +38,7 @@ import {
   validateAttachmentFile,
 } from '@/app/lib/siteApplications';
 import { formatPackagePrice } from '@/app/lib/siteApplications/packages';
+import { getMyuniPublicOrigin } from '@/app/lib/siteApplications/publicUrls';
 
 interface DynamicSiteApplicationFormProps {
   locale: string;
@@ -470,20 +471,14 @@ export default function DynamicSiteApplicationForm({
       if (!res.ok) {
         // Aynı e-posta ile sertifika zaten ödenmiş → success (tekrar Iyzico yok)
         if (res.status === 409 && data.alreadyPaid && data.applicationId) {
-          const paymentBase =
-            process.env.NEXT_PUBLIC_BASE_URL || 'https://myunilab.net';
-          const origin = paymentBase.replace(/\/$/, '');
-          if (!/localhost|127\.0\.0\.1/i.test(origin)) {
-            const qs = new URLSearchParams({
-              type: 'event_application',
-              applicationId: String(data.applicationId),
-              alreadyPaid: '1',
-            });
-            if (eventSlug) qs.set('eventSlug', eventSlug);
-            window.location.href = `${origin}/${locale}/payment-success?${qs.toString()}`;
-            return;
-          }
-          window.location.href = `https://myunilab.net/${locale}/payment-success?type=event_application&applicationId=${encodeURIComponent(String(data.applicationId))}${eventSlug ? `&eventSlug=${encodeURIComponent(eventSlug)}` : ''}&alreadyPaid=1`;
+          const origin = getMyuniPublicOrigin();
+          const qs = new URLSearchParams({
+            type: 'event_application',
+            applicationId: String(data.applicationId),
+            alreadyPaid: '1',
+          });
+          if (eventSlug) qs.set('eventSlug', eventSlug);
+          window.location.href = `${origin}/${locale}/payment-success?${qs.toString()}`;
           return;
         }
         if (data.fieldErrors && typeof data.fieldErrors === 'object') {
@@ -507,14 +502,9 @@ export default function DynamicSiteApplicationForm({
       }
 
       if (data.requiresPayment && data.submissionId) {
-        const paymentBase =
-          process.env.NEXT_PUBLIC_BASE_URL || 'https://myunilab.net';
-        const origin = paymentBase.replace(/\/$/, '');
+        const origin = getMyuniPublicOrigin();
         const checkoutPath = `/${locale}/checkout/event-application?applicationId=${encodeURIComponent(data.submissionId)}${eventSlug ? `&eventSlug=${encodeURIComponent(eventSlug)}` : ''}`;
-        const safeOrigin = /localhost|127\.0\.0\.1/i.test(origin)
-          ? 'https://myunilab.net'
-          : origin;
-        window.location.href = `${safeOrigin}${checkoutPath}`;
+        window.location.href = `${origin}${checkoutPath}`;
         return;
       }
 

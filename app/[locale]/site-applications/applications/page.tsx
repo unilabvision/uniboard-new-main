@@ -54,6 +54,7 @@ const texts = {
     packageCertificate: 'Sertifika',
     paymentPaid: 'Ödendi',
     paymentPending: 'Bekliyor',
+    paymentFailed: 'Başarısız',
     paymentSuperseded: 'Mükerrer',
     paymentNone: '—',
     filterPackage: 'Paket filtresi',
@@ -118,6 +119,7 @@ const texts = {
     packageCertificate: 'Certificate',
     paymentPaid: 'Paid',
     paymentPending: 'Pending',
+    paymentFailed: 'Failed',
     paymentSuperseded: 'Duplicate',
     paymentNone: '—',
     filterPackage: 'Package filter',
@@ -186,6 +188,8 @@ function paymentColor(status: string) {
       return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
     case 'pending':
       return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400';
+    case 'failed':
+      return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
     case 'superseded':
       return 'bg-neutral-200 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-300';
     default:
@@ -290,6 +294,7 @@ export default function SiteApplicationsListPage({
   const paymentStatusParam =
     searchParams.get('paymentStatus') === 'paid' ||
     searchParams.get('paymentStatus') === 'pending' ||
+    searchParams.get('paymentStatus') === 'failed' ||
     searchParams.get('paymentStatus') === 'none' ||
     searchParams.get('paymentStatus') === 'superseded'
       ? searchParams.get('paymentStatus')!
@@ -609,9 +614,11 @@ export default function SiteApplicationsListPage({
                   ? t.paymentPaid
                   : paymentStatusParam === 'pending'
                     ? t.paymentPending
-                    : paymentStatusParam === 'superseded'
-                      ? t.paymentSuperseded
-                      : t.paymentNone}
+                    : paymentStatusParam === 'failed'
+                      ? t.paymentFailed
+                      : paymentStatusParam === 'superseded'
+                        ? t.paymentSuperseded
+                        : t.paymentNone}
               </span>
             )}
             <Link
@@ -715,6 +722,7 @@ export default function SiteApplicationsListPage({
               ['', t.all],
               ['paid', t.paymentPaid],
               ['pending', t.paymentPending],
+              ['failed', t.paymentFailed],
               ['superseded', t.paymentSuperseded],
             ] as const
           ).map(([key, label]) => (
@@ -928,9 +936,11 @@ export default function SiteApplicationsListPage({
                                   ? t.paymentPaid
                                   : pay === 'pending'
                                     ? t.paymentPending
-                                    : pay === 'superseded'
-                                      ? t.paymentSuperseded
-                                      : t.paymentNone}
+                                    : pay === 'failed'
+                                      ? t.paymentFailed
+                                      : pay === 'superseded'
+                                        ? t.paymentSuperseded
+                                        : t.paymentNone}
                               </span>
                             ) : (
                               <span className="text-xs text-neutral-400">{t.paymentNone}</span>
@@ -955,7 +965,7 @@ export default function SiteApplicationsListPage({
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="inline-flex items-center gap-1 justify-end">
-                          {(pay === 'pending' || pay === 'superseded') && (
+                          {(pay === 'pending' || pay === 'failed' || pay === 'superseded') && (
                             <button
                               type="button"
                               onClick={() => sendRemind(app.id)}

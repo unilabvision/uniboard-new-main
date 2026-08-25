@@ -94,6 +94,7 @@ const texts = {
     packageFree: 'Ücretsiz kayıt',
     packageCertificate: 'Sertifika paketi',
     paymentPending: 'Ödeme bekleniyor',
+    paymentFailed: 'Ödeme başarısız',
     paymentNone: 'Ödeme gerekmez',
     paymentPaid: 'Ödendi',
     paymentSuperseded: 'Mükerrer (başka kayıt ödenmiş)',
@@ -151,6 +152,7 @@ const texts = {
     packageFree: 'Free registration',
     packageCertificate: 'Certificate package',
     paymentPending: 'Payment pending',
+    paymentFailed: 'Payment failed',
     paymentNone: 'No payment required',
     paymentPaid: 'Paid',
     paymentSuperseded: 'Duplicate (paid on another registration)',
@@ -521,9 +523,11 @@ export default function SiteApplicationDetailPage({
                       ? t.paymentPaid
                       : paymentStatus === 'pending'
                         ? t.paymentPending
-                        : paymentStatus === 'superseded'
-                          ? t.paymentSuperseded
-                          : t.paymentNone}
+                        : paymentStatus === 'failed'
+                          ? t.paymentFailed
+                          : paymentStatus === 'superseded'
+                            ? t.paymentSuperseded
+                            : t.paymentNone}
                   </dd>
                 </div>
               )}

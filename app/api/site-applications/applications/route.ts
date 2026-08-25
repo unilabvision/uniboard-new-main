@@ -85,6 +85,7 @@ export async function GET(request: NextRequest) {
   if (
     paymentStatus === 'paid' ||
     paymentStatus === 'pending' ||
+    paymentStatus === 'failed' ||
     paymentStatus === 'none' ||
     paymentStatus === 'superseded'
   ) {

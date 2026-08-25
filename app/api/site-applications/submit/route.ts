@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
 
       const openPending = certificateRows.find((row) => {
         const s = (row.submission_data || {}) as Record<string, unknown>;
-        return s.payment_status === 'pending';
+        return s.payment_status === 'pending' || s.payment_status === 'failed';
       });
       if (openPending) {
         return NextResponse.json({

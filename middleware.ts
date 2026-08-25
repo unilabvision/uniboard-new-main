@@ -92,6 +92,7 @@ const isPublicRoute = createRouteMatcher([
   '/api/shopier-payment', // Shopier payment endpoint
   '/api/shopier-callback', // Shopier callback (webhook)
   '/api/shopier-return', // Shopier return (user redirect)
+  '/api/iyzico-callback', // Misdirected Iyzico POST (must not hit Clerk)
   '/api/comments',
   '/api/forms/submit',
   '/api/site-applications/submit',
@@ -160,6 +161,7 @@ const isPaymentRoute = createRouteMatcher([
   '/api/shopier-payment',
   '/api/shopier-callback',
   '/api/shopier-return',
+  '/api/iyzico-callback',
 ]);
 
 // Valid routes
@@ -423,11 +425,12 @@ export const config = {
     // Match all request paths except for the ones starting with:
     // - _next/static (static files)
     // - _next/image (image optimization files)
-    // - favicon.ico (favicon file)
+    // - api/iyzico-callback (payment POST from Iyzico — Clerk handshake → 405)
+    // - api/shopier-* (payment webhooks)
     // - public folder files
-    '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
-    // Always run for API routes
-    '/(api|trpc)(.*)',
+    '/((?!_next|api/iyzico-callback|api/shopier-|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',
+    // Always run for API routes EXCEPT payment callbacks (POST document nav)
+    '/(api(?!/iyzico-callback|/shopier-)|trpc)(.*)',
   ],
   // Increase body size limit for middleware
   maxDuration: 300, // 5 minutes

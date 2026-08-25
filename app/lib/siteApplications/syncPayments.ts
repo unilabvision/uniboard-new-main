@@ -4,6 +4,7 @@ import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
 export type CertificatePaymentStatus =
   | 'none'
   | 'pending'
+  | 'failed'
   | 'paid'
   | 'superseded';
 
@@ -100,14 +101,44 @@ function isPaidOrderStatus(status: string | null | undefined): boolean {
 function isCapturedButStuckOrder(order: OrderRow): boolean {
   const status = String(order.status || '').toLowerCase();
   if (status !== 'payment_error' && status !== 'processing') return false;
+  return isIyzicoCapturedSuccess(order);
+}
+
+/**
+ * Iyzico reported SUCCESS even if local status is cancelled/failed/pending.
+ * Happens when callback is lost and a retry cancels the original pending row.
+ */
+function isIyzicoCapturedSuccess(order: OrderRow): boolean {
   const iyzicoStatus = String(
     order.custom_data?.iyzicoPaymentStatus || ''
   ).toUpperCase();
-  return iyzicoStatus === 'SUCCESS';
+  if (iyzicoStatus !== 'SUCCESS') return false;
+  const fraud = order.custom_data?.iyzicoFraudStatus;
+  if (fraud === -1 || fraud === '-1') return false;
+  return true;
+}
+
+function isFailedIyzicoOrder(order: OrderRow): boolean {
+  if (isIyzicoCapturedSuccess(order)) return false;
+  const status = String(order.status || '').toLowerCase();
+  if (status === 'failed') return true;
+  const iyzicoStatus = String(
+    order.custom_data?.iyzicoPaymentStatus || ''
+  ).toUpperCase();
+  return iyzicoStatus === 'FAILURE';
 }
 
 function isSyncablePaidOrder(order: OrderRow): boolean {
-  return isPaidOrderStatus(order.status) || isCapturedButStuckOrder(order);
+  return (
+    isPaidOrderStatus(order.status) ||
+    isCapturedButStuckOrder(order) ||
+    isIyzicoCapturedSuccess(order)
+  );
+}
+
+/** Applications that still need a successful payment (retry-eligible). */
+function isOpenUnpaidStatus(status: unknown): boolean {
+  return status === 'pending' || status === 'failed';
 }
 
 function isEventCertificateOrder(order: OrderRow): boolean {
@@ -216,25 +247,36 @@ async function fetchEventCertificateOrdersByEmails(
 }
 
 /**
- * Bekleyen sertifika ödemelerini `orders` ile senkronize eder.
- * Ayrıca aynı e-posta + etkinlikte ödenmiş başka başvuru varsa mükerrer pending'i `superseded` yapar.
+ * Bekleyen / başarısız sertifika ödemelerini `orders` ile senkronize eder.
+ * - Iyzico SUCCESS / completed → paid
+ * - Iyzico FAILURE / failed (ve SUCCESS yok) → failed (Bekliyor listesinden düşer)
+ * - Aynı e-posta + etkinlikte ödenmiş başka başvuru varsa mükerrer unpaid → superseded
  */
 export async function syncCertificatePaymentsFromOrders(
   supabase: SupabaseClient,
   options?: { eventId?: string | null }
-): Promise<{ checked: number; updated: number; superseded: number }> {
+): Promise<{ checked: number; updated: number; markedFailed: number; superseded: number }> {
   const certApps = await fetchEventCertificateApps(supabase, options);
-  const pendingApps = certApps.filter((app) => {
+  const unpaidApps = certApps.filter((app) => {
     const submission = readSubmission(app.submission_data);
-    return submission.payment_status === 'pending';
+    return isOpenUnpaidStatus(submission.payment_status);
   });
 
-  if (pendingApps.length === 0) {
-    return { checked: 0, updated: 0, superseded: 0 };
+  if (unpaidApps.length === 0) {
+    return { checked: 0, updated: 0, markedFailed: 0, superseded: 0 };
   }
 
-  const appIds = pendingApps.map((a) => a.id);
+  const appIds = unpaidApps.map((a) => a.id);
   const ordersByCourse = await fetchOrdersForAppIds(supabase, appIds);
+
+  const ordersByAppId = new Map<string, OrderRow[]>();
+  for (const order of ordersByCourse) {
+    const appId = resolveApplicationIdFromOrder(order) || order.courseid;
+    if (!appId) continue;
+    const list = ordersByAppId.get(appId) || [];
+    list.push(order);
+    ordersByAppId.set(appId, list);
+  }
 
   const paidByAppId = new Map<string, OrderRow>();
   for (const order of ordersByCourse) {
@@ -244,58 +286,114 @@ export async function syncCertificatePaymentsFromOrders(
     paidByAppId.set(appId, order);
   }
 
-  const pendingOrderIds = pendingApps
+  const linkedOrderIds = unpaidApps
     .map((a) => {
       const oid = readSubmission(a.submission_data).order_id;
       return typeof oid === 'string' && oid.trim() ? oid.trim() : null;
     })
     .filter((id): id is string => Boolean(id));
 
-  for (const order of await fetchOrdersByOrderIds(supabase, pendingOrderIds)) {
-    if (!isSyncablePaidOrder(order)) continue;
+  for (const order of await fetchOrdersByOrderIds(supabase, linkedOrderIds)) {
     const appId = resolveApplicationIdFromOrder(order) || order.courseid;
+    if (appId) {
+      const list = ordersByAppId.get(appId) || [];
+      if (!list.some((o) => o.orderid === order.orderid)) {
+        list.push(order);
+        ordersByAppId.set(appId, list);
+      }
+    }
+    if (!isSyncablePaidOrder(order)) continue;
     if (appId && !paidByAppId.has(appId)) paidByAppId.set(appId, order);
   }
 
   const emails = [
-    ...new Set(pendingApps.map((a) => normalizeEmail(a.email)).filter(Boolean)),
+    ...new Set(unpaidApps.map((a) => normalizeEmail(a.email)).filter(Boolean)),
   ];
   const ordersByEmail = await fetchEventCertificateOrdersByEmails(supabase, emails);
-  const pendingById = new Map(pendingApps.map((a) => [a.id, a]));
+  const unpaidById = new Map(unpaidApps.map((a) => [a.id, a]));
 
   for (const order of ordersByEmail) {
-    if (!isSyncablePaidOrder(order)) continue;
     const appIdFromOrder = resolveApplicationIdFromOrder(order);
-    if (appIdFromOrder && pendingById.has(appIdFromOrder) && !paidByAppId.has(appIdFromOrder)) {
+    if (appIdFromOrder && unpaidById.has(appIdFromOrder)) {
+      const list = ordersByAppId.get(appIdFromOrder) || [];
+      if (!list.some((o) => o.orderid === order.orderid)) {
+        list.push(order);
+        ordersByAppId.set(appIdFromOrder, list);
+      }
+    }
+    if (!isSyncablePaidOrder(order)) continue;
+    if (appIdFromOrder && unpaidById.has(appIdFromOrder) && !paidByAppId.has(appIdFromOrder)) {
       paidByAppId.set(appIdFromOrder, order);
     }
   }
 
   let updated = 0;
-  for (const app of pendingApps) {
-    const order = paidByAppId.get(app.id);
-    if (!order) continue;
+  let markedFailed = 0;
+  for (const app of unpaidApps) {
+    const paidOrder = paidByAppId.get(app.id);
+    if (paidOrder) {
+      const submission = readSubmission(app.submission_data);
+      const recovered =
+        isCapturedButStuckOrder(paidOrder) ||
+        (!isPaidOrderStatus(paidOrder.status) && isIyzicoCapturedSuccess(paidOrder));
+      const syncedFrom = recovered
+        ? 'orders_iyzico_success_recovery'
+        : 'orders';
+      const nextSubmission: SubmissionData = {
+        ...submission,
+        payment_status: 'paid',
+        order_id: paidOrder.orderid,
+        payment_method: paidOrder.paymentmethod || 'iyzico',
+        paid_at:
+          paidOrder.updated_at || paidOrder.created_at || new Date().toISOString(),
+        payment_synced_from: syncedFrom,
+        ...(recovered
+          ? {
+              payment_recovered_from_status: paidOrder.status,
+              payment_iyzico_status:
+                paidOrder.custom_data?.iyzicoPaymentStatus || 'SUCCESS',
+            }
+          : {}),
+      };
 
+      const { error: updateError } = await supabase
+        .from(siteApplicationsDb.applications)
+        .update({
+          submission_data: nextSubmission,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', app.id);
+
+      if (updateError) {
+        console.error(`Payment sync update failed for ${app.id}:`, updateError.message);
+        continue;
+      }
+      updated += 1;
+      app.submission_data = nextSubmission;
+      continue;
+    }
+
+    // No successful payment: if Iyzico reported FAILURE, leave "Bekliyor" → "Başarısız"
     const submission = readSubmission(app.submission_data);
-    const syncedFrom = isCapturedButStuckOrder(order)
-      ? 'orders_payment_error_recovery'
-      : 'orders';
+    if (submission.payment_status === 'failed') continue;
+
+    const appOrders = ordersByAppId.get(app.id) || [];
+    const failedOrder = appOrders.find((o) => isFailedIyzicoOrder(o));
+    if (!failedOrder) continue;
+
     const nextSubmission: SubmissionData = {
       ...submission,
-      payment_status: 'paid',
-      order_id: order.orderid,
-      payment_method: order.paymentmethod || 'iyzico',
-      paid_at: order.updated_at || order.created_at || new Date().toISOString(),
-      payment_synced_from: syncedFrom,
-      ...(isCapturedButStuckOrder(order)
-        ? {
-            payment_recovered_from_status: order.status,
-            payment_iyzico_status: order.custom_data?.iyzicoPaymentStatus || 'SUCCESS',
-          }
-        : {}),
+      payment_status: 'failed',
+      order_id: failedOrder.orderid,
+      payment_method: failedOrder.paymentmethod || 'iyzico',
+      payment_failed_at:
+        failedOrder.updated_at || failedOrder.created_at || new Date().toISOString(),
+      payment_synced_from: 'orders_iyzico_failure',
+      payment_iyzico_status:
+        failedOrder.custom_data?.iyzicoPaymentStatus || 'FAILURE',
     };
 
-    const { error: updateError } = await supabase
+    const { error: failErr } = await supabase
       .from(siteApplicationsDb.applications)
       .update({
         submission_data: nextSubmission,
@@ -303,23 +401,22 @@ export async function syncCertificatePaymentsFromOrders(
       })
       .eq('id', app.id);
 
-    if (updateError) {
-      console.error(`Payment sync update failed for ${app.id}:`, updateError.message);
+    if (failErr) {
+      console.error(`Payment fail sync failed for ${app.id}:`, failErr.message);
       continue;
     }
-    updated += 1;
-    // local state for duplicate pass
+    markedFailed += 1;
     app.submission_data = nextSubmission;
   }
 
   const superseded = await supersedeDuplicatePendingCertificates(supabase, certApps);
 
-  return { checked: pendingApps.length, updated, superseded };
+  return { checked: unpaidApps.length, updated, markedFailed, superseded };
 }
 
 /**
  * Aynı e-posta + aynı etkinlikte zaten paid sertifika varsa,
- * kalan pending başvuruları superseded yap (ödeme bekliyor sayacından düşer).
+ * kalan unpaid (pending/failed) başvuruları superseded yap.
  */
 export async function supersedeDuplicatePendingCertificates(
   supabase: SupabaseClient,
@@ -340,7 +437,7 @@ export async function supersedeDuplicatePendingCertificates(
   let superseded = 0;
   for (const app of apps) {
     const submission = readSubmission(app.submission_data);
-    if (submission.payment_status !== 'pending') continue;
+    if (!isOpenUnpaidStatus(submission.payment_status)) continue;
     const email = normalizeEmail(app.email);
     if (!email) continue;
     const eventKey = app.event_id || `name:${String(app.event_name || '').toLowerCase()}`;
@@ -384,7 +481,7 @@ export async function syncSingleApplicationPayment(
     .maybeSingle();
 
   const beforeStatus = readSubmission(before?.submission_data).payment_status;
-  if (beforeStatus !== 'pending') return { updated: false };
+  if (!isOpenUnpaidStatus(beforeStatus)) return { updated: false };
 
   await syncCertificatePaymentsFromOrders(supabase, {
     eventId: (before?.event_id as string | null) || null,
@@ -397,7 +494,12 @@ export async function syncSingleApplicationPayment(
     .maybeSingle();
 
   const afterStatus = readSubmission(after?.submission_data).payment_status;
-  return { updated: afterStatus === 'paid' || afterStatus === 'superseded' };
+  return {
+    updated:
+      afterStatus === 'paid' ||
+      afterStatus === 'superseded' ||
+      afterStatus === 'failed',
+  };
 }
 
 /**
@@ -421,8 +523,8 @@ export async function reconcileEventCertificatePayments(
   };
 }> {
   const certApps = await fetchEventCertificateApps(supabase, options);
-  const pendingApps = certApps.filter(
-    (a) => readSubmission(a.submission_data).payment_status === 'pending'
+  const pendingApps = certApps.filter((a) =>
+    isOpenUnpaidStatus(readSubmission(a.submission_data).payment_status)
   );
   const paidApps = certApps.filter(
     (a) => readSubmission(a.submission_data).payment_status === 'paid'
@@ -470,7 +572,7 @@ export async function reconcileEventCertificatePayments(
       email: app.email || '',
       eventId: app.event_id,
       eventName: app.event_name,
-      paymentStatus: 'pending',
+      paymentStatus: String(readSubmission(app.submission_data).payment_status || 'pending'),
       reason,
       paidSiblingApplicationId: siblingId,
       orders: appOrders.map((o) => ({

@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
     targets = ((data || []) as RemindTarget[]).filter((row) => {
       const s = readSubmission(row.submission_data);
       if (s.registration_tier !== 'certificate') return false;
-      if (s.payment_status === 'pending') return true;
+      if (s.payment_status === 'pending' || s.payment_status === 'failed') return true;
       if (includeSuperseded && s.payment_status === 'superseded') return true;
       return false;
     });
@@ -113,7 +113,11 @@ export async function POST(request: NextRequest) {
       continue;
     }
 
-    if (paymentStatus !== 'pending' && paymentStatus !== 'superseded') {
+    if (
+      paymentStatus !== 'pending' &&
+      paymentStatus !== 'failed' &&
+      paymentStatus !== 'superseded'
+    ) {
       results.push({
         applicationId: app.id,
         email,
