@@ -44,32 +44,13 @@ export async function GET(request: NextRequest) {
     .order('created_at', { ascending: false })
     .limit(500);
 
-  if (courseId) {
-    query = query.or(`course_id.eq.${courseId},submission_data->>course_id.eq.${courseId}`);
-  }
   if (status) {
     query = query.eq('status', status);
   }
 
   const { data, error } = await query;
   if (error) {
-    // Fallback without course_id filter expression
-    const fallback = await authResult.supabase
-      .from(siteApplicationsDb.applications)
-      .select(
-        'id, form_id, first_name, last_name, email, phone, status, locale, created_at, submission_data, source'
-      )
-      .in('form_id', formIds)
-      .order('created_at', { ascending: false })
-      .limit(500);
-    if (fallback.error) {
-      return NextResponse.json({ error: fallback.error.message }, { status: 500 });
-    }
-    return NextResponse.json({
-      success: true,
-      applications: fallback.data || [],
-      forms: courseForms,
-    });
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   return NextResponse.json({

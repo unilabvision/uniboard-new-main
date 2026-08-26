@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { ExternalLink, Loader2, Save } from 'lucide-react';
+import Link from 'next/link';
+import { Download, ExternalLink, Eye, Loader2, Save } from 'lucide-react';
 import FormFieldEditor from '@/app/components/site-applications/FormFieldEditor';
 import FormPreviewPanel from '@/app/components/site-applications/FormPreviewPanel';
 import type {
@@ -15,6 +16,16 @@ type Props = {
   courseTitle: string;
   courseSlug: string;
   locale?: string;
+};
+
+type ApplicantRow = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  phone?: string | null;
+  status: string;
+  created_at: string;
 };
 
 const texts = {
@@ -40,6 +51,11 @@ const texts = {
     questions: 'Kursa özel sorular',
     preview: 'Önizleme',
     migration: 'Uyarı',
+    applicants: 'Bu kursa başvuranlar',
+    applicantsEmpty: 'Henüz başvuru yok.',
+    exportExcel: 'Excel İndir',
+    viewAll: 'Tüm başvurular',
+    view: 'Detay',
   },
   en: {
     title: 'Course application form',
@@ -63,6 +79,11 @@ const texts = {
     questions: 'Course-specific questions',
     preview: 'Preview',
     migration: 'Warning',
+    applicants: 'Applicants for this course',
+    applicantsEmpty: 'No applications yet.',
+    exportExcel: 'Export Excel',
+    viewAll: 'All applications',
+    view: 'View',
   },
 };
 
@@ -102,6 +123,25 @@ export default function CourseApplicationFormPanel({
   const [subtitleEn, setSubtitleEn] = useState('');
   const [isActive, setIsActive] = useState(false);
   const [allowsAttachment, setAllowsAttachment] = useState(false);
+  const [applicants, setApplicants] = useState<ApplicantRow[]>([]);
+  const [applicantsLoading, setApplicantsLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const loadApplicants = useCallback(async () => {
+    setApplicantsLoading(true);
+    try {
+      const res = await fetch(
+        `/api/lms/course-applications?courseId=${encodeURIComponent(courseId)}`
+      );
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) setApplicants(data.applications || []);
+      else setApplicants([]);
+    } catch {
+      setApplicants([]);
+    } finally {
+      setApplicantsLoading(false);
+    }
+  }, [courseId]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -136,6 +176,30 @@ export default function CourseApplicationFormPanel({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void loadApplicants();
+  }, [loadApplicants]);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const qs = new URLSearchParams({ locale, courseId });
+      const res = await fetch(`/api/lms/course-applications/export?${qs.toString()}`);
+      if (res.status === 204 || !res.ok) return;
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = locale === 'tr' ? 'kurs-basvurulari.csv' : 'course-applications.csv';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const saveSettings = async (alsoPublish?: boolean) => {
     setSaving(true);
@@ -395,6 +459,83 @@ export default function CourseApplicationFormPanel({
           formType="course"
           allowsAttachment={allowsAttachment}
         />
+      </section>
+
+      <section className="rounded-xl border border-neutral-200 dark:border-neutral-700 p-4 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h4 className="text-sm font-medium">
+            {t.applicants}
+            <span className="ml-2 font-normal text-neutral-500">({applicants.length})</span>
+          </h4>
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/${locale}/lms/applications`}
+              className="text-xs text-neutral-600 dark:text-neutral-400 underline"
+            >
+              {t.viewAll}
+            </Link>
+            <button
+              type="button"
+              onClick={() => void handleExport()}
+              disabled={exporting || applicants.length === 0}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-[#990000] text-white disabled:opacity-50"
+            >
+              {exporting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              {t.exportExcel}
+            </button>
+          </div>
+        </div>
+        {applicantsLoading ? (
+          <p className="text-sm text-neutral-500 flex items-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin" />
+          </p>
+        ) : applicants.length === 0 ? (
+          <p className="text-sm text-neutral-500">{t.applicantsEmpty}</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <tbody>
+                {applicants.slice(0, 50).map((row) => {
+                  const name =
+                    [row.first_name, row.last_name].filter(Boolean).join(' ') || '—';
+                  return (
+                    <tr
+                      key={row.id}
+                      className="border-t border-neutral-200 dark:border-neutral-700"
+                    >
+                      <td className="py-2 pr-3">
+                        <div className="font-medium">{name}</div>
+                        <div className="text-xs text-neutral-500">{row.email}</div>
+                      </td>
+                      <td className="py-2 pr-3 whitespace-nowrap text-neutral-600">
+                        {row.phone || '—'}
+                      </td>
+                      <td className="py-2 pr-3">{row.status}</td>
+                      <td className="py-2 pr-3 whitespace-nowrap text-neutral-500">
+                        {new Date(row.created_at).toLocaleDateString(
+                          locale === 'en' ? 'en-US' : 'tr-TR'
+                        )}
+                      </td>
+                      <td className="py-2 text-right">
+                        <Link
+                          href={`/${locale}/site-applications/applications/${row.id}`}
+                          className="inline-flex items-center gap-1 text-xs text-[#990000]"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          {t.view}
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </div>
   );
