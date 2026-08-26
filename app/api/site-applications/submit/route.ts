@@ -264,7 +264,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error && String(error.message || '').toLowerCase().includes('course_id')) {
-      const leanRow = { ...row };
+      const leanRow: Record<string, unknown> = { ...row };
       delete leanRow.course_id;
       const retry = await supabase
         .from(siteApplicationsDb.applications)
