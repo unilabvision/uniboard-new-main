@@ -275,7 +275,7 @@ export async function POST(request: NextRequest) {
       error = retry.error;
     }
 
-    if (error) {
+    if (error || !data) {
       console.error('Site application insert error:', error);
       return NextResponse.json({ error: 'Failed to save application' }, { status: 500 });
     }
