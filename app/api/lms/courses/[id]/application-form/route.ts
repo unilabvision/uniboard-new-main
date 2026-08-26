@@ -118,7 +118,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       created_by: authResult.userId,
     };
 
-    let insertRow: Record<string, unknown> = { ...insertBase, course_id: courseId };
+    const insertRow: Record<string, unknown> = { ...insertBase, course_id: courseId };
     let { data: created, error: createError } = await authResult.supabase
       .from(siteApplicationsDb.forms)
       .insert([insertRow])
@@ -127,7 +127,8 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
     // DB check may only allow team|event until migration runs — omit form_type; slug kurş-* still identifies course forms
     if (createError && isFormTypeCheckViolation(createError)) {
-      const { form_type: _omitType, ...withoutType } = insertRow;
+      const withoutType = { ...insertRow };
+      delete withoutType.form_type;
       const retry = await authResult.supabase
         .from(siteApplicationsDb.forms)
         .insert([withoutType])
@@ -138,9 +139,8 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     }
 
     if (createError && isMissingCourseIdColumn(createError)) {
-      const { course_id: _omitCourse, ...withoutCourse } = insertBase as Record<string, unknown>;
-      // Prefer omitting form_type if constraint still blocks
-      const lean = { ...withoutCourse };
+      const lean = { ...(insertBase as Record<string, unknown>) };
+      delete lean.course_id;
       delete lean.form_type;
       const retry = await authResult.supabase
         .from(siteApplicationsDb.forms)
