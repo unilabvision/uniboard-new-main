@@ -46,6 +46,8 @@ interface DynamicSiteApplicationFormProps {
   formSlug?: string;
   /** Event slug from /etkinlik/{eventSlug}/basvuru */
   eventSlug?: string;
+  /** Course slug from /kurs/{courseSlug}/basvuru */
+  courseSlug?: string;
   /** Admin editor preview — same UI as the public form */
   previewConfig?: PublicSiteApplicationForm | null;
   previewMode?: boolean;
@@ -161,6 +163,7 @@ export default function DynamicSiteApplicationForm({
   locale,
   formSlug,
   eventSlug,
+  courseSlug,
   previewConfig = null,
   previewMode = false,
 }: DynamicSiteApplicationFormProps) {
@@ -219,7 +222,9 @@ export default function DynamicSiteApplicationForm({
     const load = async () => {
       try {
         setLoadErrorType(null);
-        const url = eventSlug
+        const url = courseSlug
+          ? `/api/site-applications/public/forms/by-course/${encodeURIComponent(courseSlug)}?locale=${locale}`
+          : eventSlug
           ? `/api/site-applications/public/forms/by-event/${encodeURIComponent(eventSlug)}?locale=${locale}`
           : `/api/site-applications/public/forms/${encodeURIComponent(formSlug || '')}?locale=${locale}`;
 
@@ -244,14 +249,14 @@ export default function DynamicSiteApplicationForm({
         setLoading(false);
       }
     };
-    if (formSlug || eventSlug) {
+    if (formSlug || eventSlug || courseSlug) {
       setLoading(true);
       load();
     } else {
       setFormConfig(null);
       setLoading(false);
     }
-  }, [previewMode, previewConfig, formSlug, eventSlug, locale]);
+  }, [previewMode, previewConfig, formSlug, eventSlug, courseSlug, locale]);
 
   const progress = useMemo(() => {
     if (!formConfig) return 0;
@@ -400,6 +405,7 @@ export default function DynamicSiteApplicationForm({
           body: JSON.stringify({
             formSlug: resolvedFormSlug || formSlug,
             eventSlug: eventSlug || undefined,
+            courseSlug: courseSlug || undefined,
             locale,
             fileName: attachment.name,
             fileSize: attachment.size,
@@ -431,6 +437,7 @@ export default function DynamicSiteApplicationForm({
           body: JSON.stringify({
             formSlug: resolvedFormSlug || formSlug,
             eventSlug: eventSlug || undefined,
+            courseSlug: courseSlug || undefined,
             locale,
             fileName: file.name,
             fileSize: file.size,
@@ -459,6 +466,7 @@ export default function DynamicSiteApplicationForm({
         body: JSON.stringify({
           formSlug: resolvedFormSlug || formSlug,
           eventSlug: eventSlug || undefined,
+          courseSlug: courseSlug || undefined,
           locale,
           fields: submissionFields,
           registrationTier: selectedPackage,

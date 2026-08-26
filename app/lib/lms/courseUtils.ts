@@ -1,7 +1,7 @@
 import type { Course } from '@/app/types/course';
 
-export function generateCourseSlug(title: string): string {
-  const base = title
+function slugifyBase(title: string): string {
+  return title
     .toLowerCase()
     .replace(/ğ/g, 'g')
     .replace(/ü/g, 'u')
@@ -11,8 +11,17 @@ export function generateCourseSlug(title: string): string {
     .replace(/ç/g, 'c')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
+}
 
+export function generateCourseSlug(title: string): string {
+  const base = slugifyBase(title);
   return `${base || 'kurs'}-${Date.now().toString(36)}`;
+}
+
+/** Paket kısa adı — sitede / sepet satırında kullanılır. */
+export function generatePackageSlug(title: string): string {
+  const base = slugifyBase(title);
+  return base || `paket-${Date.now().toString(36)}`;
 }
 
 export function buildCourseUpdatePayload(course: Course) {

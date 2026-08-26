@@ -6,7 +6,8 @@ import {
   Eye, Calendar, PlayCircle, Plus, Trash2, 
   ChevronDown, ChevronRight,
   Video, FileText, Edit2, Check, X,
-  ArrowUp, ArrowDown, HelpCircle, Users, Clock, RefreshCw
+  ArrowUp, ArrowDown, HelpCircle, Users, Clock, RefreshCw,
+  ClipboardList
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
@@ -18,10 +19,11 @@ import QuizUploadModal from '@/app/components/lms/QuizUploadModal';
 import ModuleSelectionModal from '@/app/components/lms/ModuleSelectionModal';
 import ResourceLinkModal from '@/app/components/lms/ResourceLinkModal';
 import CourseEnrollmentPanel from '@/app/components/lms/CourseEnrollmentPanel';
+import CourseImageUpload from '@/app/components/lms/CourseImageUpload';
+import CoursePackagesPanel from '@/app/components/lms/CoursePackagesPanel';
+import CourseApplicationFormPanel from '@/app/components/lms/CourseApplicationFormPanel';
 import { Course, CourseSection, CourseLesson, CourseVideo, CourseNote, CourseQuiz, ModuleType } from '@/app/types/course';
-import { buildCourseUpdatePayload } from '@/app/lib/lms/courseUtils';
 import { formatDurationMinutes, resolveLessonDurationMinutes } from '@/app/lib/lms/durationFormat';
-import { normalizeDescriptionForStorage } from '@/app/lib/lms/htmlContent';
 import HtmlDescriptionEditor from '@/app/components/lms/HtmlDescriptionEditor';
 
 // Supabase client
@@ -57,7 +59,15 @@ const texts = {
       hybrid: "Hibrit"
     },
     status: "Durum",
-    active: "Aktif",
+    active: "Sitede yayınla (aktif)",
+    activeHint: "İşaretlenince myunilab.net üzerinde /tr/kurs/{kısa-ad} adresinde görünür.",
+    banner: "Kurs banner",
+    bannerHint: "Canlı/hibrit kurs detay sayfasında üst görsel. Önerilen 1920×600.",
+    thumbnail: "Liste kapak görseli",
+    thumbnailHint: "Kurs listesi ve kartlarda kullanılır. Önerilen 800×450.",
+    uploadImage: "Görsel yükle",
+    removeImage: "Kaldır",
+    uploadingImage: "Yükleniyor...",
     save: "Kaydet",
     preview: "Önizleme",
     loading: "Yükleniyor...",
@@ -66,7 +76,8 @@ const texts = {
     error: "Bir hata oluştu",
     notFound: "Kurs bulunamadı",
     participants: "Katılımcılar",
-    courseContent: "Kurs İçeriği"
+    courseContent: "Kurs İçeriği",
+    applications: "Başvuru Formu"
   }
 };
 
@@ -77,7 +88,7 @@ export default function EditCoursePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'info' | 'content' | 'settings' | 'participants'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'content' | 'settings' | 'participants' | 'applications'>('info');
   
   const params = useParams();
   const searchParams = useSearchParams();
@@ -93,7 +104,8 @@ export default function EditCoursePage() {
       tab === 'info' ||
       tab === 'content' ||
       tab === 'settings' ||
-      tab === 'participants'
+      tab === 'participants' ||
+      tab === 'applications'
     ) {
       setActiveTab(tab);
     }
@@ -174,25 +186,31 @@ export default function EditCoursePage() {
     fetchData();
   }, [courseId, clerkUser, isLoaded]);
 
-  // Handle course update
+  // Handle course update via service-role API (shared DB → myunilab.net)
   const handleSave = async () => {
     if (!course) return;
-    
+
     try {
       setSaving(true);
-      
-      const { error } = await supabase
-        .from('myuni_courses')
-        .update(buildCourseUpdatePayload({
+
+      const res = await fetch(`/api/lms/courses/${encodeURIComponent(courseId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           ...course,
-          description: normalizeDescriptionForStorage(course.description || '') || undefined,
-        }))
-        .eq('id', courseId);
-      
-      if (error) throw error;
-      
+          banner_url: course.banner_url || null,
+          thumbnail_url: course.thumbnail_url || null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || t.error);
+      }
+      if (data.course) {
+        setCourse((prev) => (prev ? { ...prev, ...data.course } : data.course));
+      }
+
       alert(t.saved);
-      
     } catch (error: unknown) {
       console.error('Error saving course:', error);
       alert(t.error + ': ' + (error instanceof Error ? error.message : 'Unknown error'));
@@ -323,12 +341,17 @@ export default function EditCoursePage() {
               { key: 'info', label: t.courseInfo, icon: BookOpen },
               { key: 'content', label: t.courseContent, icon: PlayCircle },
               { key: 'participants', label: t.participants, icon: Users },
+              { key: 'applications', label: t.applications, icon: ClipboardList },
               { key: 'settings', label: t.liveSettings, icon: Calendar }
             ].map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
                 type="button"
-                onClick={() => setActiveTab(key as 'info' | 'content' | 'settings' | 'participants')}
+                onClick={() =>
+                  setActiveTab(
+                    key as 'info' | 'content' | 'settings' | 'participants' | 'applications'
+                  )
+                }
                 className={`flex items-center px-3 py-4 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
                   activeTab === key
                     ? 'border-[#990000] text-[#990000]'
@@ -445,19 +468,49 @@ export default function EditCoursePage() {
                 </div>
               </div>
 
-              {/* Status */}
+              <div className="grid grid-cols-1 gap-6 pt-2">
+                <CourseImageUpload
+                  courseId={courseId}
+                  kind="banner"
+                  value={course.banner_url || ''}
+                  onChange={(url) => setCourse({ ...course, banner_url: url || undefined })}
+                  label={t.banner}
+                  hint={t.bannerHint}
+                  uploadLabel={t.uploadImage}
+                  removeLabel={t.removeImage}
+                  uploadingLabel={t.uploadingImage}
+                />
+                <CourseImageUpload
+                  courseId={courseId}
+                  kind="thumbnail"
+                  value={course.thumbnail_url || ''}
+                  onChange={(url) => setCourse({ ...course, thumbnail_url: url || undefined })}
+                  label={t.thumbnail}
+                  hint={t.thumbnailHint}
+                  uploadLabel={t.uploadImage}
+                  removeLabel={t.removeImage}
+                  uploadingLabel={t.uploadingImage}
+                />
+              </div>
+
+              <CoursePackagesPanel courseId={courseId} locale={locale} />
+
+              {/* Status / publish to public site */}
               <div className="pt-4 border-t border-neutral-200 dark:border-neutral-700">
-                <div className="flex items-center">
+                <div className="flex items-start">
                   <input
                     type="checkbox"
                     id="is_active"
                     checked={course.is_active}
                     onChange={(e) => setCourse({ ...course, is_active: e.target.checked })}
-                    className="w-4 h-4 text-[#990000] bg-white dark:bg-neutral-800 border-neutral-300 dark:border-neutral-600 rounded focus:ring-[#990000] focus:ring-2"
+                    className="w-4 h-4 mt-0.5 text-[#990000] bg-white dark:bg-neutral-800 border-neutral-300 dark:border-neutral-600 rounded focus:ring-[#990000] focus:ring-2"
                   />
-                  <label htmlFor="is_active" className="ml-3 text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                    {t.active}
-                  </label>
+                  <div className="ml-3">
+                    <label htmlFor="is_active" className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                      {t.active}
+                    </label>
+                    <p className="text-xs text-neutral-500 mt-0.5">{t.activeHint}</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -477,6 +530,15 @@ export default function EditCoursePage() {
               locale={locale}
               courseId={courseId}
               showHeader={true}
+            />
+          )}
+
+          {activeTab === 'applications' && (
+            <CourseApplicationFormPanel
+              courseId={courseId}
+              courseTitle={course.title}
+              courseSlug={course.slug}
+              locale={locale}
             />
           )}
 

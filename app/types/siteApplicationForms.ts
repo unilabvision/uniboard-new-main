@@ -56,7 +56,8 @@ export interface SiteApplicationForm {
   show_on_website: boolean;
   allows_attachment: boolean;
   event_id: string | null;
-  form_type?: 'team' | 'event' | null;
+  course_id?: string | null;
+  form_type?: 'team' | 'event' | 'course' | null;
   package_settings?: EventCertificatePackageSettings | Record<string, unknown> | null;
   created_by: string | null;
   created_by_email: string | null;
@@ -78,7 +79,8 @@ export interface SiteApplicationFormInput {
   show_on_website?: boolean;
   allows_attachment?: boolean;
   event_id?: string | null;
-  form_type?: 'team' | 'event';
+  course_id?: string | null;
+  form_type?: 'team' | 'event' | 'course';
   package_settings?: EventCertificatePackageSettings | null;
 }
 
@@ -104,8 +106,8 @@ export interface PublicSiteApplicationForm {
   subtitle: string | null;
   success_message: string | null;
   allows_attachment: boolean;
-  /** team | event — used for file size limits on the client */
-  form_type?: 'team' | 'event' | null;
+  /** team | event | course — used for file size limits on the client */
+  form_type?: 'team' | 'event' | 'course' | null;
   /** Max upload size in bytes for this form */
   max_file_bytes?: number;
   packages?: PublicRegistrationPackage[];

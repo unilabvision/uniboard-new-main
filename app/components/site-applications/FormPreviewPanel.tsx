@@ -22,7 +22,7 @@ interface FormPreviewPanelProps {
   subtitle?: string | null;
   fields: SiteApplicationFormFieldInput[];
   packages?: EventCertificatePackageSettings;
-  formType?: 'team' | 'event';
+  formType?: 'team' | 'event' | 'course';
   allowsAttachment?: boolean;
 }
 
@@ -33,7 +33,7 @@ export function buildPreviewPublicForm(opts: {
   subtitle?: string | null;
   fields: SiteApplicationFormFieldInput[];
   packages?: EventCertificatePackageSettings;
-  formType?: 'team' | 'event';
+  formType?: 'team' | 'event' | 'course';
   allowsAttachment?: boolean;
 }): PublicSiteApplicationForm {
   const isEn = opts.locale === 'en';

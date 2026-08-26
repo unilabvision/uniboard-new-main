@@ -32,18 +32,33 @@ export async function GET(
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
 
-    const { data: forms, error } = await supabase
+    const { data: publishedForms, error } = await supabase
       .from(siteApplicationsDb.forms)
       .select('*')
       .eq('event_id', event.id)
       .eq('is_active', true)
+      .eq('show_on_website', true)
       .order('updated_at', { ascending: false })
       .limit(1);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
-    const form = forms?.[0];
+
+    let form = publishedForms?.[0];
+    if (!form) {
+      const { data: fallbackForms, error: fallbackError } = await supabase
+        .from(siteApplicationsDb.forms)
+        .select('*')
+        .eq('event_id', event.id)
+        .eq('is_active', true)
+        .order('updated_at', { ascending: false })
+        .limit(1);
+      if (fallbackError) {
+        return NextResponse.json({ error: fallbackError.message }, { status: 500 });
+      }
+      form = fallbackForms?.[0];
+    }
     if (!form) {
       return NextResponse.json({ error: 'Application form not found for this event' }, { status: 404 });
     }

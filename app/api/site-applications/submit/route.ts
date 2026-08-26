@@ -40,21 +40,30 @@ export async function POST(request: NextRequest) {
 
     const formSlug = String(body.formSlug || '').trim();
     const eventSlug = String(body.eventSlug || '').trim();
+    const courseSlug = String(body.courseSlug || '').trim();
     const locale = body.locale === 'en' ? 'en' : 'tr';
     const fieldValues = (body.fields || {}) as Record<string, unknown>;
 
-    if (!formSlug && !eventSlug) {
-      return NextResponse.json({ error: 'Form slug or event slug required' }, { status: 400 });
+    if (!formSlug && !eventSlug && !courseSlug) {
+      return NextResponse.json(
+        { error: 'Form slug, event slug, or course slug required' },
+        { status: 400 }
+      );
     }
 
     const supabase = getSupabase();
-    const resolved = await resolveActiveForm(supabase, { locale, formSlug, eventSlug });
+    const resolved = await resolveActiveForm(supabase, {
+      locale,
+      formSlug,
+      eventSlug,
+      courseSlug,
+    });
 
     if (!resolved) {
       return NextResponse.json({ error: 'Form not found or inactive' }, { status: 404 });
     }
 
-    const { form, event } = resolved;
+    const { form, event, course } = resolved;
 
     const { data: fields, error: fieldsError } = await supabase
       .from(siteApplicationsDb.formFields)
@@ -75,6 +84,8 @@ export async function POST(request: NextRequest) {
 
     const formType = form.form_type ?? inferFormType(form);
     const isEventApplication = formType === 'event' || Boolean(event) || Boolean(form.event_id);
+    const isCourseApplication =
+      formType === 'course' || Boolean(course) || Boolean(form.course_id);
     const registrationTier = (
       body.registrationTier === 'certificate' ? 'certificate' : 'free'
     ) as RegistrationPackageId;
@@ -105,14 +116,14 @@ export async function POST(request: NextRequest) {
     }
 
     const contact = extractContactFromSubmission(typedFields, normalized);
-    const applicationType = getApplicationTypeSlug(form, locale, event);
+    const applicationType = getApplicationTypeSlug(form, locale, event, course);
     const requiresPayment =
       formType === 'event' &&
       selectedPackage.id === 'certificate' &&
       selectedPackage.price > 0;
 
     // Events: always auto-accept (no admin review). Certificate fee is tracked via payment_status.
-    // Team: stays pending for manual review.
+    // Course & team: stay pending for manual review.
     const initialStatus = isEventApplication ? 'accepted' : 'pending';
 
     const eventName =
@@ -120,6 +131,7 @@ export async function POST(request: NextRequest) {
       (typeof normalized.event_name === 'string' ? normalized.event_name : null);
 
     const eventIdForRow = event?.id || form.event_id || null;
+    const courseIdForRow = course?.id || form.course_id || null;
 
     // Aynı e-posta + etkinlikte sertifika kaydı varsa yeni satır açma (çift başvuru / çift ödeme riski)
     if (isEventApplication && selectedPackage.id === 'certificate' && contact.email) {
@@ -187,6 +199,7 @@ export async function POST(request: NextRequest) {
     const row = {
       form_id: form.id,
       event_id: eventIdForRow,
+      course_id: courseIdForRow,
       application_type: applicationType,
       first_name: contact.firstName,
       last_name: contact.lastName,
@@ -203,12 +216,19 @@ export async function POST(request: NextRequest) {
       experience: typeof normalized.experience === 'string' ? normalized.experience : null,
       portfolio_url: typeof normalized.portfolio_url === 'string' ? normalized.portfolio_url : null,
       locale,
-      source: isEventApplication ? 'event_website' : 'website',
+      source: isEventApplication
+        ? 'event_website'
+        : isCourseApplication
+          ? 'course_website'
+          : 'website',
       user_agent: request.headers.get('user-agent'),
       status: initialStatus,
       submission_data: {
         ...normalized,
         ...(event ? { event_slug: event.slug, event_title: event.title } : {}),
+        ...(course
+          ? { course_slug: course.slug, course_title: course.title, course_id: course.id }
+          : {}),
         ...(formType === 'event'
           ? {
               registration_tier: selectedPackage.id,
@@ -237,11 +257,22 @@ export async function POST(request: NextRequest) {
       attachment_expires_at: attachmentStoragePath ? computeAttachmentExpiresAt() : null,
     };
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from(siteApplicationsDb.applications)
       .insert(row)
       .select('id')
       .single();
+
+    if (error && String(error.message || '').toLowerCase().includes('course_id')) {
+      const { course_id: _omit, ...leanRow } = row;
+      const retry = await supabase
+        .from(siteApplicationsDb.applications)
+        .insert(leanRow)
+        .select('id')
+        .single();
+      data = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       console.error('Site application insert error:', error);

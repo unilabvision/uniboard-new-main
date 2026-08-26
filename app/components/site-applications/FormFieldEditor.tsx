@@ -495,8 +495,8 @@ interface FormFieldEditorProps {
   fields: SiteApplicationFormFieldInput[];
   setFields: React.Dispatch<React.SetStateAction<SiteApplicationFormFieldInput[]>>;
   onAddField?: () => void;
-  /** team | event — controls file size hint for team forms */
-  formType?: 'team' | 'event';
+  /** team | event | course — controls file size hint for team forms */
+  formType?: 'team' | 'event' | 'course';
   /** Required to upload resource files */
   formId?: string;
 }
