@@ -5,7 +5,10 @@ import {
   requireSiteApplicationsOrEventsUser,
   resolveSiteApplicationsPanelOrganizationScope,
 } from '@/app/api/site-applications/access/_helpers';
-import { decryptSmtpPassword } from '@/app/_services/smtpEncryption';
+import {
+  decryptSmtpPassword,
+  normalizeSmtpPassword,
+} from '@/app/_services/smtpEncryption';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -87,17 +90,20 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
 
   try {
-    const password = decryptSmtpPassword(config.smtp_password_encrypted);
+    const password = normalizeSmtpPassword(decryptSmtpPassword(config.smtp_password_encrypted));
+    const port = Number(config.smtp_port) || 587;
+    const secure = Boolean(config.smtp_secure) || port === 465;
     const transporter = nodemailer.createTransport({
-      host: config.smtp_host,
-      port: config.smtp_port,
-      secure: config.smtp_secure,
-      auth: { user: config.smtp_user, pass: password },
+      host: String(config.smtp_host || '').trim(),
+      port,
+      secure,
+      auth: { user: String(config.smtp_user || '').trim(), pass: password },
+      requireTLS: !secure && port === 587,
       tls: { rejectUnauthorized: false },
     });
 
     const from = config.from_name
-      ? `"${config.from_name}" <${config.smtp_user}>`
+      ? `"${String(config.from_name).replace(/"/g, '')}" <${config.smtp_user}>`
       : config.smtp_user;
 
     await transporter.sendMail({
