@@ -20,6 +20,12 @@ import {
   Settings,
 } from 'lucide-react';
 
+type OpportunityRow = Opportunity & {
+  form_slug_tr?: string | null;
+  form_slug_en?: string | null;
+  site_form_id?: string | null;
+};
+
 type UnlinkedForm = {
   id: string;
   title_tr: string | null;
@@ -134,7 +140,7 @@ export default function OpportunitiesListPage() {
         (m.capabilities == null || m.capabilities.includes('forms'))
     );
 
-  const [items, setItems] = useState<Opportunity[]>([]);
+  const [items, setItems] = useState<OpportunityRow[]>([]);
   const [unlinkedForms, setUnlinkedForms] = useState<UnlinkedForm[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -395,7 +401,12 @@ export default function OpportunitiesListPage() {
           <ul className="space-y-3">
             {items.map((opp) => {
               const listingUrl = getAbsoluteOpportunityListingPath(locale, opp.slug);
-              const formUrl = getAbsoluteSiteApplicationPublicPath(locale, opp.slug);
+              const formSlug =
+                (locale === 'en' ? opp.form_slug_en : opp.form_slug_tr) ||
+                opp.form_slug_tr ||
+                opp.form_slug_en ||
+                opp.slug;
+              const formUrl = getAbsoluteSiteApplicationPublicPath(locale, formSlug);
               const typeLabel = t.type[opp.opportunity_type || 'staj'] || opp.opportunity_type;
               return (
                 <li

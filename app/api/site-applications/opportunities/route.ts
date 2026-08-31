@@ -131,12 +131,37 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const opportunities = data ?? [];
+  const opportunitiesRaw = data ?? [];
   const linkedFormIds = new Set(
-    opportunities
+    opportunitiesRaw
       .map((o) => o.site_form_id as string | null)
       .filter((id): id is string => typeof id === 'string' && id.length > 0)
   );
+
+  // Attach linked form slugs for correct “Başvuru formu” public URLs
+  const formIdList = Array.from(linkedFormIds);
+  const formSlugById = new Map<string, { slug_tr: string | null; slug_en: string | null }>();
+  if (formIdList.length > 0) {
+    const { data: linkedForms } = await supabase
+      .from(siteApplicationsDb.forms)
+      .select('id, slug_tr, slug_en')
+      .in('id', formIdList);
+    for (const f of linkedForms ?? []) {
+      formSlugById.set(String(f.id), {
+        slug_tr: f.slug_tr ?? null,
+        slug_en: f.slug_en ?? null,
+      });
+    }
+  }
+
+  const opportunities = opportunitiesRaw.map((o) => {
+    const formMeta = o.site_form_id ? formSlugById.get(String(o.site_form_id)) : undefined;
+    return {
+      ...o,
+      form_slug_tr: formMeta?.slug_tr || o.slug || null,
+      form_slug_en: formMeta?.slug_en || o.slug || null,
+    };
+  });
 
   // Team forms without a linked opportunity — so existing form can become a listing
   let formsQuery = supabase
