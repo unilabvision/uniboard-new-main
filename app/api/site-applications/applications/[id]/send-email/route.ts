@@ -90,7 +90,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
   }
 
   try {
-    const password = normalizeSmtpPassword(decryptSmtpPassword(config.smtp_password_encrypted));
+    const password = normalizeSmtpPassword(
+      decryptSmtpPassword(config.smtp_password_encrypted, config.panel_organization_id)
+    );
     const port = Number(config.smtp_port) || 587;
     const secure = Boolean(config.smtp_secure) || port === 465;
     const transporter = nodemailer.createTransport({

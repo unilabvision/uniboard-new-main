@@ -69,14 +69,16 @@ export async function POST(request: NextRequest) {
 
     let password: string;
     try {
-      password = normalizeSmtpPassword(decryptSmtpPassword(config.smtp_password_encrypted));
+      password = normalizeSmtpPassword(
+        decryptSmtpPassword(config.smtp_password_encrypted, panelOrgId)
+      );
     } catch (err: unknown) {
       return NextResponse.json(
         {
           error:
             err instanceof Error
               ? err.message
-              : 'Kayıtlı şifre çözülemedi. Lütfen şifreyi yeniden kaydedin.',
+              : 'Kayıtlı şifre çözülemedi. E-posta Ayarları’ndan veri koruma anahtarı ve şifreyi yeniden kaydedin.',
         },
         { status: 500 }
       );

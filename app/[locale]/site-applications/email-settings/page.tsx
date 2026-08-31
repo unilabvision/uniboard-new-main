@@ -28,10 +28,40 @@ const t = {
       'Port 465 ise işaretleyin. Port 587 ise işaretlemeyin (STARTTLS otomatik kullanılır).',
     user: 'Gönderen E-posta Adresi',
     userHint: 'Maillerin gönderileceği adres. Bu aynı zamanda SMTP kullanıcı adınızdır.',
-    password: 'Şifre / Uygulama Parolası',
+    password: 'E-posta uygulama parolası (App Password)',
+    passwordWhat: 'Bu nedir?',
     passwordHint:
-      'Gmail ve Google Workspace kullanıyorsanız normal şifreniz çalışmaz. Google Hesabı → Güvenlik → 2 Adımlı Doğrulama → Uygulama Parolaları bölümünden 16 karakterlik parola oluşturun. Boşluklu yapıştırabilirsiniz; sistem temizler.\nDaha önce kaydettiyseniz şifreyi değiştirmek istemiyorsanız bu alanı boş bırakabilirsiniz.',
-    passwordKeepHint: 'Kayıtlı şifre korunacak (değiştirmek için yeni parola girin).',
+      'Bu alan, mail hesabınızın giriş şifresi değildir.\n\n' +
+      'Gmail / Google Workspace (şirket maili) kullanıyorsanız:\n' +
+      '1) Google Hesabı → Güvenlik\n' +
+      '2) 2 Adımlı Doğrulama açık olmalı\n' +
+      '3) “Uygulama parolaları” (App passwords) bölümünden yeni parola oluşturun\n' +
+      '4) Gelen 16 karakterlik kodu buraya yapıştırın (boşluklu da olabilir; sistem temizler)\n\n' +
+      'Microsoft 365 kullanıyorsanız benzer şekilde “App password” gerekebilir.\n' +
+      'Kendi mail sunucunuz varsa IT’nin verdiği SMTP şifresini yazın.\n\n' +
+      'Daha önce kaydettiyseniz ve değiştirmek istemiyorsanız bu alanı boş bırakın.',
+    passwordKeepHint: 'Kayıtlı uygulama parolası korunacak. Değiştirmek için yeni App Password girin.',
+    passwordPlaceholder: 'abcd efgh ijkl mnop',
+    protectionKey: 'Veri koruma anahtarı (sizin belirlediğiniz)',
+    protectionKeyWhat: 'Bu nedir?',
+    protectionKeyHint:
+      'Bu alan e-posta şifreniz değildir. App Password ile karıştırmayın.\n\n' +
+      'Ne işe yarar?\n' +
+      'Uygulama parolanızı (üstteki App Password) sistemde güvenli saklamak için sizin oluşturduğunuz bir kilittir. Kurumunuza özeldir; MyUNI’nin kendi mail ayarlarından tamamen ayrıdır.\n\n' +
+      'Nasıl seçilir?\n' +
+      '• En az 8 karakter (önerilen: 12+)\n' +
+      '• Kolay tahmin edilmeyen bir ifade veya rastgele metin\n' +
+      '• Örnek format: AroniaceaeMail2026!  (kendi ifadenizi kullanın)\n' +
+      '• Bu anahtarı not defterinizde veya şifre yöneticinizde saklayın\n\n' +
+      'İlk kayıtta zorunludur. Sonraki kayıtlarda boş bırakırsanız aynı anahtar kullanılır. Değiştirmek isterseniz yeni anahtarı yazın ve App Password’ü de yeniden girin.',
+    protectionKeyKeepHint: 'Kayıtlı veri koruma anahtarı kullanılacak. Değiştirmek için yeni anahtar yazın.',
+    protectionKeyRequired:
+      'İlk kurulumda veri koruma anahtarı zorunludur (en az 8 karakter). Bu, e-posta App Password’ünden farklı bir alandır.',
+    protectionKeyPlaceholder: 'Kurumunuza özel gizli anahtar',
+    twoSecretsTitle: 'İki farklı alan — karıştırmayın',
+    twoSecretsBody:
+      '1) E-posta uygulama parolası → Google/Microsoft’un size verdiği App Password (mail göndermek için).\n' +
+      '2) Veri koruma anahtarı → Sizin uydurduğunuz kilit (App Password’ü panelde saklamak için).',
     fromName: 'Gönderen Adı',
     fromNameHint:
       'Alıcıların gelen kutusunda göreceği isim. Örn: "XYZ Şirketi İK", "ABC Topluluk"',
@@ -73,10 +103,40 @@ const t = {
       'Check this if using port 465. Leave unchecked for port 587 (STARTTLS is used automatically).',
     user: 'Sender Email Address',
     userHint: 'The address emails will be sent from. This is also your SMTP username.',
-    password: 'Password / App Password',
+    password: 'Email app password (App Password)',
+    passwordWhat: 'What is this?',
     passwordHint:
-      'For Gmail/Google Workspace, your regular password won\'t work. Generate a 16-character App Password. Spaces are OK; we strip them.\nLeave blank to keep the previously saved password.',
-    passwordKeepHint: 'Saved password will be kept (enter a new one to change it).',
+      'This is NOT your normal email login password.\n\n' +
+      'If you use Gmail / Google Workspace:\n' +
+      '1) Google Account → Security\n' +
+      '2) Turn on 2-Step Verification\n' +
+      '3) Open App passwords and create a new one\n' +
+      '4) Paste the 16-character code here (spaces are OK; we remove them)\n\n' +
+      'Microsoft 365 may also require an App password.\n' +
+      'On your own mail server, use the SMTP password from IT.\n\n' +
+      'Leave blank to keep a previously saved password.',
+    passwordKeepHint: 'Saved app password will be kept. Enter a new App Password only if you want to change it.',
+    passwordPlaceholder: 'abcd efgh ijkl mnop',
+    protectionKey: 'Data protection key (you create this)',
+    protectionKeyWhat: 'What is this?',
+    protectionKeyHint:
+      'This is NOT your email password. Do not paste the App Password here.\n\n' +
+      'What is it for?\n' +
+      'A lock you invent so we can store your App Password safely for your organization. It is separate from MyUNI’s own mail settings.\n\n' +
+      'How to choose one:\n' +
+      '• At least 8 characters (12+ recommended)\n' +
+      '• Something hard to guess, or a random phrase\n' +
+      '• Example style: AcmeMailLock2026!  (use your own)\n' +
+      '• Save it in a password manager or secure note\n\n' +
+      'Required on first setup. Leave blank later to reuse the same key. To change it, enter a new key and re-enter the App Password.',
+    protectionKeyKeepHint: 'Saved protection key will be used. Enter a new one only if you want to change it.',
+    protectionKeyRequired:
+      'A data protection key is required on first setup (min 8 characters). This is different from the email App Password.',
+    protectionKeyPlaceholder: 'Your organization secret key',
+    twoSecretsTitle: 'Two different fields — don’t mix them up',
+    twoSecretsBody:
+      '1) Email app password → App Password from Google/Microsoft (needed to send mail).\n' +
+      '2) Data protection key → A secret you invent (used only to lock/store that App Password in this panel).',
     fromName: 'Sender Name',
     fromNameHint:
       'The name recipients will see in their inbox. E.g.: "XYZ Corp HR", "ABC Community"',
@@ -109,9 +169,12 @@ export default function EmailSettingsPage() {
   const [secure, setSecure] = useState(false);
   const [user, setUser] = useState('');
   const [password, setPassword] = useState('');
+  const [protectionKey, setProtectionKey] = useState('');
   const [fromName, setFromName] = useState('');
   const [isVerified, setIsVerified] = useState(false);
   const [hasSavedConfig, setHasSavedConfig] = useState(false);
+  const [hasProtectionKey, setHasProtectionKey] = useState(false);
+  const [needsProtectionKey, setNeedsProtectionKey] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -139,6 +202,10 @@ export default function EmailSettingsPage() {
           setIsVerified(Boolean(data.config.is_verified));
           setHasSavedConfig(true);
         }
+        setHasProtectionKey(Boolean(data.has_protection_key));
+        setNeedsProtectionKey(
+          !data.has_protection_key || Boolean(data.needs_protection_key_reentry)
+        );
       })
       .catch(() => {
         setFlash({
@@ -162,6 +229,7 @@ export default function EmailSettingsPage() {
           smtp_secure: secure,
           smtp_user: user.trim(),
           smtp_password: password,
+          protection_key: protectionKey,
           from_name: fromName.trim(),
         }),
       });
@@ -170,8 +238,11 @@ export default function EmailSettingsPage() {
         throw new Error(data.error || (locale === 'en' ? 'Save failed' : 'Kayıt başarısız'));
       }
       setHasSavedConfig(true);
+      setHasProtectionKey(true);
+      setNeedsProtectionKey(false);
       setIsVerified(Boolean(data.verified));
       setPassword('');
+      setProtectionKey('');
       if (data.verified) {
         setFlash({ type: 'success', msg: labels.saveSuccess });
       } else {
@@ -220,7 +291,12 @@ export default function EmailSettingsPage() {
     return <div className="p-8 text-neutral-500">Loading...</div>;
   }
 
-  const canSave = Boolean(host.trim() && user.trim() && (password || hasSavedConfig));
+  const canSave = Boolean(
+    host.trim() &&
+      user.trim() &&
+      (password || hasSavedConfig) &&
+      (protectionKey.trim().length >= 8 || (hasProtectionKey && !needsProtectionKey))
+  );
   const canTest = hasSavedConfig;
 
   return (
@@ -341,6 +417,15 @@ export default function EmailSettingsPage() {
           <p className="text-xs text-neutral-500 mt-1.5">{labels.userHint}</p>
         </div>
 
+        <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 space-y-1.5">
+          <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+            {labels.twoSecretsTitle}
+          </p>
+          <p className="text-xs text-amber-800 dark:text-amber-300/90 leading-relaxed whitespace-pre-line">
+            {labels.twoSecretsBody}
+          </p>
+        </div>
+
         <div>
           <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
             {labels.password}
@@ -350,15 +435,56 @@ export default function EmailSettingsPage() {
             autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder={hasSavedConfig ? '••••••••' : '••••••••'}
+            placeholder={labels.passwordPlaceholder}
             className="w-full px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-sm"
           />
-          <p className="text-xs text-neutral-500 mt-1.5 leading-relaxed whitespace-pre-line">
-            {labels.passwordHint}
-          </p>
+          <div className="mt-2 rounded-lg bg-neutral-50 dark:bg-neutral-900/60 border border-neutral-200 dark:border-neutral-700 px-3 py-2.5">
+            <p className="text-xs font-semibold text-neutral-700 dark:text-neutral-200 mb-1">
+              {labels.passwordWhat}
+            </p>
+            <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed whitespace-pre-line">
+              {labels.passwordHint}
+            </p>
+          </div>
           {hasSavedConfig && !password && (
-            <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
+            <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1.5">
               {labels.passwordKeepHint}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
+            {labels.protectionKey}
+          </label>
+          <input
+            type="password"
+            autoComplete="off"
+            value={protectionKey}
+            onChange={(e) => setProtectionKey(e.target.value)}
+            placeholder={
+              hasProtectionKey && !needsProtectionKey
+                ? '••••••••'
+                : labels.protectionKeyPlaceholder
+            }
+            className="w-full px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-sm"
+          />
+          <div className="mt-2 rounded-lg bg-neutral-50 dark:bg-neutral-900/60 border border-neutral-200 dark:border-neutral-700 px-3 py-2.5">
+            <p className="text-xs font-semibold text-neutral-700 dark:text-neutral-200 mb-1">
+              {labels.protectionKeyWhat}
+            </p>
+            <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed whitespace-pre-line">
+              {labels.protectionKeyHint}
+            </p>
+          </div>
+          {needsProtectionKey && !protectionKey && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1.5">
+              {labels.protectionKeyRequired}
+            </p>
+          )}
+          {hasProtectionKey && !needsProtectionKey && !protectionKey && (
+            <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1.5">
+              {labels.protectionKeyKeepHint}
             </p>
           )}
         </div>

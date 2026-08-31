@@ -6,8 +6,12 @@ import {
   getServiceSupabase,
 } from '@/app/api/site-applications/access/_helpers';
 import {
-  encryptSmtpPassword,
+  encryptSmtpPasswordWithOrgKey,
+  decryptSmtpPassword,
+  hasStoredOrgProtectionKey,
   normalizeSmtpPassword,
+  unwrapOrgProtectionKey,
+  isOrgSmtpBlob,
 } from '@/app/_services/smtpEncryption';
 
 const UUID_RE =
@@ -65,14 +69,31 @@ export async function GET(request: NextRequest) {
   const { data } = await authResult.supabase
     .from('org_smtp_configs')
     .select(
-      'id, panel_organization_id, smtp_host, smtp_port, smtp_secure, smtp_user, from_name, is_verified, updated_at'
+      'id, panel_organization_id, smtp_host, smtp_port, smtp_secure, smtp_user, from_name, is_verified, updated_at, smtp_password_encrypted'
     )
     .eq('panel_organization_id', orgId)
     .maybeSingle();
 
+  const hasProtectionKey = hasStoredOrgProtectionKey(data?.smtp_password_encrypted);
+  const legacyEncryption = Boolean(data?.smtp_password_encrypted) && !hasProtectionKey;
+
   return NextResponse.json({
-    config: data || null,
-    has_password: Boolean(data),
+    config: data
+      ? {
+          id: data.id,
+          panel_organization_id: data.panel_organization_id,
+          smtp_host: data.smtp_host,
+          smtp_port: data.smtp_port,
+          smtp_secure: data.smtp_secure,
+          smtp_user: data.smtp_user,
+          from_name: data.from_name,
+          is_verified: data.is_verified,
+          updated_at: data.updated_at,
+        }
+      : null,
+    has_password: Boolean(data?.smtp_password_encrypted),
+    has_protection_key: hasProtectionKey,
+    needs_protection_key_reentry: legacyEncryption,
   });
 }
 
@@ -91,6 +112,7 @@ export async function POST(request: NextRequest) {
       smtp_user,
       smtp_password,
       from_name,
+      protection_key,
       orgId,
     } = body;
 
@@ -101,6 +123,8 @@ export async function POST(request: NextRequest) {
     const secureFlag = Boolean(smtp_secure) || portNum === 465;
     const passwordRaw = typeof smtp_password === 'string' ? smtp_password : '';
     const password = normalizeSmtpPassword(passwordRaw);
+    const protectionKeyInput =
+      typeof protection_key === 'string' ? protection_key.trim() : '';
 
     if (!host || !user) {
       return NextResponse.json(
@@ -140,73 +164,106 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Keep existing password when field left blank (re-save settings)
+    const { data: existing } = await authResult.supabase
+      .from('org_smtp_configs')
+      .select('smtp_password_encrypted, is_verified')
+      .eq('panel_organization_id', panelOrgId)
+      .maybeSingle();
+
+    const existingBlob = existing?.smtp_password_encrypted
+      ? String(existing.smtp_password_encrypted)
+      : '';
+
+    // Resolve protection key: new input, or unwrap from existing orgv1 blob
+    let protectionKey = protectionKeyInput;
+    if (!protectionKey) {
+      if (isOrgSmtpBlob(existingBlob)) {
+        try {
+          protectionKey = unwrapOrgProtectionKey(existingBlob, panelOrgId);
+        } catch {
+          return NextResponse.json(
+            {
+              error:
+                'Kayıtlı veri koruma anahtarı okunamadı. Lütfen “Veri koruma anahtarı” alanını tekrar girin.',
+            },
+            { status: 400 }
+          );
+        }
+      } else {
+        return NextResponse.json(
+          {
+            error:
+              'Veri koruma anahtarı zorunlu. Kurumunuza özel bir anahtar belirleyin (en az 8 karakter). MyUNI sunucu anahtarından bağımsızdır.',
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (protectionKey.length < 8) {
+      return NextResponse.json(
+        { error: 'Veri koruma anahtarı en az 8 karakter olmalı.' },
+        { status: 400 }
+      );
+    }
+
+    // Resolve SMTP password plaintext
     let passwordToStore = password;
     if (!passwordToStore) {
-      const { data: existing } = await authResult.supabase
-        .from('org_smtp_configs')
-        .select('smtp_password_encrypted')
-        .eq('panel_organization_id', panelOrgId)
-        .maybeSingle();
-      if (!existing?.smtp_password_encrypted) {
+      if (!existingBlob) {
         return NextResponse.json(
           { error: 'Şifre / uygulama parolası zorunludur.' },
           { status: 400 }
         );
       }
-      // Will re-encrypt only when new password provided; keep ciphertext
-      passwordToStore = '';
+      try {
+        passwordToStore = normalizeSmtpPassword(
+          decryptSmtpPassword(existingBlob, panelOrgId)
+        );
+      } catch {
+        return NextResponse.json(
+          {
+            error:
+              'Kayıtlı SMTP şifresi çözülemedi. App Password’ü ve veri koruma anahtarını yeniden girin.',
+          },
+          { status: 400 }
+        );
+      }
     }
 
     let isVerified = false;
     let verifyError: string | null = null;
-
-    // Verify with new password, or skip live verify if reusing stored password without plaintext
-    if (passwordToStore) {
-      try {
-        const transporter = buildTransporter({
-          host,
-          port: portNum,
-          secure: secureFlag,
-          user,
-          pass: passwordToStore,
-        });
-        await transporter.verify();
-        isVerified = true;
-        transporter.close();
-      } catch (err: unknown) {
-        verifyError = err instanceof Error ? err.message : 'SMTP bağlantısı doğrulanamadı';
-        isVerified = false;
-      }
+    try {
+      const transporter = buildTransporter({
+        host,
+        port: portNum,
+        secure: secureFlag,
+        user,
+        pass: passwordToStore,
+      });
+      await transporter.verify();
+      isVerified = true;
+      transporter.close();
+    } catch (err: unknown) {
+      verifyError = err instanceof Error ? err.message : 'SMTP bağlantısı doğrulanamadı';
+      isVerified = false;
     }
 
     let encrypted: string;
-    if (passwordToStore) {
-      try {
-        encrypted = encryptSmtpPassword(passwordToStore);
-      } catch (err: unknown) {
-        return NextResponse.json(
-          {
-            error:
-              err instanceof Error
-                ? err.message
-                : 'SMTP şifresi şifrelenemedi. Sunucu SMTP_ENCRYPTION_KEY ayarını kontrol edin.',
-          },
-          { status: 500 }
-        );
-      }
-    } else {
-      const { data: existing } = await authResult.supabase
-        .from('org_smtp_configs')
-        .select('smtp_password_encrypted, is_verified')
-        .eq('panel_organization_id', panelOrgId)
-        .maybeSingle();
-      encrypted = String(existing?.smtp_password_encrypted || '');
-      if (!encrypted) {
-        return NextResponse.json({ error: 'Şifre / uygulama parolası zorunludur.' }, { status: 400 });
-      }
-      // Keep prior verification if we didn't re-test
-      isVerified = Boolean(existing?.is_verified);
+    try {
+      encrypted = encryptSmtpPasswordWithOrgKey(
+        passwordToStore,
+        protectionKey,
+        panelOrgId
+      );
+    } catch (err: unknown) {
+      return NextResponse.json(
+        {
+          error:
+            err instanceof Error ? err.message : 'SMTP şifresi şifrelenemedi.',
+        },
+        { status: 500 }
+      );
     }
 
     const { data, error } = await authResult.supabase
@@ -242,6 +299,7 @@ export async function POST(request: NextRequest) {
       config: data,
       verified: isVerified,
       verifyError,
+      has_protection_key: true,
     });
   } catch (err: unknown) {
     console.error('SMTP config POST error:', err);
