@@ -38,24 +38,25 @@ const texts = {
     slug: 'Sitedeki adres (son kısım)',
     publish: 'Sitede yayınla',
     publishHint:
-      'Açıkken bu kayıt /stajlar listesinde görünür (myuni_opportunities). Kapalıyken listeden düşmesi için sitenin is_active filtrelemesi gerekir.',
+      'Açıkken ilan /stajlar listesinde çıkar ve detay sayfası otomatik oluşur: banner, fırsat detayları, açıklama ve “Başvuru formuna git” — gönüllü sayfasıyla aynı yapı. Her ilan için ayrı kod/deploy gerekmez; slug ile bağlanır.',
     publishMismatch:
       'Panel kapalı ama kart sitede duruyorsa site is_active’i yok sayıyor demektir — myunilab listesinde is_active=true filtresi eklenmeli.',
     publishDuplicateWarn:
-      'Yayın açık: liste DB kaydını gösterir. Aynı slug için sabit kart da varsa çift görünür; sabiti kaldırın.',
+      'Yayın açık: liste ve detay sayfası DB kaydından üretilir (ortak şablon). Aynı slug için eski sabit kart varsa çift görünebilir.',
     featured: 'Öne çıkar',
     save: 'Kaydet',
     saving: 'Kaydediliyor...',
     saved: 'Kaydedildi',
     error: 'Kaydedilemedi',
-    liveListing: 'İlan linki',
-    liveForm: 'Başvuru linki',
+    liveListing: 'İlan detay sayfası',
+    liveForm: 'Başvuru formu',
     editForm: 'Başvuru sorularını düzenle',
     delete: 'İlanı sil',
     deleteConfirm: 'İlan silinsin mi? Form pasife alınır.',
     deleting: 'Siliniyor...',
     banner: 'Banner (detay sayfası üst görsel)',
-    bannerHint: 'İlan detay sayfasının en üstündeki geniş görsel.',
+    bannerHint:
+      'Detay sayfasının en üstündeki geniş görsel (gönüllü sayfasındaki gibi). Yayınlamadan önce yüklemeniz önerilir.',
     bannerUpload: 'Görsel seç',
     bannerRemove: 'Kaldır',
     bannerUploading: 'Yükleniyor...',
@@ -64,6 +65,9 @@ const texts = {
     coverUpload: 'Kapak seç',
     coverRemove: 'Kaldır',
     coverUploading: 'Yükleniyor...',
+    pageStructureTitle: 'Sitede nasıl görünür?',
+    pageStructureBody:
+      'Yayınladığınız her ilan aynı sayfa yapısını kullanır:\n1) Üst şerit (tür, kurum, çalışma biçimi, son başvuru)\n2) Banner\n3) Fırsat detay kartları\n4) Açıklama metni\n5) Yan / mobil “Başvuru formuna git” butonu → /basvuru/{slug}',
   },
   en: {
     title: 'Edit listing',
@@ -89,24 +93,25 @@ const texts = {
     slug: 'URL ending',
     publish: 'Publish on site (DB list)',
     publishHint:
-      'When on, this row appears as a DB card on /stajlar. If the site also has a hardcoded card for the same slug, you get a duplicate — it does not merge into the existing card.',
+      'When on, the listing appears on /stajlar and the detail page is generated automatically: banner, detail cards, description, and “Go to application form” — same layout as the volunteer page. No per-listing deploy; bound by slug.',
     publishMismatch:
       'Mismatch: off in the panel, but the page may stay live (hardcoded). Turning publish on does not update that card; it may add a second list item.',
     publishDuplicateWarn:
-      'Warning: if a card already exists on the site for this URL, publishing adds a second card. Remove the hardcoded card on myunilab first, or use DB only.',
+      'Published: list + detail come from the DB using one shared template. A hardcoded card for the same slug may cause duplicates.',
     featured: 'Featured',
     save: 'Save',
     saving: 'Saving...',
     saved: 'Saved',
     error: 'Could not save',
-    liveListing: 'Listing link',
-    liveForm: 'Apply link',
+    liveListing: 'Listing detail page',
+    liveForm: 'Application form',
     editForm: 'Edit application questions',
     delete: 'Delete listing',
     deleteConfirm: 'Delete this listing? The form will be deactivated.',
     deleting: 'Deleting...',
     banner: 'Banner (detail page hero)',
-    bannerHint: 'Wide image at the top of the listing detail page.',
+    bannerHint:
+      'Wide hero image on the detail page (same role as on the volunteer page). Upload before publishing for best results.',
     bannerUpload: 'Choose image',
     bannerRemove: 'Remove',
     bannerUploading: 'Uploading...',
@@ -115,6 +120,9 @@ const texts = {
     coverUpload: 'Choose cover',
     coverRemove: 'Remove',
     coverUploading: 'Uploading...',
+    pageStructureTitle: 'How it appears on the site',
+    pageStructureBody:
+      'Every published listing uses the same page structure:\n1) Status strip (type, org, work mode, deadline)\n2) Banner\n3) Opportunity detail cards\n4) Description\n5) Sidebar / mobile “Go to application form” → /basvuru/{slug}',
   },
 };
 
@@ -420,6 +428,15 @@ export default function EditOpportunityPage() {
           removeLabel={t.bannerRemove}
           uploadingLabel={t.bannerUploading}
         />
+
+        <div className="rounded-lg border border-sky-200 dark:border-sky-900/50 bg-sky-50 dark:bg-sky-950/30 p-4 space-y-2">
+          <p className="text-sm font-semibold text-sky-900 dark:text-sky-200">
+            {t.pageStructureTitle}
+          </p>
+          <p className="text-xs text-sky-800 dark:text-sky-300/90 leading-relaxed whitespace-pre-line">
+            {t.pageStructureBody}
+          </p>
+        </div>
 
         <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/50 p-4 space-y-2 text-sm">
           {listingPreview && (
