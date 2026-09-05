@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { requireLmsContentAdmin } from '@/app/api/lms/_helpers';
 import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
 import { isCourseApplicationForm } from '@/app/lib/siteApplications/formTypes';
+import { normalizeFieldOptions } from '@/app/lib/siteApplications/forms';
+import * as XLSX from 'xlsx';
 
 const MAX_EXPORT_ROWS = 5000;
 
@@ -23,14 +25,7 @@ const INTERNAL_SUBMISSION_KEYS = new Set([
   'event_title',
 ]);
 
-function escapeCsvCell(value: unknown): string {
-  if (value === null || value === undefined) return '';
-  const str = String(value).replace(/\r?\n/g, ' ');
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
-}
+// Artık CSV escape fonksiyonuna ihtiyacımız yok, XLSX kütüphanesi handle edecek.
 
 /**
  * GET – Excel/CSV export of course application submissions.
@@ -91,6 +86,27 @@ export async function GET(request: NextRequest) {
   }
 
   let applications = rows ?? [];
+
+  // 1. Deduplicate by ID
+  const seenId = new Set<string>();
+  const idDedupedApps = applications.filter((row) => {
+    if (seenId.has(row.id)) return false;
+    seenId.add(row.id);
+    return true;
+  });
+
+  // 2. Deduplicate by email + form_id combination
+  const emailFormSeen = new Map<string, string>();
+  for (const row of idDedupedApps) {
+    const key = `${(row.email || '').toLowerCase()}::${row.form_id}`;
+    if (!emailFormSeen.has(key)) {
+      emailFormSeen.set(key, row.id);
+    }
+  }
+  applications = idDedupedApps.filter(
+    (row) => emailFormSeen.get(`${(row.email || '').toLowerCase()}::${row.form_id}`) === row.id
+  );
+
   if (courseId) {
     applications = applications.filter((a) => {
       const fromCol = a.course_id != null && String(a.course_id) === courseId;
@@ -135,14 +151,23 @@ export async function GET(request: NextRequest) {
   }
 
   const fieldLabelMap = new Map<string, string>();
+  const fieldOptionsMap = new Map<string, Array<{ value: string; label_tr: string; label_en: string }>>();
+  
   const { data: fields } = await supabase
     .from(siteApplicationsDb.formFields)
-    .select('field_key, label_tr, label_en, form_id')
+    .select('field_key, label_tr, label_en, form_id, options')
     .in('form_id', formIds);
+
   for (const f of fields ?? []) {
     const label = locale === 'en' ? f.label_en : f.label_tr;
     if (!fieldLabelMap.has(f.field_key)) {
       fieldLabelMap.set(f.field_key, label || f.field_key);
+    }
+    const normOpts = normalizeFieldOptions(f.options);
+    if (normOpts.length > 0) {
+      // FormId bağımsız olarak genel bir options havuzu (aynı field_key farklı formlarda farklıysa son okunan geçerli olur)
+      // Ancak aynı course için formlar birbirine benzer, sorun yaratmaz.
+      fieldOptionsMap.set(f.field_key, normOpts as Array<{ value: string; label_tr: string; label_en: string }>);
     }
   }
 
@@ -168,7 +193,34 @@ export async function GET(request: NextRequest) {
     (key) => fieldLabelMap.get(key) || key.replace(/_/g, ' ')
   );
   const headers = [...staticHeaders, ...dynamicHeaders];
-  const csvRows: string[] = [headers.map(escapeCsvCell).join(',')];
+  
+  // Create rows for XLSX
+  const worksheetData: unknown[][] = [headers];
+
+  const resolveValue = (key: string, rawVal: unknown): string => {
+    if (rawVal == null || rawVal === '') return '';
+    const opts = fieldOptionsMap.get(key);
+
+    const resolveOne = (v: string): string => {
+      if (!opts) return v;
+      const match = opts.find((o) => o.value === v || o.value === v.trim());
+      if (!match) return v;
+      return (locale === 'en' ? match.label_en : match.label_tr) || v;
+    };
+
+    if (Array.isArray(rawVal)) {
+      return rawVal.map((v) => resolveOne(String(v))).join(', ');
+    }
+
+    if (typeof rawVal === 'string' && opts && /option_\d+/.test(rawVal)) {
+      const parts = rawVal.trim().split(/[\s,]+/).filter(Boolean);
+      if (parts.length > 1) {
+        return parts.map(resolveOne).join(', ');
+      }
+    }
+
+    return resolveOne(String(rawVal));
+  };
 
   for (const app of applications) {
     const form = formById.get(String(app.form_id));
@@ -202,19 +254,39 @@ export async function GET(request: NextRequest) {
         ? new Date(app.created_at).toISOString().slice(0, 16).replace('T', ' ')
         : '',
     ];
-    const dynamicRow = dynamicKeys.map((key) => sub[key] ?? '');
-    csvRows.push([...staticRow, ...dynamicRow].map(escapeCsvCell).join(','));
+    const dynamicRow = dynamicKeys.map((key) => resolveValue(key, sub[key]));
+    worksheetData.push([...staticRow, ...dynamicRow]);
   }
 
-  const BOM = '\uFEFF';
-  const csv = BOM + csvRows.join('\r\n');
-  const filename =
-    locale === 'tr' ? 'kurs-basvurulari.csv' : 'course-applications.csv';
+  // Create workbook and worksheet
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
 
-  return new Response(csv, {
+  // Auto-size columns based on content length
+  const colWidths = headers.map((_, colIndex) => {
+    let max = 10; // minimum width
+    for (let rowIndex = 0; rowIndex < worksheetData.length; rowIndex++) {
+      const val = worksheetData[rowIndex][colIndex];
+      const len = val ? String(val).length : 0;
+      if (len > max) {
+        max = len > 50 ? 50 : len; // cap max width at 50 to prevent super wide cols
+      }
+    }
+    return { wch: max + 2 }; // padding
+  });
+  worksheet['!cols'] = colWidths;
+
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Applications');
+
+  const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+
+  const filename =
+    locale === 'tr' ? 'kurs-basvurulari.xlsx' : 'course-applications.xlsx';
+
+  return new Response(buffer as unknown as BodyInit, {
     status: 200,
     headers: {
-      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="${filename}"`,
     },
   });

@@ -39,8 +39,8 @@ export const eventApplicationOrFilter =
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function applyTeamApplicationsFilter(query: any) {
-  // Ekip = etkinliğe bağlı değil (source hatalı olsa bile panelde görünsün)
-  return query.is('event_id', null).is('event_name', null);
+  // Ekip = etkinliğe veya kursa bağlı değil
+  return query.is('event_id', null).is('event_name', null).is('course_id', null);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

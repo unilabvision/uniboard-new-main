@@ -27,11 +27,17 @@ export async function GET(request: NextRequest) {
   }
 
   const courseForms = (forms || []).filter((f) => isCourseApplicationForm(f));
-  const formIds = courseForms
-    .filter((f) => !courseId || String(f.course_id || '') === courseId)
-    .map((f) => String(f.id));
 
-  if (formIds.length === 0) {
+  // Deduplicate form IDs to avoid fetching same form twice
+  const uniqueFormIds = [
+    ...new Set(
+      courseForms
+        .filter((f) => !courseId || String(f.course_id || '') === courseId)
+        .map((f) => String(f.id))
+    ),
+  ];
+
+  if (uniqueFormIds.length === 0) {
     return NextResponse.json({ success: true, applications: [], forms: courseForms });
   }
 
@@ -40,7 +46,7 @@ export async function GET(request: NextRequest) {
     .select(
       'id, form_id, course_id, first_name, last_name, email, phone, status, locale, created_at, submission_data, source'
     )
-    .in('form_id', formIds)
+    .in('form_id', uniqueFormIds)
     .order('created_at', { ascending: false })
     .limit(500);
 
@@ -53,9 +59,32 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Deduplicate applications by ID (safety net against DB-level duplicates)
+  const seen = new Set<string>();
+  const idDedupedApplications = (data || []).filter((row) => {
+    if (seen.has(row.id)) return false;
+    seen.add(row.id);
+    return true;
+  });
+
+  // Further deduplicate by email + form_id combination:
+  // Keep only the latest submission per (email, form_id) pair.
+  const emailFormSeen = new Map<string, string>(); // key -> row id of latest
+  // First pass: identify latest per key
+  for (const row of idDedupedApplications) {
+    const key = `${(row.email || '').toLowerCase()}::${row.form_id}`;
+    if (!emailFormSeen.has(key)) {
+      emailFormSeen.set(key, row.id);
+    }
+    // idDedupedApplications is already sorted desc by created_at, so first one is the latest
+  }
+  const dedupedApplications = idDedupedApplications.filter(
+    (row) => emailFormSeen.get(`${(row.email || '').toLowerCase()}::${row.form_id}`) === row.id
+  );
+
   return NextResponse.json({
     success: true,
-    applications: data || [],
+    applications: dedupedApplications,
     forms: courseForms,
   });
 }

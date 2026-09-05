@@ -429,9 +429,13 @@ export default function SiteApplicationsListPage({
       if (!res.ok) throw new Error(data.error || 'Failed');
 
       let rows = (data.applications as SiteApplication[]) || [];
-      // Ek güvenlik: ekip sekmesine etkinlik kaydı sızmasın
+      // Ek güvenlik: ekip sekmesine etkinlik veya kurs kaydı sızmasın
       if (categoryFilter === 'team') {
-        rows = rows.filter((app) => !isEventSiteApplication(app));
+        rows = rows.filter(
+          (app) =>
+            !isEventSiteApplication(app) &&
+            !app.course_id // kurs başvurularını dışarıda bırak
+        );
       } else if (categoryFilter === 'event') {
         rows = rows.filter((app) => isEventSiteApplication(app));
       }

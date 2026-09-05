@@ -17,7 +17,10 @@ import {
   Sun,
   Moon,
   GraduationCap,
-  Award
+  Award,
+  ClipboardList,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import { useUser, useClerk } from '@clerk/nextjs';
 import { getModuleHref } from '@/utils/moduleRoutes';
@@ -101,6 +104,14 @@ function GlobalDashboardSidebarInner({
   const currentQuery = searchParams.toString();
   const { user } = useUser();
   const { signOut } = useClerk();
+
+  // LMS başvuru istatistikleri
+  const [lmsCoursesWithApps, setLmsCoursesWithApps] = useState<
+    Array<{ id: string; title: string; count: number }>
+  >([]);
+  const [lmsTotalApps, setLmsTotalApps] = useState(0);
+  const [lmsPendingApps, setLmsPendingApps] = useState(0);
+  const [lmsAppsExpanded, setLmsAppsExpanded] = useState(false);
   
   const t = sidebarTexts[locale as keyof typeof sidebarTexts] || sidebarTexts.tr;
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -320,6 +331,75 @@ function GlobalDashboardSidebarInner({
       setModuleContent(null);
     }
   }, [currentModule, isInModule]);
+
+  // LMS modülündeyken başvuru istatistiklerini çek
+  useEffect(() => {
+    if (currentModule !== 'lms') return;
+
+    const fetchLmsAppStats = async () => {
+      try {
+        const res = await fetch('/api/lms/course-applications');
+        if (!res.ok) return;
+        const data = await res.json().catch(() => ({}));
+        const apps: Array<{ course_id?: string | null; form_id: string; status: string }> =
+          data.applications || [];
+        const forms: Array<{ id: string; course_id?: string | null; title_tr?: string | null; title_en?: string | null; is_active?: boolean }> =
+          data.forms || [];
+
+        // form → courseId map (sadece aktif formlar)
+        const formCourseMap = new Map<string, string>();
+        const activeCourseIds = new Set<string>();
+        
+        forms.forEach((f) => {
+          if (f.course_id && f.is_active) {
+            formCourseMap.set(String(f.id), String(f.course_id));
+            activeCourseIds.add(String(f.course_id));
+          }
+        });
+
+        // course → title map (formdan al)
+        const courseTitleMap = new Map<string, string>();
+        forms.forEach((f) => {
+          if (f.course_id && f.is_active) {
+            const title = f.title_tr || f.title_en || '';
+            // Başlıktan " Başvurusu" / " Application" kısmını kaldır
+            const cleaned = title
+              .replace(/ Başvurusu$/i, '')
+              .replace(/ Application$/i, '')
+              .trim();
+            courseTitleMap.set(String(f.course_id), cleaned || title);
+          }
+        });
+
+        // Her aktif kurs için sayım
+        const counts: Record<string, number> = {};
+        let pending = 0;
+        let totalActiveApps = 0;
+        
+        apps.forEach((app) => {
+          const cid = app.course_id || formCourseMap.get(app.form_id) || null;
+          // Sadece aktif formu olan kursların başvurularını say
+          if (cid && activeCourseIds.has(cid)) {
+            counts[cid] = (counts[cid] || 0) + 1;
+            totalActiveApps++;
+            if (app.status === 'pending') pending++;
+          }
+        });
+
+        const courseList = Object.entries(counts)
+          .map(([id, count]) => ({ id, title: courseTitleMap.get(id) || id, count }))
+          .sort((a, b) => b.count - a.count);
+
+        setLmsCoursesWithApps(courseList);
+        setLmsTotalApps(totalActiveApps);
+        setLmsPendingApps(pending);
+      } catch {
+        // sessizce yoksay
+      }
+    };
+
+    void fetchLmsAppStats();
+  }, [currentModule]);
 
   // Theme toggle function
   const toggleTheme = () => {
@@ -728,6 +808,87 @@ function GlobalDashboardSidebarInner({
                   </Link>
                 ))}
               </>
+            )}
+
+            {/* LMS Modülü — Kurs Başvuruları Paneli */}
+            {!isCollapsed && currentModule === 'lms' && lmsTotalApps >= 0 && (
+              <div className="mt-2 mx-0.5">
+                <div className="rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden">
+                  {/* Başlık satırı */}
+                  <button
+                    type="button"
+                    onClick={() => setLmsAppsExpanded((v) => !v)}
+                    className="w-full flex items-center justify-between px-3 py-2 bg-neutral-50 dark:bg-neutral-900 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-left"
+                  >
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <ClipboardList className="w-3.5 h-3.5 text-[#990000] flex-shrink-0" />
+                      <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300 truncate">
+                        {locale === 'tr' ? 'Başvurular' : 'Applications'}
+                      </span>
+                      {lmsPendingApps > 0 && (
+                        <span className="ml-auto flex-shrink-0 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-[#990000] text-white text-[10px] font-bold">
+                          {lmsPendingApps}
+                        </span>
+                      )}
+                    </div>
+                    {lmsAppsExpanded ? (
+                      <ChevronDown className="w-3 h-3 text-neutral-400 flex-shrink-0" />
+                    ) : (
+                      <ChevronRight className="w-3 h-3 text-neutral-400 flex-shrink-0" />
+                    )}
+                  </button>
+
+                  {/* Toplam satırı */}
+                  <Link
+                    href={`/${locale}/lms/applications`}
+                    onClick={() => setIsOpen(false)}
+                    className={`flex items-center justify-between px-3 py-1.5 border-t border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors ${
+                      pathname === `/${locale}/lms/applications` && !pathname.includes('?')
+                        ? 'bg-[#990000]/10 dark:bg-[#990000]/20'
+                        : ''
+                    }`}
+                  >
+                    <span className="text-xs text-neutral-600 dark:text-neutral-400">
+                      {locale === 'tr' ? 'Tüm Başvurular' : 'All Applications'}
+                    </span>
+                    <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-200">
+                      {lmsTotalApps}
+                    </span>
+                  </Link>
+
+                  {/* Kurs listesi (açılırsa) */}
+                  {lmsAppsExpanded && (
+                    <div className="border-t border-neutral-200 dark:border-neutral-700">
+                      {lmsCoursesWithApps.length === 0 ? (
+                        <p className="px-3 py-2 text-xs text-neutral-400">
+                          {locale === 'tr' ? 'Başvuru yok' : 'No applications'}
+                        </p>
+                      ) : (
+                        lmsCoursesWithApps.map((course) => (
+                          <Link
+                            key={course.id}
+                            href={`/${locale}/lms/applications?courseId=${course.id}`}
+                            onClick={() => setIsOpen(false)}
+                            className={`flex items-center justify-between px-3 py-1.5 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors border-t border-neutral-100 dark:border-neutral-800 first:border-t-0 ${
+                              pathname.includes('/lms/applications') &&
+                              searchParams.get('courseId') === course.id
+                                ? 'bg-[#990000]/10 dark:bg-[#990000]/20'
+                                : ''
+                            }`}
+                          >
+                            <span className="text-xs text-neutral-600 dark:text-neutral-400 truncate mr-2">
+                              {course.title}
+                            </span>
+                            <span className="text-xs font-semibold text-[#990000] flex-shrink-0">
+                              {course.count}
+                            </span>
+                          </Link>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
 
             {/* Divider */}

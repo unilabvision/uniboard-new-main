@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import {
   ClipboardList,
   Download,
@@ -12,6 +12,7 @@ import {
   FileText,
   ExternalLink,
   Search,
+  Trash2,
 } from 'lucide-react';
 
 type ApplicationRow = {
@@ -68,6 +69,8 @@ const texts = {
     allForms: 'Tüm formlar',
     allStatuses: 'Tüm durumlar',
     count: (n: number) => `${n} başvuru`,
+    delete: 'Sil',
+    confirmDelete: 'Bu başvuruyu kalıcı olarak silmek istediğinize emin misiniz?',
   },
   en: {
     title: 'Course Applications',
@@ -100,21 +103,28 @@ const texts = {
     allForms: 'All forms',
     allStatuses: 'All statuses',
     count: (n: number) => `${n} applications`,
+    delete: 'Delete',
+    confirmDelete: 'Are you sure you want to permanently delete this application?',
   },
 };
 
 export default function LmsCourseApplicationsPage() {
   const params = useParams();
+  const searchParamsHook = useSearchParams();
   const locale = (params?.locale as string) || 'tr';
   const t = texts[locale as keyof typeof texts] || texts.tr;
 
+  // Pre-filter by courseId from URL query param
+  const initialCourseId = searchParamsHook?.get('courseId') || '';
+
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [applications, setApplications] = useState<ApplicationRow[]>([]);
   const [forms, setForms] = useState<FormRow[]>([]);
   const [search, setSearch] = useState('');
-  const [formFilter, setFormFilter] = useState('');
+  const [formFilter, setFormFilter] = useState(initialCourseId ? '' : ''); // will be set after forms load
   const [statusFilter, setStatusFilter] = useState('');
 
   const formById = useMemo(() => {
@@ -151,15 +161,24 @@ export default function LmsCourseApplicationsPage() {
       const res = await fetch('/api/lms/course-applications');
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || t.error);
+      const loadedForms: FormRow[] = data.forms || [];
       setApplications(data.applications || []);
-      setForms(data.forms || []);
+      setForms(loadedForms);
+
+      // Auto-select form filter if courseId provided in URL
+      if (initialCourseId) {
+        const matchingForm = loadedForms.find(
+          (f) => String(f.course_id || '') === initialCourseId
+        );
+        if (matchingForm) setFormFilter(matchingForm.id);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : t.error);
       setApplications([]);
     } finally {
       setLoading(false);
     }
-  }, [t.error]);
+  }, [t.error, initialCourseId]);
 
   useEffect(() => {
     void load();
@@ -194,7 +213,7 @@ export default function LmsCourseApplicationsPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = locale === 'tr' ? 'kurs-basvurulari.csv' : 'course-applications.csv';
+      a.download = locale === 'tr' ? 'kurs-basvurulari.xlsx' : 'course-applications.xlsx';
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -206,13 +225,47 @@ export default function LmsCourseApplicationsPage() {
     }
   };
 
+  const handleDelete = async (id: string) => {
+    if (!window.confirm(t.confirmDelete)) return;
+    setDeletingId(id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/lms/course-applications/${id}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to delete');
+      }
+      setApplications((prev) => prev.filter((a) => a.id !== id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete error');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
+          {initialCourseId && (
+            <Link
+              href={`/${locale}/lms`}
+              className="inline-flex items-center gap-1 text-xs text-neutral-500 hover:text-[#990000] mb-2"
+            >
+              ← {locale === 'tr' ? 'Kurs Yönetimi' : 'Course Management'}
+            </Link>
+          )}
           <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
             <ClipboardList className="w-6 h-6 text-[#990000]" />
-            {t.title}
+            {initialCourseId && formFilter
+              ? (() => {
+                  const form = forms.find((f) => f.id === formFilter);
+                  const courseName = locale === 'en' ? form?.title_en || form?.title_tr : form?.title_tr || form?.title_en;
+                  return courseName ? `${courseName} — ${t.title}` : t.title;
+                })()
+              : t.title}
           </h1>
           <p className="text-sm text-neutral-500 mt-1">{t.subtitle}</p>
           <p className="text-xs text-neutral-500 mt-1">{t.hint}</p>
@@ -396,11 +449,24 @@ export default function LmsCourseApplicationsPage() {
                         {courseId && (
                           <Link
                             href={`/${locale}/lms/edit/${courseId}?tab=applications`}
-                            className="inline-flex items-center gap-1 text-neutral-600 text-xs"
+                            className="inline-flex items-center gap-1 text-neutral-600 hover:text-neutral-900 dark:hover:text-neutral-300 text-xs"
                           >
                             {t.openForm}
                           </Link>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => void handleDelete(row.id)}
+                          disabled={deletingId === row.id}
+                          className="inline-flex items-center gap-1 text-red-600 hover:text-red-700 disabled:opacity-50 text-xs ml-2"
+                        >
+                          {deletingId === row.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-3.5 h-3.5" />
+                          )}
+                          {t.delete}
+                        </button>
                       </td>
                     </tr>
                   );

@@ -5,7 +5,6 @@ import {
   Shield,
   Users,
   Tag,
-  ClipboardList,
 } from 'lucide-react';
 
 export const lmsSidebarContent = {
@@ -21,7 +20,6 @@ export const lmsSidebarContent = {
         icon: Users,
         crossModule: true,
       },
-      { name: 'Başvurular', href: '/applications', icon: ClipboardList, capability: 'courses' },
       { name: 'Ayarlar', href: '/settings', icon: Settings, capability: 'settings' },
       { name: 'Yetkilendirme', href: '/access', icon: Shield, capability: 'access' },
     ],
@@ -38,7 +36,6 @@ export const lmsSidebarContent = {
         icon: Users,
         crossModule: true,
       },
-      { name: 'Applications', href: '/applications', icon: ClipboardList, capability: 'courses' },
       { name: 'Settings', href: '/settings', icon: Settings, capability: 'settings' },
       { name: 'Access Control', href: '/access', icon: Shield, capability: 'access' },
     ],

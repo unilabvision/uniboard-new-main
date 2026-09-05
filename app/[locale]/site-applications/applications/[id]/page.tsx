@@ -16,6 +16,7 @@ import {
   Download,
   Loader2,
   Send,
+  Trash2,
 } from 'lucide-react';
 import type { SiteApplication, SiteApplicationStatusHistory } from '@/app/types/siteApplications';
 import {
@@ -67,6 +68,8 @@ const texts = {
     history: 'Durum Geçmişi',
     loading: 'Yükleniyor...',
     notFound: 'Başvuru bulunamadı',
+    delete: 'Başvuruyu Sil',
+    confirmDelete: 'Bu başvuruyu kalıcı olarak silmek istediğinize emin misiniz?',
     statusLabels: {
       pending: 'Bekliyor',
       under_review: 'İncelemede',
@@ -125,6 +128,8 @@ const texts = {
     history: 'Status History',
     loading: 'Loading...',
     notFound: 'Application not found',
+    delete: 'Delete Application',
+    confirmDelete: 'Are you sure you want to permanently delete this application?',
     statusLabels: {
       pending: 'Pending',
       under_review: 'Under Review',
@@ -212,6 +217,7 @@ export default function SiteApplicationDetailPage({
   const [emailConfirmed, setEmailConfirmed] = useState(false);
   const [smtpConfigured, setSmtpConfigured] = useState<boolean | null>(null);
   const [statusEmailCheck, setStatusEmailCheck] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -355,6 +361,31 @@ export default function SiteApplicationDetailPage({
     }
   };
 
+  const handleDelete = async () => {
+    if (!window.confirm(t.confirmDelete)) return;
+    setDeleting(true);
+    setStatusMessage(null);
+    try {
+      // Use the specific LMS endpoint if coming from LMS, or general site-applications endpoint
+      const endpoint = pathname.includes('/lms/') 
+        ? `/api/lms/course-applications/${id}` 
+        : `/api/site-applications/applications/${id}`;
+        
+      const res = await fetch(endpoint, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to delete');
+      }
+      // Redirect back to list
+      window.location.href = listHref;
+    } catch (err) {
+      setStatusMessage(err instanceof Error ? err.message : 'Delete error');
+      setDeleting(false);
+    }
+  };
+
   if (loading) {
     return <div className="p-8 text-center text-neutral-500">{t.loading}</div>;
   }
@@ -439,26 +470,72 @@ export default function SiteApplicationDetailPage({
     );
   };
 
-  const resolveOptionValue = (key: string, rawValue: unknown): string => {
-    if (typeof rawValue !== 'string') return String(rawValue ?? '');
+  const resolveOptionValue = (key: string, rawValue: unknown): React.ReactNode => {
     const def = formFields.find((f) => f.field_key === key);
-    if (!def || !Array.isArray(def.options)) return rawValue;
-    const match = (def.options as Array<{ label_tr?: string; label_en?: string; value?: string }>).find(
-      (o) => o.value === rawValue
-    );
-    if (!match) return rawValue;
-    return (locale === 'en' ? match.label_en : match.label_tr) || rawValue;
+    const optArr = def && Array.isArray(def.options)
+      ? (def.options as Array<{ label_tr?: string; label_en?: string; value?: string }>)
+      : null;
+
+    const resolveOne = (v: string): string => {
+      if (!optArr) return v;
+      const match = optArr.find((o) => o.value === v || o.value === v.trim());
+      if (!match) return v;
+      return (locale === 'en' ? match.label_en : match.label_tr) || v;
+    };
+
+    // Array (multi-select checkbox stored as array)
+    if (Array.isArray(rawValue)) {
+      const labels = rawValue.map((v) => resolveOne(String(v)));
+      return (
+        <ul className="list-disc list-inside space-y-0.5">
+          {labels.map((l, i) => <li key={i}>{l}</li>)}
+        </ul>
+      );
+    }
+
+    if (typeof rawValue !== 'string') return String(rawValue ?? '');
+
+    // Space-separated or comma-separated multi-value string like "option_3 option_5"
+    // Only split if it looks like it contains option_ keys
+    if (optArr && /option_\d+/.test(rawValue)) {
+      const parts = rawValue.trim().split(/[\s,]+/).filter(Boolean);
+      if (parts.length > 1) {
+        const labels = parts.map(resolveOne);
+        return (
+          <ul className="list-disc list-inside space-y-0.5">
+            {labels.map((l, i) => <li key={i}>{l}</li>)}
+          </ul>
+        );
+      }
+    }
+
+    return resolveOne(rawValue);
   };
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto">
-      <Link
-        href={listHref}
-        className="inline-flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400 hover:text-[#990000] mb-6"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        {t.back}
-      </Link>
+      <div className="flex items-center justify-between mb-6">
+        <Link
+          href={listHref}
+          className="inline-flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400 hover:text-[#990000]"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          {t.back}
+        </Link>
+        <button
+          type="button"
+          onClick={handleDelete}
+          disabled={deleting}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50"
+        >
+          {deleting ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Trash2 className="w-4 h-4" />
+          )}
+          {t.delete}
+        </button>
+      </div>
 
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">

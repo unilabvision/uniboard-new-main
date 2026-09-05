@@ -4,6 +4,7 @@ export interface SiteApplication {
   id: string;
   form_id: string | null;
   event_id?: string | null;
+  course_id?: string | null;
   application_type: string;
   first_name: string;
   last_name: string;
