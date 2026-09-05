@@ -1,6 +1,6 @@
 /** Maillerde / dış linklerde localhost veya vercel preview kullanma */
 
-export const DEFAULT_MYUNI_PUBLIC_ORIGIN = 'https://myunilab.net';
+export const DEFAULT_MYUNI_PUBLIC_ORIGIN = 'https://www.myunilab.net';
 
 function normalizeOrigin(raw: string): string {
   return raw.trim().replace(/\/$/, '');
@@ -12,8 +12,8 @@ function isUnsafePublicOrigin(value: string): boolean {
 
 /**
  * Checkout / public site linkleri.
- * Kanonik env: NEXT_PUBLIC_BASE_URL (prod'da https://myunilab.net).
- * Localhost/vercel gelirse atlanır → myunilab.net.
+ * Kanonik env: NEXT_PUBLIC_BASE_URL (prod'da https://www.myunilab.net).
+ * Localhost/vercel gelirse atlanır → www.myunilab.net.
  */
 export function getMyuniPublicOrigin(): string {
   const candidates = [
@@ -26,6 +26,10 @@ export function getMyuniPublicOrigin(): string {
     if (!raw?.trim()) continue;
     const value = normalizeOrigin(raw);
     if (isUnsafePublicOrigin(value)) continue;
+    // myunilab.net → www.myunilab.net (site kanonik host)
+    if (/^https?:\/\/myunilab\.net$/i.test(value)) {
+      return 'https://www.myunilab.net';
+    }
     return value.startsWith('http') ? value : `https://${value}`;
   }
 

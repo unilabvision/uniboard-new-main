@@ -3,6 +3,10 @@ import {
   EVENTS_CAPABILITIES,
   EVENTS_CAPABILITY_LABELS,
 } from '@/app/lib/events/permissions';
+import {
+  MENTORSHIP_CAPABILITIES,
+  MENTORSHIP_CAPABILITY_LABELS,
+} from '@/app/lib/mentorship/permissions';
 
 export type ModuleCapabilityDef = {
   key: string;
@@ -26,6 +30,13 @@ export const MODULE_CAPABILITIES: Record<string, ModuleCapabilityDef[]> = {
       labelTr: 'Yetkilendirme yönetimi',
       labelEn: 'Access management',
     },
+  ],
+  mentorship: [
+    ...MENTORSHIP_CAPABILITIES.map((key) => ({
+      key,
+      labelTr: MENTORSHIP_CAPABILITY_LABELS[key].tr,
+      labelEn: MENTORSHIP_CAPABILITY_LABELS[key].en,
+    })),
   ],
   'site-applications': [
     {

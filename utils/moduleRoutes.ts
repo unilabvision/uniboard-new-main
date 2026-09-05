@@ -20,6 +20,10 @@ const modulePathOverrides: Record<string, string> = {
   'etkinlik-yonetimi': 'events',
   'event-management': 'events',
   event_management: 'events',
+  mentorship: 'mentorship',
+  mentorluk: 'mentorship',
+  mentorships: 'mentorship',
+  mentor: 'mentorship',
 };
 
 export const getModuleHref = (locale: string, moduleKey: string) => {

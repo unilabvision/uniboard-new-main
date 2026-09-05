@@ -158,6 +158,10 @@ function GlobalDashboardSidebarInner({
         modules.some((m) =>
           ['events', 'event', 'etkinlik', 'etkinlikler'].includes(m.key)
         )) ||
+      (['mentorship', 'mentorluk', 'mentorships', 'mentor'].includes(currentModule) &&
+        modules.some((m) =>
+          ['mentorship', 'mentorluk', 'mentorships', 'mentor'].includes(m.key)
+        )) ||
       (['students', 'student'].includes(currentModule) &&
         modules.some((m) =>
           ['students', 'student', 'lms', 'courses'].includes(m.key)
@@ -305,6 +309,19 @@ function GlobalDashboardSidebarInner({
                 content = eventsSidebarContent;
               } catch (error) {
                 console.error('Could not load events sidebar content', error);
+                content = null;
+              }
+              break;
+
+            case 'mentorship':
+            case 'mentorluk':
+            case 'mentorships':
+            case 'mentor':
+              try {
+                const { mentorshipSidebarContent } = await import('../../app/[locale]/mentorship/sidebar-content');
+                content = mentorshipSidebarContent;
+              } catch (error) {
+                console.error('Could not load mentorship sidebar content', error);
                 content = null;
               }
               break;
@@ -456,6 +473,7 @@ function GlobalDashboardSidebarInner({
 
     const moduleAliases: Record<string, string[]> = {
       events: ['events', 'event', 'etkinlik', 'etkinlikler'],
+      mentorship: ['mentorship', 'mentorluk', 'mentorships', 'mentor'],
       'site-applications': [
         'site-applications',
         'site_basvurular',

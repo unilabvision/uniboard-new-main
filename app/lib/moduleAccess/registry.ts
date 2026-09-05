@@ -93,6 +93,14 @@ export const MODULE_ACCESS_REGISTRY: Record<string, ModuleAccessDefinition> = {
     nameEn: 'Event Management',
     managePolicy: 'moduleHolder',
   },
+  mentorship: {
+    primaryModuleKey: 'mentorship',
+    moduleKeys: ['mentorship', 'mentorluk', 'mentorships', 'mentor'],
+    dashboardPath: 'mentorship',
+    nameTr: 'Mentörlük Paneli',
+    nameEn: 'Mentorship Panel',
+    managePolicy: 'moduleHolder',
+  },
 };
 
 export function getModuleAccessDefinition(moduleKey: string): ModuleAccessDefinition | null {

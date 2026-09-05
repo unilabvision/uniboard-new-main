@@ -16,6 +16,8 @@ const isPublicRoute = createRouteMatcher([
   '/en/site-applications(.*)',
   '/tr/events(.*)',
   '/en/events(.*)',
+  '/tr/mentorship(.*)',
+  '/en/mentorship(.*)',
   '/tr/lms(.*)',
   '/en/lms(.*)',
   '/tr/lms-2(.*)',
@@ -99,6 +101,8 @@ const isPublicRoute = createRouteMatcher([
   '/api/site-applications/public(.*)',
   '/api/public/events(.*)',
   '/api/events(.*)',
+  '/api/public/mentorships(.*)',
+  '/api/mentorship(.*)',
   '/api/site-applications/files/upload-url',
   '/api/site-applications/payments/confirm',
   '/api/site-applications/cleanup',
@@ -148,6 +152,8 @@ const isProtectedRoute = createRouteMatcher([
   '/en/checkout(.*)', // Checkout requires auth
   '/tr/influencer(.*)', // Influencer panel requires auth
   '/en/influencer(.*)',
+  '/tr/mentorship(.*)',
+  '/en/mentorship(.*)',
 ]);
 
 // Payment-related routes that need special handling
@@ -182,6 +188,8 @@ const isValidRoute = createRouteMatcher([
   '/en/site-applications(.*)',
   '/tr/events(.*)',
   '/en/events(.*)',
+  '/tr/mentorship(.*)',
+  '/en/mentorship(.*)',
   '/tr/lms(.*)',
   '/en/lms(.*)',
   '/tr/lms-2(.*)',
