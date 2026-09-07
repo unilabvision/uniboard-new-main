@@ -7,6 +7,7 @@ import {
 import {
   requireSiteApplicationsOrEventsUser,
   resolveSiteApplicationsTenantScope,
+  applySiteApplicationsTenantScope,
 } from '@/app/api/site-applications/access/_helpers';
 import { normalizeFieldOptions } from '@/app/lib/siteApplications/forms';
 import { getSiteApplicationAttachmentUrl } from '@/app/lib/siteApplications/attachmentDownload';
@@ -35,12 +36,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     .from(siteApplicationsDb.applications)
     .select('*')
     .eq('id', id);
-  if (tenantScope.mode === 'none') {
-    return NextResponse.json({ error: 'Application not found' }, { status: 404 });
-  }
-  if (tenantScope.mode === 'scoped') {
-    verifyQuery = verifyQuery.in('organization', tenantScope.allowedValues);
-  }
+  verifyQuery = applySiteApplicationsTenantScope(verifyQuery, tenantScope);
 
   const { data: verified, error: verifyError } = await verifyQuery.maybeSingle();
   if (verifyError || !verified) {
@@ -53,9 +49,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     .from(siteApplicationsDb.applications)
     .select('*')
     .eq('id', id);
-  if (tenantScope.mode === 'scoped') {
-    loadedQuery = loadedQuery.in('organization', tenantScope.allowedValues);
-  }
+  loadedQuery = applySiteApplicationsTenantScope(loadedQuery, tenantScope);
 
   const { data: loaded, error } = await loadedQuery.single();
 
@@ -161,17 +155,11 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     authResult.userId || ''
   );
 
-  if (tenantScope.mode === 'none') {
-    return NextResponse.json({ error: 'Application not found' }, { status: 404 });
-  }
-
   let existingQuery = supabase
     .from(siteApplicationsDb.applications)
     .select('*')
     .eq('id', id);
-  if (tenantScope.mode === 'scoped') {
-    existingQuery = existingQuery.in('organization', tenantScope.allowedValues);
-  }
+  existingQuery = applySiteApplicationsTenantScope(existingQuery, tenantScope);
 
   const { data: existing, error: loadError } = await existingQuery.single();
 
@@ -232,12 +220,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     .from(siteApplicationsDb.applications)
     .update(updates)
     .eq('id', id);
-  if (tenantScope.mode === 'scoped') {
-    updateQuery = updateQuery.in(
-      'organization',
-      tenantScope.allowedValues
-    );
-  }
+  updateQuery = applySiteApplicationsTenantScope(updateQuery, tenantScope);
 
   const { data, error } = await updateQuery.select('*').single();
 
@@ -290,14 +273,9 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
   // Tenant scope doğrulaması olmadan silme yapma.
   let verifyQuery = authResult.supabase
     .from(siteApplicationsDb.applications)
-    .select('id, organization')
+    .select('id, form_id')
     .eq('id', id);
-  if (tenantScope.mode === 'none') {
-    return NextResponse.json({ error: 'Application not found' }, { status: 404 });
-  }
-  if (tenantScope.mode === 'scoped') {
-    verifyQuery = verifyQuery.in('organization', tenantScope.allowedValues);
-  }
+  verifyQuery = applySiteApplicationsTenantScope(verifyQuery, tenantScope);
 
   const { data: existing, error: loadError } = await verifyQuery.maybeSingle();
   if (loadError || !existing) {

@@ -7,6 +7,7 @@ import {
 import {
   requireSiteApplicationsOrEventsUser,
   resolveSiteApplicationsTenantScope,
+  applySiteApplicationsTenantScope,
 } from '@/app/api/site-applications/access/_helpers';
 
 const MAX_EXPORT_ROWS = 5000;
@@ -70,9 +71,8 @@ export async function GET(request: NextRequest) {
 
   if (tenantScope.mode === 'none') {
     return new Response('', { status: 204 });
-  } else if (tenantScope.mode === 'scoped') {
-    query = query.in('organization', tenantScope.allowedValues);
   }
+  query = applySiteApplicationsTenantScope(query, tenantScope);
 
   if (eventId) query = query.eq('event_id', eventId);
   else if (eventName) query = query.ilike('event_name', eventName);

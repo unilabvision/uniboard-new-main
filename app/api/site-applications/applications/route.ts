@@ -7,6 +7,8 @@ import {
 import {
   requireSiteApplicationsOrEventsUser,
   resolveSiteApplicationsTenantScope,
+  applySiteApplicationsTenantScope,
+  isApplicationInTenantScope,
 } from '@/app/api/site-applications/access/_helpers';
 import { backfillPendingEventApplications } from '@/app/lib/siteApplications/eventAutoAccept';
 import { syncCertificatePaymentsFromOrders } from '@/app/lib/siteApplications/syncPayments';
@@ -53,12 +55,7 @@ export async function GET(request: NextRequest) {
     query = applyTeamApplicationsFilter(query);
   }
 
-  // Tenant scoping: external kurum/kişinin sadece kendi başvurularını görmesi
-  if (tenantScope.mode === 'none') {
-    query = query.eq('id', '__no_access__');
-  } else if (tenantScope.mode === 'scoped') {
-    query = query.in('organization', tenantScope.allowedValues);
-  }
+  query = applySiteApplicationsTenantScope(query, tenantScope);
 
   if (eventId) {
     query = query.eq('event_id', eventId);
@@ -139,7 +136,7 @@ export async function DELETE(request: NextRequest) {
     );
   }
 
-  // Tenant scoping check: sadece izinli organization'a ait olanları sil.
+  // Tenant scoping: sadece kendi formlarına ait başvuruları sil
   let deletableIds = ids;
   const forbidden: Array<{ id: string; error: string }> = [];
 
@@ -149,23 +146,24 @@ export async function DELETE(request: NextRequest) {
   } else if (tenantScope.mode === 'scoped') {
     const { data: existingRows } = await authResult.supabase
       .from(siteApplicationsDb.applications)
-      .select('id, organization')
+      .select('id, form_id')
       .in('id', ids);
 
     const byId = new Map<string, string | null>(
-      (existingRows ?? []).map((r) => [String(r.id), (r.organization as string | null) ?? null])
+      (existingRows ?? []).map((r) => [
+        String(r.id),
+        (r.form_id as string | null) ?? null,
+      ])
     );
 
-    const allowedSet = new Set(tenantScope.allowedValues);
-    deletableIds = ids.filter((id) => {
-      const org = byId.get(id) ?? null;
-      return org != null && allowedSet.has(org);
-    });
+    deletableIds = ids.filter((id) =>
+      isApplicationInTenantScope(byId.get(id) ?? null, tenantScope)
+    );
 
     for (const id of ids) {
-      const org = byId.get(id) ?? null;
-      if (org == null) continue; // not found => bulk delete will handle as failed
-      if (!allowedSet.has(org)) {
+      const formId = byId.get(id) ?? null;
+      if (formId == null && !byId.has(id)) continue;
+      if (!isApplicationInTenantScope(formId, tenantScope)) {
         forbidden.push({ id, error: 'Forbidden by tenant scope' });
       }
     }

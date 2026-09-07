@@ -4,6 +4,7 @@ import {
   SITE_APPLICATIONS_MODULE_KEY,
   hasSiteApplicationsAccess,
 } from '@/app/lib/siteApplications/permissions';
+import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
 import {
   EVENTS_MODULE_KEY,
   hasEventsAccess,
@@ -153,15 +154,24 @@ export async function requireSiteApplicationsOrEventsUser(
 type SiteAppsTenantScope =
   | { mode: 'all' }
   | { mode: 'none' }
-  | { mode: 'scoped'; allowedValues: string[] };
+  | { mode: 'scoped'; allowedFormIds: string[] };
+
+const SITE_APPS_TENANT_MODULE_KEYS = [
+  'site-applications',
+  'site_basvurular',
+  'site-basvurular',
+  'basvurular',
+  'events',
+  'event',
+  'etkinlik',
+  'etkinlikler',
+] as const;
 
 /**
- * External kurum/kişi paneli için tenant-scoping:
- * - user_module_access.panel_organization_id -> panel_organizations (slug/name)
- * - myuni_site_applications.organization alanına filtre uygular.
- *
- * Not: `organization` değeri formdan geldiği için hem `slug` hem `name` match listesine
- * eklenir (değer hangi şekilde saklanıyorsa yakalamak için).
+ * External kurum paneli için başvuru tenant-scoping:
+ * Başvurular `organization` (adayın yazdığı kurum metni) ile değil,
+ * form sahipliği ile filtrelenir:
+ * user → panel_organization_id → aynı org’daki form creators → form_id listesi.
  */
 export async function resolveSiteApplicationsTenantScope(
   supabase: ReturnType<typeof getServiceSupabase>,
@@ -172,9 +182,7 @@ export async function resolveSiteApplicationsTenantScope(
 
   if (resolved.isSuperAdmin) return { mode: 'all' };
 
-  // Org-scoped tenant:
-  // - panel_organization_id = null ise kullanıcı modüle global erişimde demektir (tüm başvurular)
-  // - panel_organization_id atanmışsa o org'larla kısıtlı başvurular görünmeli
+  // panel_organization_id = null → global erişim (tüm başvurular)
   const hasUnscopedMembership = resolved.memberships.some(
     (m) => m.panelOrganizationId == null
   );
@@ -190,24 +198,67 @@ export async function resolveSiteApplicationsTenantScope(
 
   if (orgIds.length === 0) return { mode: 'none' };
 
-  const { data, error } = await supabase
-    .from('panel_organizations')
-    .select('slug, name')
-    .in('id', orgIds)
-    .eq('is_active', true);
+  const { data: accessRows, error: accessError } = await supabase
+    .from('user_module_access')
+    .select('clerk_user_id')
+    .eq('is_enabled', true)
+    .in('module_key', [...SITE_APPS_TENANT_MODULE_KEYS])
+    .in('panel_organization_id', orgIds);
 
-  if (error) return { mode: 'none' };
+  if (accessError) return { mode: 'none' };
 
-  const allowedValues = Array.from(
+  const creatorIds = Array.from(
     new Set(
-      (data ?? [])
-        .flatMap((o) => [o.slug, o.name])
-        .map((v) => (typeof v === 'string' ? v.trim() : ''))
-        .filter(Boolean)
+      (accessRows ?? [])
+        .map((r: { clerk_user_id: string }) => r.clerk_user_id)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)
     )
   );
 
-  return { mode: allowedValues.length > 0 ? 'scoped' : 'none', allowedValues };
+  if (creatorIds.length === 0) return { mode: 'none' };
+
+  const { data: forms, error: formsError } = await supabase
+    .from(siteApplicationsDb.forms)
+    .select('id')
+    .in('created_by', creatorIds);
+
+  if (formsError) return { mode: 'none' };
+
+  const allowedFormIds = Array.from(
+    new Set(
+      (forms ?? [])
+        .map((f: { id: string }) => f.id)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)
+    )
+  );
+
+  // Org’un formu yoksa boş liste dön (başvuru da görünmez)
+  return { mode: 'scoped', allowedFormIds };
+}
+
+/** PostgREST sorgusuna tenant form_id filtresi uygula */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function applySiteApplicationsTenantScope(query: any, scope: SiteAppsTenantScope) {
+  if (scope.mode === 'none') {
+    return query.eq('id', '__no_access__');
+  }
+  if (scope.mode === 'scoped') {
+    if (scope.allowedFormIds.length === 0) {
+      return query.eq('id', '__no_access__');
+    }
+    return query.in('form_id', scope.allowedFormIds);
+  }
+  return query;
+}
+
+export function isApplicationInTenantScope(
+  formId: string | null | undefined,
+  scope: SiteAppsTenantScope
+): boolean {
+  if (scope.mode === 'all') return true;
+  if (scope.mode === 'none') return false;
+  if (!formId) return false;
+  return scope.allowedFormIds.includes(formId);
 }
 
 type SiteAppsPanelOrganizationScope =

@@ -3,6 +3,7 @@ import { siteApplicationsDb, eventApplicationOrFilter } from '@/app/lib/siteAppl
 import {
   requireSiteApplicationsOrEventsUser,
   resolveSiteApplicationsTenantScope,
+  applySiteApplicationsTenantScope,
 } from '@/app/api/site-applications/access/_helpers';
 import { fetchActiveEvents } from '@/app/lib/siteApplications/events';
 import { backfillPendingEventApplications } from '@/app/lib/siteApplications/eventAutoAccept';
@@ -66,11 +67,7 @@ export async function GET() {
     .or(eventApplicationOrFilter)
     .order('created_at', { ascending: false });
 
-  if (tenantScope.mode === 'none') {
-    appsQuery = appsQuery.eq('id', '__no_access__');
-  } else if (tenantScope.mode === 'scoped') {
-    appsQuery = appsQuery.in('organization', tenantScope.allowedValues);
-  }
+  appsQuery = applySiteApplicationsTenantScope(appsQuery, tenantScope);
 
   const [{ data: apps, error }, eventsResult] = await Promise.all([
     appsQuery,

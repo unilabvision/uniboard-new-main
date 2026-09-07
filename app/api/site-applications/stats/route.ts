@@ -7,6 +7,7 @@ import {
   requireSiteApplicationsModuleUser,
   resolveSiteApplicationsTenantScope,
   resolveSiteApplicationsPanelOrganizationScope,
+  applySiteApplicationsTenantScope,
 } from '@/app/api/site-applications/access/_helpers';
 
 /** Site Başvuruları dashboard — yalnızca ekip başvuruları */
@@ -47,17 +48,10 @@ export async function GET() {
     .limit(5);
   recentQ = applyTeamApplicationsFilter(recentQ);
 
-  if (tenantScope.mode === 'none') {
-    totalQ = totalQ.eq('id', '__no_access__');
-    pendingQ = pendingQ.eq('id', '__no_access__');
-    acceptedQ = acceptedQ.eq('id', '__no_access__');
-    recentQ = recentQ.eq('id', '__no_access__');
-  } else if (tenantScope.mode === 'scoped') {
-    totalQ = totalQ.in('organization', tenantScope.allowedValues);
-    pendingQ = pendingQ.in('organization', tenantScope.allowedValues);
-    acceptedQ = acceptedQ.in('organization', tenantScope.allowedValues);
-    recentQ = recentQ.in('organization', tenantScope.allowedValues);
-  }
+  totalQ = applySiteApplicationsTenantScope(totalQ, tenantScope);
+  pendingQ = applySiteApplicationsTenantScope(pendingQ, tenantScope);
+  acceptedQ = applySiteApplicationsTenantScope(acceptedQ, tenantScope);
+  recentQ = applySiteApplicationsTenantScope(recentQ, tenantScope);
 
   const [
     { count: total },
