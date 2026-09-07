@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { mentorshipDb } from '@/app/lib/mentorship/config';
+import {
+  normalizeMentorshipQuestions,
+  splitLegacyAnswerFields,
+  validateRequiredAnswers,
+} from '@/app/lib/mentorship/questions';
 import type { MentorshipApplicationInput } from '@/app/types/mentorship';
 
 function getSupabase() {
@@ -10,6 +15,23 @@ function getSupabase() {
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+}
+
+function buildAnswers(body: MentorshipApplicationInput): Record<string, unknown> {
+  const answers: Record<string, unknown> =
+    body.answers && typeof body.answers === 'object' ? { ...body.answers } : {};
+
+  if (body.motivation?.trim() && answers.motivation == null) {
+    answers.motivation = body.motivation.trim();
+  }
+  if (body.goals?.trim() && answers.goals == null) {
+    answers.goals = body.goals.trim();
+  }
+  if (body.experience?.trim() && answers.experience == null) {
+    answers.experience = body.experience.trim();
+  }
+
+  return answers;
 }
 
 /** myunilab.net — mentörlük başvurusu */
@@ -37,10 +59,15 @@ export async function POST(request: NextRequest) {
     const supabase = getSupabase();
 
     let mentorshipId = body.mentorship_id;
+    let applicationQuestions: unknown = [];
+
+    const selectCols =
+      'id, is_active, is_application_open, max_mentees, current_mentees, application_questions';
+
     if (!mentorshipId && body.mentorship_slug) {
       const { data: m, error: mErr } = await supabase
         .from(mentorshipDb.mentorships)
-        .select('id, is_active, is_application_open, max_mentees, current_mentees')
+        .select(selectCols)
         .eq('slug', body.mentorship_slug)
         .maybeSingle();
 
@@ -57,10 +84,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Kontenjan dolu' }, { status: 400 });
       }
       mentorshipId = m.id;
+      applicationQuestions = m.application_questions;
     } else if (mentorshipId) {
       const { data: m, error: mErr } = await supabase
         .from(mentorshipDb.mentorships)
-        .select('id, is_active, is_application_open, max_mentees, current_mentees')
+        .select(selectCols)
         .eq('id', mentorshipId)
         .maybeSingle();
 
@@ -76,7 +104,17 @@ export async function POST(request: NextRequest) {
       if (m.max_mentees != null && m.current_mentees >= m.max_mentees) {
         return NextResponse.json({ error: 'Kontenjan dolu' }, { status: 400 });
       }
+      applicationQuestions = m.application_questions;
     }
+
+    const questions = normalizeMentorshipQuestions(applicationQuestions);
+    const answers = buildAnswers(body);
+    const validationError = validateRequiredAnswers(questions, answers);
+    if (validationError) {
+      return NextResponse.json({ error: validationError }, { status: 400 });
+    }
+
+    const legacy = splitLegacyAnswerFields(answers);
 
     const { data: duplicate } = await supabase
       .from(mentorshipDb.applications)
@@ -105,10 +143,10 @@ export async function POST(request: NextRequest) {
         department: body.department?.trim() || null,
         grade: body.grade?.trim() || null,
         linkedin_url: body.linkedin_url?.trim() || null,
-        motivation: body.motivation?.trim() || null,
-        goals: body.goals?.trim() || null,
-        experience: body.experience?.trim() || null,
-        answers: body.answers || {},
+        motivation: legacy.motivation || body.motivation?.trim() || null,
+        goals: legacy.goals || body.goals?.trim() || null,
+        experience: legacy.experience || body.experience?.trim() || null,
+        answers,
         locale: body.locale === 'en' ? 'en' : 'tr',
         source: body.source || 'website',
         status: 'pending',

@@ -9,6 +9,33 @@ export type MentorshipMode = (typeof MENTORSHIP_MODES)[number];
 export type MentorshipApplicationStatus =
   (typeof MENTORSHIP_APPLICATION_STATUSES)[number];
 
+export type MentorshipQuestionType =
+  | 'text'
+  | 'textarea'
+  | 'select'
+  | 'url'
+  | 'number'
+  | 'checkbox';
+
+export type MentorshipQuestionOption = {
+  value: string;
+  label_tr: string;
+  label_en: string;
+};
+
+export type MentorshipApplicationQuestion = {
+  id: string;
+  field_key: string;
+  field_type: MentorshipQuestionType;
+  label_tr: string;
+  label_en: string;
+  placeholder_tr?: string;
+  placeholder_en?: string;
+  required: boolean;
+  order_index: number;
+  options?: MentorshipQuestionOption[];
+};
+
 export type LocalizedText = {
   tr?: string;
   en?: string;
@@ -38,6 +65,7 @@ export interface Mentorship {
   thumbnail_url: string | null;
   banner_url: string | null;
   tags: string[] | null;
+  application_questions: MentorshipApplicationQuestion[] | null;
   order_index: number;
   is_active: boolean;
   is_featured: boolean;
@@ -81,7 +109,10 @@ export interface MentorshipApplication {
   locale: string | null;
   created_at: string;
   updated_at: string;
-  mentorships?: Pick<Mentorship, 'id' | 'slug' | 'title' | 'mentor_name'> | null;
+  mentorships?: Pick<
+    Mentorship,
+    'id' | 'slug' | 'title' | 'mentor_name' | 'application_questions'
+  > | null;
 }
 
 export type MentorshipApplicationInput = {

@@ -10,6 +10,7 @@ import {
   requireMentorshipCapability,
 } from '@/app/api/mentorship/_helpers';
 import type { MentorshipInput, LocalizedText } from '@/app/types/mentorship';
+import { normalizeMentorshipQuestions } from '@/app/lib/mentorship/questions';
 
 function asLocalized(value: unknown): LocalizedText {
   if (typeof value === 'string') {
@@ -52,6 +53,7 @@ function pickPayload(body: MentorshipInput, userId?: string | null) {
     thumbnail_url: body.thumbnail_url?.trim() || null,
     banner_url: body.banner_url?.trim() || null,
     tags: body.tags?.length ? body.tags : null,
+    application_questions: normalizeMentorshipQuestions(body.application_questions),
     order_index: body.order_index ?? 0,
     is_active: parseBooleanField(body.is_active, false),
     is_featured: parseBooleanField(body.is_featured, false),
@@ -73,7 +75,7 @@ export async function GET(request: NextRequest) {
     .from(mentorshipDb.mentorships)
     .select('*')
     .order('order_index', { ascending: true })
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: true });
 
   if (activeOnly) {
     query = query.eq('is_active', true);
@@ -86,6 +88,38 @@ export async function GET(request: NextRequest) {
   }
 
   return NextResponse.json({ mentorships: data ?? [] });
+}
+
+/** Toplu sıralama: { updates: [{ id, order_index }] } */
+export async function PATCH(request: NextRequest) {
+  const authResult = await requireMentorshipCapability('edit');
+  if (authResult.error || !authResult.supabase) {
+    return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+  }
+
+  const body = await request.json().catch(() => ({}));
+  if (!Array.isArray(body.updates)) {
+    return NextResponse.json(
+      { error: 'updates dizisi zorunludur' },
+      { status: 400 }
+    );
+  }
+
+  const now = new Date().toISOString();
+  for (const row of body.updates) {
+    if (!row?.id) continue;
+    const orderIndex = Number(row.order_index);
+    if (!Number.isFinite(orderIndex)) continue;
+    const { error } = await authResult.supabase
+      .from(mentorshipDb.mentorships)
+      .update({ order_index: orderIndex, updated_at: now })
+      .eq('id', row.id);
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+  }
+
+  return NextResponse.json({ success: true });
 }
 
 export async function POST(request: NextRequest) {
@@ -104,6 +138,16 @@ export async function POST(request: NextRequest) {
   }
 
   const payload = pickPayload(body, authResult.userId);
+
+  // Yeni kayıtlar listenin sonuna eklenir; sıra listeden sürükle-bırak ile ayarlanır
+  const { data: existing } = await authResult.supabase
+    .from(mentorshipDb.mentorships)
+    .select('order_index')
+    .order('order_index', { ascending: false })
+    .limit(1);
+  const maxOrder =
+    existing && existing.length > 0 ? Number(existing[0].order_index) || 0 : -1;
+  payload.order_index = maxOrder + 1;
 
   const { data, error } = await authResult.supabase
     .from(mentorshipDb.mentorships)

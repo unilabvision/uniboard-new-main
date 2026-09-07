@@ -1,9 +1,13 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { getLocalizedJson } from '@/app/lib/mentorship/config';
+import {
+  formatAnswerValue,
+  normalizeMentorshipQuestions,
+} from '@/app/lib/mentorship/questions';
 import type { MentorshipApplication, MentorshipApplicationStatus } from '@/app/types/mentorship';
 
 const STATUSES: MentorshipApplicationStatus[] = [
@@ -40,7 +44,13 @@ export default function MentorshipApplicationDetailPage({
   const [id, setId] = useState('');
   const [app, setApp] = useState<MentorshipApplication | null>(null);
   const [history, setHistory] = useState<
-    Array<{ id: string; from_status: string | null; to_status: string; created_at: string; note: string | null }>
+    Array<{
+      id: string;
+      from_status: string | null;
+      to_status: string;
+      created_at: string;
+      note: string | null;
+    }>
   >([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -70,6 +80,55 @@ export default function MentorshipApplicationDetailPage({
       .finally(() => setLoading(false));
   }, [id]);
 
+  const customAnswers = useMemo(() => {
+    if (!app) return [];
+    const questions = normalizeMentorshipQuestions(
+      app.mentorships?.application_questions
+    );
+    const answers = app.answers && typeof app.answers === 'object' ? app.answers : {};
+    const shownKeys = new Set<string>();
+
+    const fromQuestions = questions
+      .map((q) => {
+        shownKeys.add(q.field_key);
+        const raw =
+          answers[q.field_key] ??
+          (q.field_key === 'motivation'
+            ? app.motivation
+            : q.field_key === 'goals'
+              ? app.goals
+              : q.field_key === 'experience'
+                ? app.experience
+                : null);
+        const value = formatAnswerValue(raw);
+        if (!value) return null;
+        return {
+          key: q.field_key,
+          label:
+            locale === 'en'
+              ? q.label_en || q.label_tr
+              : q.label_tr || q.label_en,
+          value,
+        };
+      })
+      .filter((row): row is { key: string; label: string; value: string } =>
+        Boolean(row)
+      );
+
+    const leftover = Object.entries(answers)
+      .filter(([key]) => !shownKeys.has(key))
+      .map(([key, raw]) => {
+        const value = formatAnswerValue(raw);
+        if (!value) return null;
+        return { key, label: key, value };
+      })
+      .filter((row): row is { key: string; label: string; value: string } =>
+        Boolean(row)
+      );
+
+    return [...fromQuestions, ...leftover];
+  }, [app, locale]);
+
   const save = async () => {
     setSaving(true);
     setError(null);
@@ -82,8 +141,9 @@ export default function MentorshipApplicationDetailPage({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
       setApp(data.application);
-      // refresh history
-      const detail = await fetch(`/api/mentorship/applications/${id}`).then((r) => r.json());
+      const detail = await fetch(`/api/mentorship/applications/${id}`).then((r) =>
+        r.json()
+      );
       setHistory(detail.history || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error');
@@ -134,10 +194,36 @@ export default function MentorshipApplicationDetailPage({
         <Row label={locale === 'tr' ? 'Bölüm' : 'Department'} value={app.department} />
         <Row label={locale === 'tr' ? 'Sınıf' : 'Grade'} value={app.grade} />
         <Row label="LinkedIn" value={app.linkedin_url} />
-        <Row label={locale === 'tr' ? 'Motivasyon' : 'Motivation'} value={app.motivation} multiline />
-        <Row label={locale === 'tr' ? 'Hedefler' : 'Goals'} value={app.goals} multiline />
-        <Row label={locale === 'tr' ? 'Deneyim' : 'Experience'} value={app.experience} multiline />
       </div>
+
+      {customAnswers.length > 0 ? (
+        <div className="space-y-4 rounded-xl border border-neutral-200 dark:border-neutral-800 p-5 bg-white dark:bg-neutral-900 mb-6">
+          <h2 className="font-semibold">
+            {locale === 'tr' ? 'Başvuru yanıtları' : 'Application answers'}
+          </h2>
+          {customAnswers.map((row) => (
+            <Row key={row.key} label={row.label} value={row.value} multiline />
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-4 rounded-xl border border-neutral-200 dark:border-neutral-800 p-5 bg-white dark:bg-neutral-900 mb-6">
+          <Row
+            label={locale === 'tr' ? 'Motivasyon' : 'Motivation'}
+            value={app.motivation}
+            multiline
+          />
+          <Row
+            label={locale === 'tr' ? 'Hedefler' : 'Goals'}
+            value={app.goals}
+            multiline
+          />
+          <Row
+            label={locale === 'tr' ? 'Deneyim' : 'Experience'}
+            value={app.experience}
+            multiline
+          />
+        </div>
+      )}
 
       <div className="space-y-4 rounded-xl border border-neutral-200 dark:border-neutral-800 p-5 bg-white dark:bg-neutral-900 mb-6">
         <div>
@@ -174,7 +260,13 @@ export default function MentorshipApplicationDetailPage({
           disabled={saving}
           className="px-5 py-2.5 bg-[#990000] text-white rounded-lg disabled:opacity-60"
         >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin inline" /> : locale === 'tr' ? 'Kaydet' : 'Save'}
+          {saving ? (
+            <Loader2 className="w-4 h-4 animate-spin inline" />
+          ) : locale === 'tr' ? (
+            'Kaydet'
+          ) : (
+            'Save'
+          )}
         </button>
       </div>
 
@@ -188,7 +280,9 @@ export default function MentorshipApplicationDetailPage({
               <li key={h.id} className="border-l-2 border-neutral-300 pl-3">
                 {(h.from_status || '—') + ' → ' + h.to_status}
                 <span className="text-neutral-400 ml-2">
-                  {new Date(h.created_at).toLocaleString(locale === 'tr' ? 'tr-TR' : 'en-US')}
+                  {new Date(h.created_at).toLocaleString(
+                    locale === 'tr' ? 'tr-TR' : 'en-US'
+                  )}
                 </span>
                 {h.note && <div className="text-neutral-500">{h.note}</div>}
               </li>
@@ -212,7 +306,9 @@ function Row({
   if (!value) return null;
   return (
     <div>
-      <div className="text-xs uppercase tracking-wide text-neutral-500 mb-0.5">{label}</div>
+      <div className="text-xs uppercase tracking-wide text-neutral-500 mb-0.5">
+        {label}
+      </div>
       <div className={multiline ? 'whitespace-pre-wrap' : ''}>{value}</div>
     </div>
   );

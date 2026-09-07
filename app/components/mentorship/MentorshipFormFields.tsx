@@ -8,7 +8,12 @@ import {
   slugifyMentorshipTitle,
   getPublicMentorshipUrl,
 } from '@/app/lib/mentorship/config';
-import type { Mentorship, MentorshipInput, MentorshipMode, MentorshipType } from '@/app/types/mentorship';
+import type { Mentorship, MentorshipApplicationQuestion, MentorshipInput, MentorshipMode, MentorshipType } from '@/app/types/mentorship';
+import {
+  defaultMentorshipQuestions,
+  normalizeMentorshipQuestions,
+} from '@/app/lib/mentorship/questions';
+import MentorshipQuestionsEditor from '@/app/components/mentorship/MentorshipQuestionsEditor';
 
 export type MentorshipFormState = {
   slug: string;
@@ -38,6 +43,7 @@ export type MentorshipFormState = {
   order_index: string;
   is_active: boolean;
   is_featured: boolean;
+  application_questions: MentorshipApplicationQuestion[];
 };
 
 export function emptyMentorshipForm(): MentorshipFormState {
@@ -69,6 +75,7 @@ export function emptyMentorshipForm(): MentorshipFormState {
     order_index: '0',
     is_active: false,
     is_featured: false,
+    application_questions: defaultMentorshipQuestions(),
   };
 }
 
@@ -116,6 +123,10 @@ export function mentorshipToForm(m: Mentorship): MentorshipFormState {
     order_index: String(m.order_index ?? 0),
     is_active: m.is_active ?? false,
     is_featured: m.is_featured ?? false,
+    application_questions: (() => {
+      const normalized = normalizeMentorshipQuestions(m.application_questions);
+      return normalized.length ? normalized : defaultMentorshipQuestions();
+    })(),
   };
 }
 
@@ -155,6 +166,7 @@ export function formStateToPayload(form: MentorshipFormState): MentorshipInput {
     order_index: Number(form.order_index) || 0,
     is_active: form.is_active,
     is_featured: form.is_featured,
+    application_questions: normalizeMentorshipQuestions(form.application_questions),
   };
 }
 
@@ -563,6 +575,14 @@ export default function MentorshipFormFields({
           </label>
         </div>
       </section>
+
+      <MentorshipQuestionsEditor
+        locale={locale}
+        questions={form.application_questions}
+        onChange={(application_questions) =>
+          setForm((prev) => ({ ...prev, application_questions }))
+        }
+      />
     </div>
   );
 }

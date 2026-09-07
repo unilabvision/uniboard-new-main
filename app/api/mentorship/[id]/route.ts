@@ -10,6 +10,7 @@ import {
   requireMentorshipCapability,
 } from '@/app/api/mentorship/_helpers';
 import type { MentorshipInput, LocalizedText } from '@/app/types/mentorship';
+import { normalizeMentorshipQuestions } from '@/app/lib/mentorship/questions';
 
 function asLocalized(value: unknown): LocalizedText {
   if (typeof value === 'string') {
@@ -86,6 +87,13 @@ function pickPayload(body: MentorshipInput) {
       ? { banner_url: body.banner_url?.trim() || null }
       : {}),
     ...(body.tags !== undefined ? { tags: body.tags?.length ? body.tags : null } : {}),
+    ...(body.application_questions !== undefined
+      ? {
+          application_questions: normalizeMentorshipQuestions(
+            body.application_questions
+          ),
+        }
+      : {}),
     ...(body.order_index !== undefined ? { order_index: body.order_index ?? 0 } : {}),
     ...(body.is_active !== undefined
       ? { is_active: parseBooleanField(body.is_active, false) }

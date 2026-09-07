@@ -6,6 +6,10 @@ import {
   getPublicMentorshipApplicationPath,
   getLocalizedJson,
 } from '@/app/lib/mentorship/config';
+import {
+  localizeMentorshipQuestions,
+  normalizeMentorshipQuestions,
+} from '@/app/lib/mentorship/questions';
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL2;
@@ -40,11 +44,18 @@ export async function GET(
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
+    const questions = normalizeMentorshipQuestions(data.application_questions);
+
     return NextResponse.json({
       success: true,
       locale,
       mentorship: {
         ...data,
+        application_questions: questions,
+        application_questions_localized: localizeMentorshipQuestions(
+          questions,
+          locale
+        ),
         title_localized: getLocalizedJson(data.title, locale),
         summary_localized: getLocalizedJson(data.summary, locale),
         description_localized: getLocalizedJson(data.description, locale),

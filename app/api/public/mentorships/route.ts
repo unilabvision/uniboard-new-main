@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
       )
       .eq('is_active', true)
       .order('order_index', { ascending: true })
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: true });
 
     if (featuredOnly) {
       query = query.eq('is_featured', true);

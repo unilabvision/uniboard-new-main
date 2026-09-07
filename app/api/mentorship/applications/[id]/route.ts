@@ -18,7 +18,9 @@ export async function GET(
   const { id } = await context.params;
   const { data, error } = await authResult.supabase
     .from(mentorshipDb.applications)
-    .select('*, mentorships:mentorship_id ( id, slug, title, mentor_name, is_active )')
+    .select(
+      '*, mentorships:mentorship_id ( id, slug, title, mentor_name, is_active, application_questions )'
+    )
     .eq('id', id)
     .maybeSingle();
 
