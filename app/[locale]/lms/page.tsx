@@ -23,14 +23,7 @@ import {
   updateCourseRegistration,
   type CoursePackagePrice,
 } from '@/app/lib/lms/enrollmentOverviewService';
-
-function parsePriceInput(value: string): number | null | 'invalid' {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const normalized = trimmed.replace(/\s/g, '').replace(',', '.');
-  const num = Number(normalized);
-  return Number.isFinite(num) ? num : 'invalid';
-}
+import { parsePrice as parsePriceInput } from '@/app/lib/lms/parsePrice';
 
 function isCourseRegistrationOpen(course: {
   is_registration_open?: boolean;
@@ -755,20 +748,19 @@ const CourseCard = ({
                 <div>
                   <label className="block text-[11px] text-neutral-500 mb-1">{t.courseDetails.price}</label>
                   <input
-                    type="number"
-                    min="0"
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
                     value={priceDraft}
                     onChange={(e) => setPriceDraft(e.target.value)}
                     className="w-full px-2 py-1.5 text-sm border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-900"
+                    placeholder="0,00"
                   />
                 </div>
                 <div>
                   <label className="block text-[11px] text-neutral-500 mb-1">{t.originalPriceShort}</label>
                   <input
-                    type="number"
-                    min="0"
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
                     value={originalPriceDraft}
                     onChange={(e) => setOriginalPriceDraft(e.target.value)}
                     className="w-full px-2 py-1.5 text-sm border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-900"
@@ -832,9 +824,8 @@ const CourseCard = ({
                                 {t.courseDetails.price}
                               </label>
                               <input
-                                type="number"
-                                min="0"
-                                step="0.01"
+                                type="text"
+                                inputMode="decimal"
                                 value={draft.price}
                                 onChange={(e) =>
                                   setPackageDrafts((prev) => ({
@@ -843,6 +834,7 @@ const CourseCard = ({
                                   }))
                                 }
                                 className="w-full px-2 py-1.5 text-sm border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-900"
+                                placeholder="0,00"
                               />
                             </div>
                             <div>
@@ -850,9 +842,8 @@ const CourseCard = ({
                                 {t.originalPriceShort}
                               </label>
                               <input
-                                type="number"
-                                min="0"
-                                step="0.01"
+                                type="text"
+                                inputMode="decimal"
                                 value={draft.original}
                                 onChange={(e) =>
                                   setPackageDrafts((prev) => ({

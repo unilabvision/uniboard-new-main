@@ -241,5 +241,63 @@ export async function requireEventsOrSiteAppsUser(
   };
 }
 
+/**
+ * Katılım sertifikası ayar + gönderim — aynı yüzey:
+ * events (edit | ops | registrations) veya site-applications.
+ */
+export async function requireEventCertificateToolsUser() {
+  const { userId } = await auth();
+  if (!userId) {
+    return {
+      error: 'Unauthorized',
+      status: 401 as const,
+      userId: null,
+      supabase: null,
+      isSuperAdmin: false,
+    };
+  }
+
+  const access = await loadAccess(userId);
+  if (access.error || !access.supabase) {
+    return {
+      error: access.error || 'Forbidden',
+      status: access.status,
+      userId: null,
+      supabase: null,
+      isSuperAdmin: false,
+    };
+  }
+
+  const eventsOk =
+    hasEventsAccess(access.moduleKeys, access.isSuperAdmin) &&
+    (access.isSuperAdmin ||
+      hasFeature(access.membership, 'edit', access.isSuperAdmin) ||
+      hasFeature(access.membership, 'ops', access.isSuperAdmin) ||
+      hasFeature(access.membership, 'registrations', access.isSuperAdmin));
+
+  const siteAppsOk = hasSiteApplicationsAccess(
+    access.moduleKeys,
+    access.isSuperAdmin
+  );
+
+  if (!eventsOk && !siteAppsOk) {
+    return {
+      error: 'Forbidden',
+      status: 403 as const,
+      userId: null,
+      supabase: null,
+      isSuperAdmin: false,
+    };
+  }
+
+  return {
+    error: null,
+    status: 200 as const,
+    userId,
+    supabase: access.supabase,
+    isSuperAdmin: access.isSuperAdmin,
+  };
+}
+
 // re-export for any notes decoding callers
 export { decodeCapabilitiesFromRow };

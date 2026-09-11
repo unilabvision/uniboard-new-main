@@ -4,6 +4,7 @@ export interface DisplayVideo {
   title: string;
   vimeo_id?: string;
   vimeo_hash?: string;
+  vimeo_embed_url?: string;
   duration_seconds?: number;
   order_index: number;
 }

@@ -256,7 +256,7 @@ const VideoPlayer = ({
 }) => {
   if (!vimeoId) return null;
 
-  const embedUrl = vimeoHash 
+  const embedUrl = vimeoHash && vimeoHash !== vimeoId && !/^\d+$/.test(vimeoHash)
     ? `https://player.vimeo.com/video/${vimeoId}?h=${vimeoHash}&badge=0&autopause=0&quality_selector=1&player_id=0&app_id=58479`
     : `https://player.vimeo.com/video/${vimeoId}?badge=0&autopause=0&quality_selector=1&player_id=0&app_id=58479`;
 

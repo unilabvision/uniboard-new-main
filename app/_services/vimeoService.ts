@@ -1,4 +1,5 @@
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { extractVimeoHashFromEmbedUrl } from '@/app/lib/lms/vimeoUrl';
 
 // Types for Vimeo API responses
 export interface VimeoVideo {
@@ -434,6 +435,10 @@ class VimeoService {
 
       const vimeoId = vimeoData.uri.split('/').pop();
       const thumbnailUrl = this.getHighestQualityThumbnail(vimeoData.pictures);
+      const vimeoHash = extractVimeoHashFromEmbedUrl(
+        vimeoData.player_embed_url,
+        vimeoId
+      );
 
       const videoRecord: Omit<DatabaseVideoRecord, 'id'> = {
         lesson_id: lessonId,
@@ -441,7 +446,7 @@ class VimeoService {
         vimeo_id: vimeoId,
         video_url: vimeoData.link,
         vimeo_embed_url: vimeoData.player_embed_url,
-        vimeo_hash: vimeoId, // Using Vimeo ID as hash
+        vimeo_hash: vimeoHash || undefined,
         thumbnail_url: thumbnailUrl,
         duration_seconds: vimeoData.duration,
         width: vimeoData.width || 640,

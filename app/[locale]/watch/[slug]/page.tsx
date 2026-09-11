@@ -13,6 +13,10 @@ import { VimeoPlayer } from '@/app/components/lms/VimeoPlayer';
 import { ProgressService } from '@/app/[locale]/lms/progress/progressService';
 import { getUserEnrollment } from '@/app/lib/lms/enrollmentService';
 import { processCourseSectionsForDisplay } from '@/app/lib/lms/courseContent';
+import {
+  extractVimeoHashFromEmbedUrl,
+  normalizeVimeoHash,
+} from '@/app/lib/lms/vimeoUrl';
 
 const supabase = createClientComponentClient({
   supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL2 || 'https://emfvwpztyuykqtepnsfp.supabase.co',
@@ -25,6 +29,7 @@ interface CourseVideo {
   title: string;
   vimeo_id?: string;
   vimeo_hash?: string;
+  vimeo_embed_url?: string;
   duration_seconds?: number;
   order_index: number;
 }
@@ -121,7 +126,7 @@ export default function WatchCoursePage() {
               id, title, order_index, is_active,
               myuni_course_lessons (
                 id, section_id, title, order_index, is_locked, is_active, duration_minutes,
-                myuni_videos ( id, lesson_id, title, vimeo_id, vimeo_hash, duration_seconds, order_index )
+                myuni_videos ( id, lesson_id, title, vimeo_id, vimeo_hash, vimeo_embed_url, duration_seconds, order_index )
               )
             )
           `)
@@ -274,7 +279,17 @@ export default function WatchCoursePage() {
               <div className="w-full max-w-5xl mx-auto px-4">
                 <VimeoPlayer
                   vimeoId={activeVideo.vimeo_id}
-                  vimeoHash={activeVideo.vimeo_hash}
+                  vimeoHash={
+                    normalizeVimeoHash(
+                      activeVideo.vimeo_hash,
+                      activeVideo.vimeo_id
+                    ) ||
+                    extractVimeoHashFromEmbedUrl(
+                      activeVideo.vimeo_embed_url,
+                      activeVideo.vimeo_id
+                    ) ||
+                    undefined
+                  }
                   title={activeVideo.title}
                   responsive
                   onProgress={handleVideoProgress}

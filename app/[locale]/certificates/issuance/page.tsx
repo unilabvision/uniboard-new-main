@@ -72,8 +72,10 @@ const texts = {
     issue: 'Oluştur ve e-posta gönder',
     issuing: 'Gönderiliyor...',
     needSelection: 'En az bir kişi ve şablon seçin',
-    success: (issued: number, emailed: number) =>
-      `${issued} sertifika oluşturuldu, ${emailed} e-posta gönderildi`,
+    success: (issued: number, emailed: number, failed?: number) =>
+      failed
+        ? `${issued} sertifika e-postası gönderildi, ${failed} başarısız (kuyrukta kaldı — tekrar deneyin)`
+        : `${issued} sertifika oluşturuldu, ${emailed} e-posta gönderildi`,
     statusLabels: {
       ready: 'Hazır',
       pending: 'Bekliyor',
@@ -117,8 +119,10 @@ const texts = {
     issue: 'Create & email',
     issuing: 'Sending...',
     needSelection: 'Select at least one person and a template',
-    success: (issued: number, emailed: number) =>
-      `${issued} certificates created, ${emailed} emails sent`,
+    success: (issued: number, emailed: number, failed?: number) =>
+      failed
+        ? `${issued} certificate emails sent, ${failed} failed (still in queue — retry)`
+        : `${issued} certificates created, ${emailed} emails sent`,
     statusLabels: {
       ready: 'Ready',
       pending: 'Pending',
@@ -334,7 +338,18 @@ export default function CertificateIssuancePage({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Issue failed');
-      setMessage(t.success(data.issued || 0, data.emailed || 0));
+      const failed = Number(data.failed || 0);
+      const issued = Number(data.issued || 0);
+      const emailed = Number(data.emailed || 0);
+      setMessage(t.success(issued, emailed, failed || undefined));
+      if (failed > 0 && Array.isArray(data.errors) && data.errors.length) {
+        const detail = data.errors
+          .slice(0, 5)
+          .map((e: { error?: string }) => e.error || 'error')
+          .join('; ');
+        setError(detail);
+      }
+      setSelected(new Set());
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Issue failed');

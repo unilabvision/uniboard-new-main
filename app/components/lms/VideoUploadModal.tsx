@@ -2,6 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import { Upload, X, AlertCircle, CheckCircle, Video, Link, FileVideo } from 'lucide-react';
+import { parseVimeoUrl, toVimeoApiIdentifier } from '@/app/lib/lms/vimeoUrl';
 
 interface VideoUploadProps {
   lessonId: string;
@@ -58,7 +59,9 @@ const validateVideoFile = (
 };
 
 // Vimeo link validation function
-const validateVimeoLink = (url: string): { isValid: boolean; vimeoId?: string; error?: string } => {
+const validateVimeoLink = (
+  url: string
+): { isValid: boolean; vimeoId?: string; vimeoHash?: string | null; error?: string } => {
   if (!url.trim()) {
     return {
       isValid: false,
@@ -66,27 +69,19 @@ const validateVimeoLink = (url: string): { isValid: boolean; vimeoId?: string; e
     };
   }
 
-  // Vimeo URL patterns
-  const vimeoPatterns = [
-    /vimeo\.com\/(\d+)/, // https://vimeo.com/123456789
-    /player\.vimeo\.com\/video\/(\d+)/, // https://player.vimeo.com/video/123456789
-    /vimeo\.com\/channels\/[^\/]+\/(\d+)/, // https://vimeo.com/channels/channelname/123456789
-    /vimeo\.com\/groups\/[^\/]+\/videos\/(\d+)/, // https://vimeo.com/groups/groupname/videos/123456789
-  ];
-
-  for (const pattern of vimeoPatterns) {
-    const match = url.match(pattern);
-    if (match) {
-      return {
-        isValid: true,
-        vimeoId: match[1],
-      };
-    }
+  const parsed = parseVimeoUrl(url);
+  if (parsed) {
+    return {
+      isValid: true,
+      vimeoId: parsed.vimeoId,
+      vimeoHash: parsed.vimeoHash,
+    };
   }
 
   return {
     isValid: false,
-    error: 'Geçerli bir Vimeo linki giriniz (örn: https://vimeo.com/123456789)',
+    error:
+      'Geçerli bir Vimeo linki giriniz (örn: https://vimeo.com/123456789 veya https://vimeo.com/123456789/hash)',
   };
 };
 
@@ -233,7 +228,11 @@ export default function VideoUploadModal({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          vimeoId: validation.vimeoId,
+          vimeoId: toVimeoApiIdentifier(
+            validation.vimeoId!,
+            validation.vimeoHash
+          ),
+          vimeoHash: validation.vimeoHash || undefined,
         }),
       });
 
@@ -261,6 +260,7 @@ export default function VideoUploadModal({
           title: videoTitle,
           description: videoDescription,
           vimeoId: validation.vimeoId,
+          vimeoHash: validation.vimeoHash || null,
           orderIndex,
         }),
       });
@@ -801,11 +801,11 @@ export default function VideoUploadModal({
                     value={vimeoLink}
                     onChange={(e) => setVimeoLink(e.target.value)}
                     className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors placeholder-neutral-400 dark:placeholder-neutral-500"
-                    placeholder="https://vimeo.com/123456789"
+                    placeholder="https://vimeo.com/123456789/hash"
                     disabled={uploadState.status === 'processing'}
                   />
                   <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                    Desteklenen formatlar: vimeo.com/123456789, player.vimeo.com/video/123456789
+                    Desteklenen formatlar: vimeo.com/ID, vimeo.com/ID/hash, player.vimeo.com/video/ID?h=hash
                   </p>
                 </div>
               </div>

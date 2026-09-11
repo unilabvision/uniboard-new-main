@@ -87,8 +87,16 @@ export const VimeoPlayer: React.FC<VimeoPlayerProps> = ({
       responsive: responsive ? '1' : '0'
     });
 
-    if (vimeoHash) {
-      params.set('h', vimeoHash);
+    // Ignore legacy buggy saves that stored the numeric video id as "hash"
+    const effectiveHash =
+      vimeoHash &&
+      vimeoHash !== vimeoId &&
+      !/^\d+$/.test(vimeoHash)
+        ? vimeoHash
+        : undefined;
+
+    if (effectiveHash) {
+      params.set('h', effectiveHash);
     }
 
     return `${baseUrl}?${params.toString()}`;
@@ -380,8 +388,12 @@ export const SimpleVimeoPlayer: React.FC<{
   height = 360,
   className = ''
 }) => {
-  const embedUrl = vimeoHash 
-    ? `https://player.vimeo.com/video/${vimeoId}?h=${vimeoHash}&badge=0&autopause=0&quality_selector=1&player_id=0&app_id=58479`
+  const effectiveHash =
+    vimeoHash && vimeoHash !== vimeoId && !/^\d+$/.test(vimeoHash)
+      ? vimeoHash
+      : undefined;
+  const embedUrl = effectiveHash
+    ? `https://player.vimeo.com/video/${vimeoId}?h=${effectiveHash}&badge=0&autopause=0&quality_selector=1&player_id=0&app_id=58479`
     : `https://player.vimeo.com/video/${vimeoId}?badge=0&autopause=0&quality_selector=1&player_id=0&app_id=58479`;
 
   return (

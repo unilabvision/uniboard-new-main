@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test:list-query": "npx --yes tsx app/lib/siteApplications/listQuery.selfcheck.ts"
+    "test:list-query": "npx --yes tsx app/lib/siteApplications/listQuery.selfcheck.ts",
+    "test:certificate-issue": "npx --yes tsx app/lib/events/certificateIssue.selfcheck.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.18.5",

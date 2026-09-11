@@ -234,10 +234,12 @@ export async function issueCertificatesFromQueue(
       );
 
       const nowIso = new Date().toISOString();
+      // Keep issued_certificate_id so a retry reuses the cert; mark failed if email
+      // did not send so the row stays in the issuance queue.
       const { error: updateError } = await supabase
         .from(CERTIFICATE_ISSUANCE_TABLE)
         .update({
-          status: 'issued',
+          status: emailResult.success ? 'issued' : 'failed',
           issued_certificate_id: certificateId,
           issued_certificatenumber: certificatenumber,
           issued_at: nowIso,
@@ -251,9 +253,10 @@ export async function issueCertificatesFromQueue(
         throw new Error(updateError.message);
       }
 
-      result.issued += 1;
-      if (emailResult.success) result.emailed += 1;
-      else {
+      if (emailResult.success) {
+        result.issued += 1;
+        result.emailed += 1;
+      } else {
         result.failed += 1;
         result.errors.push({
           id: row.id,

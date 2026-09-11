@@ -43,12 +43,13 @@ function readSubmission(raw: unknown): Record<string, unknown> {
   return {};
 }
 
-/** Sertifika paketi: ödeme yapılmış veya ücretsiz (0₺) paket */
-function isCertificateEligible(sub: Record<string, unknown>): boolean {
+/**
+ * Katılım sertifikası kuyruğu: yalnızca sertifika paketi + ödenmiş.
+ * 0₺ paketler submit anında payment_status=paid işaretlenir; pending/failed girmez.
+ */
+export function isCertificateEligible(sub: Record<string, unknown>): boolean {
   if (sub.registration_tier !== 'certificate') return false;
-  if (sub.payment_status === 'paid') return true;
-  const price = Number(sub.package_price);
-  return Number.isFinite(price) && price <= 0;
+  return sub.payment_status === 'paid';
 }
 
 /**
@@ -200,7 +201,7 @@ async function resolveEventsForParticipationSync(
   return [...byId.values()];
 }
 
-async function syncOneEventParticipation(
+export async function syncOneEventParticipation(
   event: LatestEventInfo,
   supabase: ReturnType<typeof getCertificatesServiceSupabase>
 ): Promise<{ scanned: number; upserted: number }> {
@@ -425,6 +426,47 @@ async function syncCourseAchievementCandidates(): Promise<{
   }
 
   return { scanned: list.length, upserted: toUpsert.length };
+}
+
+/**
+ * Tek etkinlik için ödeme sync + katılım kuyruğu (manuel gönderim yolu).
+ * Global LMS/course sync yapmaz — Vercel timeout riskini düşürür.
+ */
+export async function syncEventCertificateIssuanceQueue(eventId: string): Promise<{
+  scanned: number;
+  upserted: number;
+  event: LatestEventInfo | null;
+}> {
+  const supabase = getCertificatesServiceSupabase();
+  const id = String(eventId || '').trim();
+  if (!id) {
+    return { scanned: 0, upserted: 0, event: null };
+  }
+
+  await syncCertificatePaymentsFromOrders(supabase, { eventId: id });
+
+  const { data: event, error } = await supabase
+    .from('myuni_events')
+    .select('id, title, start_date, end_date')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+  if (!event) {
+    return { scanned: 0, upserted: 0, event: null };
+  }
+
+  const info: LatestEventInfo = {
+    id: String(event.id),
+    title: String(event.title || 'Etkinlik'),
+    start_date: String(event.start_date || ''),
+    end_date: event.end_date ? String(event.end_date) : null,
+  };
+
+  const result = await syncOneEventParticipation(info, supabase);
+  return { ...result, event: info };
 }
 
 export async function syncCertificateIssuanceQueue(): Promise<{

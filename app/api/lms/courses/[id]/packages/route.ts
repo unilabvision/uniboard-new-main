@@ -1,19 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireLmsContentAdmin } from '@/app/api/lms/_helpers';
 import { generatePackageSlug } from '@/app/lib/lms/courseUtils';
+import { parsePrice } from '@/app/lib/lms/parsePrice';
 
 type RouteContext = { params: Promise<{ id: string }> };
-
-function parsePrice(value: unknown): number | null | 'invalid' {
-  if (value === null || value === undefined || value === '') return null;
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : 'invalid';
-  }
-  const normalized = String(value).trim().replace(/\s/g, '').replace(',', '.');
-  if (!normalized) return null;
-  const num = Number(normalized);
-  return Number.isFinite(num) ? num : 'invalid';
-}
 
 function parseSessionLabels(value: unknown): string[] {
   if (Array.isArray(value)) {

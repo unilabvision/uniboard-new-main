@@ -47,21 +47,10 @@ export default function MentorshipQuestionsEditor({
     index: number,
     patch: Partial<MentorshipApplicationQuestion>
   ) => {
+    // Never regenerate field_key from label edits — that orphans saved answers.
     onChange(
       withOrder(
-        questions.map((q, i) => {
-          if (i !== index) return q;
-          const next = { ...q, ...patch };
-          if (patch.label_tr != null && !q.field_key.startsWith('motivation') && !q.field_key.startsWith('goals') && !q.field_key.startsWith('experience')) {
-            const keys = new Set(
-              questions.filter((_, j) => j !== index).map((x) => x.field_key)
-            );
-            if (!patch.field_key) {
-              next.field_key = fieldKeyFromLabel(next.label_tr || next.label_en, keys);
-            }
-          }
-          return next;
-        })
+        questions.map((q, i) => (i === index ? { ...q, ...patch } : q))
       )
     );
   };
@@ -100,6 +89,12 @@ export default function MentorshipQuestionsEditor({
     );
   };
 
+  const slugifyOption = (label: string, fallback: string) =>
+    label
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/gi, '_')
+      .replace(/^_|_$/g, '') || fallback;
+
   const updateOption = (
     qIndex: number,
     optIndex: number,
@@ -107,13 +102,16 @@ export default function MentorshipQuestionsEditor({
   ) => {
     const q = questions[qIndex];
     const options = [...(q.options || [])];
-    options[optIndex] = { ...options[optIndex], ...patch };
-    if (patch.label_tr && !patch.value) {
-      options[optIndex].value = patch.label_tr
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/gi, '_')
-        .replace(/^_|_$/g, '') || `option_${optIndex + 1}`;
+    const prev = options[optIndex];
+    const next = { ...prev, ...patch };
+    // Only auto-fill value when empty; never rewrite an existing value on label edits.
+    if (!next.value?.trim() && (patch.label_tr || patch.label_en)) {
+      next.value = slugifyOption(
+        patch.label_tr || patch.label_en || '',
+        `option_${optIndex + 1}`
+      );
     }
+    options[optIndex] = next;
     updateAt(qIndex, { options });
   };
 
@@ -203,7 +201,7 @@ export default function MentorshipQuestionsEditor({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className={labelClass}>
                       {tr ? 'Soru türü' : 'Question type'}
@@ -237,6 +235,21 @@ export default function MentorshipQuestionsEditor({
                       ))}
                     </select>
                   </div>
+                  <div className="flex items-end pb-2">
+                    <label className="inline-flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={q.required}
+                        onChange={(e) =>
+                          updateAt(index, { required: e.target.checked })
+                        }
+                      />
+                      {tr ? 'Zorunlu' : 'Required'}
+                    </label>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className={labelClass}>
                       {tr ? 'Yardımcı metin (TR)' : 'Placeholder (TR)'}
@@ -249,17 +262,17 @@ export default function MentorshipQuestionsEditor({
                       }
                     />
                   </div>
-                  <div className="flex items-end pb-2">
-                    <label className="inline-flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={q.required}
-                        onChange={(e) =>
-                          updateAt(index, { required: e.target.checked })
-                        }
-                      />
-                      {tr ? 'Zorunlu' : 'Required'}
+                  <div>
+                    <label className={labelClass}>
+                      {tr ? 'Yardımcı metin (EN)' : 'Placeholder (EN)'}
                     </label>
+                    <input
+                      className={fieldClass}
+                      value={q.placeholder_en || ''}
+                      onChange={(e) =>
+                        updateAt(index, { placeholder_en: e.target.value })
+                      }
+                    />
                   </div>
                 </div>
 

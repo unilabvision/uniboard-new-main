@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { syncLessonVideoDurations } from '@/app/lib/lms/videoDurations';
+import {
+  extractVimeoHashFromEmbedUrl,
+  normalizeVimeoHash,
+  toVimeoApiIdentifier,
+} from '@/app/lib/lms/vimeoUrl';
 
 // Initialize Supabase client with service role key for server-side operations
 const supabase = createClient(
@@ -93,6 +98,7 @@ export async function POST(request: NextRequest) {
       title, 
       description, 
       vimeoId, 
+      vimeoHash: vimeoHashRaw,
       orderIndex = 0 
     } = body;
 
@@ -101,6 +107,7 @@ export async function POST(request: NextRequest) {
       title,
       hasDescription: !!description,
       vimeoId,
+      vimeoHash: vimeoHashRaw,
       orderIndex
     });
 
@@ -115,9 +122,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const providedHash = normalizeVimeoHash(vimeoHashRaw, vimeoId);
+    const apiId = toVimeoApiIdentifier(String(vimeoId), providedHash);
+
     console.log('Fetching video details from Vimeo...');
     // Fetch video details from Vimeo
-    const vimeoResponse = await fetch(`https://api.vimeo.com/videos/${vimeoId}`, {
+    const vimeoResponse = await fetch(`https://api.vimeo.com/videos/${apiId}`, {
       headers: {
         'Authorization': `bearer ${VIMEO_ACCESS_TOKEN}`,
         'Accept': `application/vnd.vimeo.*+json;version=${VIMEO_API_VERSION}`,
@@ -152,6 +162,10 @@ export async function POST(request: NextRequest) {
       ? vimeoData.pictures.sizes.sort((a, b) => b.width - a.width)[0].link
       : vimeoData.pictures?.base_link || '';
 
+    const vimeoHash =
+      providedHash ||
+      extractVimeoHashFromEmbedUrl(vimeoData.player_embed_url, String(vimeoId));
+
     console.log('Creating video record in database...');
     // Create video record in database
     const videoRecord = {
@@ -160,7 +174,7 @@ export async function POST(request: NextRequest) {
       vimeo_id: vimeoId,
       video_url: vimeoData.link,
       vimeo_embed_url: vimeoData.player_embed_url,
-      vimeo_hash: vimeoId,
+      vimeo_hash: vimeoHash,
       thumbnail_url: thumbnailUrl,
       duration_seconds: vimeoData.duration,
       width: vimeoData.width || 640,
