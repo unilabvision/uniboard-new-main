@@ -10,12 +10,18 @@ import {
   applySiteApplicationsTenantScope,
   isApplicationInTenantScope,
 } from '@/app/api/site-applications/access/_helpers';
-import { backfillPendingEventApplications } from '@/app/lib/siteApplications/eventAutoAccept';
-import { syncCertificatePaymentsFromOrders } from '@/app/lib/siteApplications/syncPayments';
 import {
   deleteSiteApplicationsBulk,
   getMaxBulkDelete,
 } from '@/app/lib/siteApplications/deleteApplication';
+import {
+  APPLICATION_LIST_COLUMNS,
+  applyApplicationListFilters,
+  parseApplicationListFilters,
+  submissionFromProjectedListRow,
+  LIST_SUBMISSION_KEYS,
+} from '@/app/lib/siteApplications/listQuery';
+import { syncPaymentsForVisibleApplications } from '@/app/lib/siteApplications/paymentSyncThrottle';
 
 export async function GET(request: NextRequest) {
   const authResult = await requireSiteApplicationsOrEventsUser('registrations');
@@ -28,76 +34,95 @@ export async function GET(request: NextRequest) {
     authResult.userId || ''
   );
 
-  // Eski pending etkinlik kayıtlarını accepted yap + source düzelt + ödeme senkron
-  await backfillPendingEventApplications(authResult.supabase);
-  await syncCertificatePaymentsFromOrders(authResult.supabase);
-
   const { searchParams } = request.nextUrl;
   const page = Math.max(1, Number(searchParams.get('page') || '1'));
   const perPage = Math.min(50, Math.max(1, Number(searchParams.get('perPage') || '20')));
-  const search = searchParams.get('search')?.trim() || '';
-  const formFilter = searchParams.get('form') || 'all';
-  const status = searchParams.get('status');
-  const category = searchParams.get('category');
-  const eventId = searchParams.get('eventId')?.trim() || '';
-  const eventName = searchParams.get('eventName')?.trim() || '';
-  const registrationTier = searchParams.get('registrationTier')?.trim() || '';
-  const paymentStatus = searchParams.get('paymentStatus')?.trim() || '';
+  const filters = parseApplicationListFilters(searchParams);
 
-  let query = authResult.supabase
-    .from(siteApplicationsDb.applications)
-    .select('*', { count: 'exact' })
-    .order('created_at', { ascending: false });
-
-  if (category === 'event') {
-    query = applyEventApplicationsFilter(query);
-  } else if (category === 'team') {
-    query = applyTeamApplicationsFilter(query);
+  if (tenantScope.mode === 'none') {
+    return NextResponse.json({
+      applications: [],
+      total: 0,
+      page,
+      perPage,
+    });
   }
 
-  query = applySiteApplicationsTenantScope(query, tenantScope);
+  const buildQuery = () => {
+    let query = authResult.supabase!
+      .from(siteApplicationsDb.applications)
+      .select(APPLICATION_LIST_COLUMNS, { count: 'exact' })
+      .order('created_at', { ascending: false });
 
-  if (eventId) {
-    query = query.eq('event_id', eventId);
-  } else if (eventName) {
-    query = query.ilike('event_name', eventName);
-  }
+    if (filters.category === 'event') {
+      query = applyEventApplicationsFilter(query);
+    } else if (filters.category === 'team') {
+      query = applyTeamApplicationsFilter(query);
+    }
 
-  if (formFilter !== 'all') {
-    query = query.eq('application_type', formFilter);
-  }
-
-  if (status) {
-    query = query.eq('status', status);
-  }
-
-  if (search) {
-    const q = `%${search}%`;
-    query = query.or(`first_name.ilike.${q},last_name.ilike.${q},email.ilike.${q}`);
-  }
-
-  if (registrationTier === 'free' || registrationTier === 'certificate') {
-    query = query.eq('submission_data->>registration_tier', registrationTier);
-  }
-  if (
-    paymentStatus === 'paid' ||
-    paymentStatus === 'pending' ||
-    paymentStatus === 'failed' ||
-    paymentStatus === 'none' ||
-    paymentStatus === 'superseded'
-  ) {
-    query = query.eq('submission_data->>payment_status', paymentStatus);
-  }
+    query = applySiteApplicationsTenantScope(query, tenantScope);
+    query = applyApplicationListFilters(query, filters);
+    return query;
+  };
 
   const from = (page - 1) * perPage;
-  const { data, error, count } = await query.range(from, from + perPage - 1);
+  const firstPage = await buildQuery().range(from, from + perPage - 1);
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (firstPage.error) {
+    return NextResponse.json({ error: firstPage.error.message }, { status: 500 });
   }
 
+  let data = firstPage.data;
+  let count = firstPage.count;
+  let rows = (data ?? []) as unknown as Array<Record<string, unknown>>;
+
+  const paymentFilterActive = Boolean(
+    filters.paymentStatus || filters.registrationTier === 'certificate'
+  );
+  const shouldRefreshPayments =
+    filters.category === 'event' || paymentFilterActive || Boolean(filters.eventId);
+
+  if (shouldRefreshPayments && rows.length > 0) {
+    const { syncedEventIds } = await syncPaymentsForVisibleApplications(
+      authResult.supabase,
+      rows.map((r) => ({
+        id: typeof r.id === 'string' ? r.id : undefined,
+        event_id: (r.event_id as string | null) ?? null,
+        submission_data:
+          r.submission_data && typeof r.submission_data === 'object'
+            ? r.submission_data
+            : {
+                registration_tier: r.registration_tier,
+                payment_status: r.payment_status,
+              },
+      })),
+      {
+        eventId: filters.eventId || null,
+        paymentFilterActive,
+      }
+    );
+
+    if (syncedEventIds.length > 0) {
+      const refreshed = await buildQuery().range(from, from + perPage - 1);
+      if (!refreshed.error) {
+        data = refreshed.data;
+        count = refreshed.count;
+        rows = (refreshed.data ?? []) as unknown as Array<Record<string, unknown>>;
+      }
+    }
+  }
+
+  const applications = rows.map((row) => {
+    const submission_data = submissionFromProjectedListRow(row);
+    const cleaned: Record<string, unknown> = { ...row, submission_data };
+    for (const key of LIST_SUBMISSION_KEYS) {
+      delete cleaned[key];
+    }
+    return cleaned;
+  });
+
   return NextResponse.json({
-    applications: data ?? [],
+    applications,
     total: count ?? 0,
     page,
     perPage,
@@ -136,7 +161,6 @@ export async function DELETE(request: NextRequest) {
     );
   }
 
-  // Tenant scoping: sadece kendi formlarına ait başvuruları sil
   let deletableIds = ids;
   const forbidden: Array<{ id: string; error: string }> = [];
 

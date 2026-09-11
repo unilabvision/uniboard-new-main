@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireSiteApplicationsModuleUser } from '@/app/api/site-applications/access/_helpers';
+import { requireSiteApplicationsOrEventsUser } from '@/app/api/site-applications/access/_helpers';
 import {
   reconcileEventCertificatePayments,
   syncCertificatePaymentsFromOrders,
@@ -10,7 +10,7 @@ import {
  * Önce orders ↔ applications sync, sonra pending sınıflandırma + çift ödeme listesi.
  */
 export async function GET(request: NextRequest) {
-  const authResult = await requireSiteApplicationsModuleUser();
+  const authResult = await requireSiteApplicationsOrEventsUser('registrations');
   if (authResult.error || !authResult.supabase) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
  * POST — yalnızca sync (mükerrer pending → superseded + completed order → paid).
  */
 export async function POST(request: NextRequest) {
-  const authResult = await requireSiteApplicationsModuleUser();
+  const authResult = await requireSiteApplicationsOrEventsUser('registrations');
   if (authResult.error || !authResult.supabase) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }

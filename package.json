@@ -6,7 +6,8 @@
     "dev": "cross-env NODE_OPTIONS=\"--max-http-header-size=80000 --max-old-space-size=4096\" next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:list-query": "npx --yes tsx app/lib/siteApplications/listQuery.selfcheck.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.18.5",

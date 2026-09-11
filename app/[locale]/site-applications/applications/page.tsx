@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   Search,
   RefreshCw,
@@ -64,7 +64,7 @@ const texts = {
     allForms: 'Tüm formlar',
     clearFilter: 'Filtreyi temizle',
     filterActive: 'Aktif filtre',
-    search: 'İsim veya e-posta ara...',
+    search: 'İsim, e-posta veya telefon ara...',
     applicant: 'Başvuran',
     form: 'Form',
     status: 'Durum',
@@ -99,6 +99,27 @@ const texts = {
     cancelButton: 'İptal',
     deleteSuccess: 'Başvurular silindi',
     deleteFail: 'Silme işlemi başarısız',
+    dateFrom: 'Başlangıç',
+    dateTo: 'Bitiş',
+    organizationFilter: 'Kurum',
+    organizationPlaceholder: 'Kurum ara...',
+    hasAttachment: 'Ek dosya',
+    attachmentAll: 'Tümü',
+    attachmentYes: 'Var',
+    attachmentNo: 'Yok',
+    localeFilter: 'Dil',
+    localeAll: 'Tümü',
+    sourceFilter: 'Kaynak',
+    sourceAll: 'Tümü',
+    sourceWebsite: 'Website',
+    sourceEventWebsite: 'Etkinlik sitesi',
+    moreFilters: 'Ek filtreler',
+    paymentStaleHint:
+      'Ödeme durumu anlık olmayabilir; siparişlerle eşitlemek için senkronize edin.',
+    syncPayments: 'Ödemeleri senkronize et',
+    syncingPayments: 'Senkronize ediliyor…',
+    syncPaymentsOk: 'Ödeme durumları güncellendi',
+    syncPaymentsFail: 'Ödeme senkronu başarısız',
   },
   en: {
     title: 'All Applications',
@@ -129,7 +150,7 @@ const texts = {
     allForms: 'All forms',
     clearFilter: 'Clear filter',
     filterActive: 'Active filter',
-    search: 'Search name or email...',
+    search: 'Search name, email or phone...',
     applicant: 'Applicant',
     form: 'Form',
     status: 'Status',
@@ -164,8 +185,32 @@ const texts = {
     cancelButton: 'Cancel',
     deleteSuccess: 'Applications deleted',
     deleteFail: 'Failed to delete applications',
+    dateFrom: 'From',
+    dateTo: 'To',
+    organizationFilter: 'Organization',
+    organizationPlaceholder: 'Search organization...',
+    hasAttachment: 'Attachment',
+    attachmentAll: 'All',
+    attachmentYes: 'Yes',
+    attachmentNo: 'No',
+    localeFilter: 'Language',
+    localeAll: 'All',
+    sourceFilter: 'Source',
+    sourceAll: 'All',
+    sourceWebsite: 'Website',
+    sourceEventWebsite: 'Event website',
+    moreFilters: 'More filters',
+    paymentStaleHint:
+      'Payment status may not be up to the second; sync to match orders.',
+    syncPayments: 'Sync payments',
+    syncingPayments: 'Syncing…',
+    syncPaymentsOk: 'Payment statuses updated',
+    syncPaymentsFail: 'Payment sync failed',
   },
 };
+
+const SOURCE_OPTIONS = ['website', 'event_website'] as const;
+
 
 function statusColor(status: string) {
   switch (status) {
@@ -269,9 +314,6 @@ export default function SiteApplicationsListPage({
   const [forms, setForms] = useState<SiteApplicationForm[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
-  const [formFilter, setFormFilter] = useState<string>('all');
-  const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [remindingId, setRemindingId] = useState<string | null>(null);
   const [remindFlash, setRemindFlash] = useState<string | null>(null);
@@ -279,13 +321,21 @@ export default function SiteApplicationsListPage({
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteFlash, setDeleteFlash] = useState<string | null>(null);
+  const [syncingPayments, setSyncingPayments] = useState(false);
+  const [paymentSyncFlash, setPaymentSyncFlash] = useState<string | null>(null);
   const perPage = 20;
+  const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname() || '';
   const isEventsHub = pathname.includes('/events/registrations');
   const statusParam = searchParams.get('status');
   const eventIdParam = searchParams.get('eventId')?.trim() || '';
   const eventNameParam = searchParams.get('eventName')?.trim() || '';
+  const formFilter = searchParams.get('form')?.trim() || 'all';
+  const search = searchParams.get('search') || '';
+  const [searchInput, setSearchInput] = useState(search);
+  const page = Math.max(1, Number(searchParams.get('page') || '1') || 1);
+  const listQueryString = searchParams.toString();
   const registrationTierParam =
     searchParams.get('registrationTier') === 'certificate' ||
     searchParams.get('registrationTier') === 'free'
@@ -299,6 +349,23 @@ export default function SiteApplicationsListPage({
     searchParams.get('paymentStatus') === 'superseded'
       ? searchParams.get('paymentStatus')!
       : '';
+  const dateFromParam = /^\d{4}-\d{2}-\d{2}$/.test(searchParams.get('dateFrom') || '')
+    ? searchParams.get('dateFrom')!
+    : '';
+  const dateToParam = /^\d{4}-\d{2}-\d{2}$/.test(searchParams.get('dateTo') || '')
+    ? searchParams.get('dateTo')!
+    : '';
+  const organizationParam = searchParams.get('organization')?.trim() || '';
+  const [organizationInput, setOrganizationInput] = useState(organizationParam);
+  const hasAttachmentParam =
+    searchParams.get('hasAttachment') === 'yes' || searchParams.get('hasAttachment') === 'no'
+      ? searchParams.get('hasAttachment')!
+      : '';
+  const localeFilterParam =
+    searchParams.get('localeFilter') === 'tr' || searchParams.get('localeFilter') === 'en'
+      ? searchParams.get('localeFilter')!
+      : '';
+  const sourceParam = searchParams.get('source')?.trim() || '';
 
   const categoryFilter = isEventsHub
     ? 'event'
@@ -353,7 +420,14 @@ export default function SiteApplicationsListPage({
   }, []);
 
   useEffect(() => {
-    setPage(1);
+    setSearchInput(search);
+  }, [search]);
+
+  useEffect(() => {
+    setOrganizationInput(organizationParam);
+  }, [organizationParam]);
+
+  useEffect(() => {
     setSelectedIds(new Set());
   }, [
     statusFilter,
@@ -364,6 +438,13 @@ export default function SiteApplicationsListPage({
     eventNameParam,
     registrationTierParam,
     paymentStatusParam,
+    dateFromParam,
+    dateToParam,
+    organizationParam,
+    hasAttachmentParam,
+    localeFilterParam,
+    sourceParam,
+    page,
   ]);
 
   const formTitleBySlug = useCallback(
@@ -383,6 +464,15 @@ export default function SiteApplicationsListPage({
     eventName?: string | null;
     registrationTier?: string | null;
     paymentStatus?: string | null;
+    form?: string | null;
+    page?: number | null;
+    search?: string | null;
+    dateFrom?: string | null;
+    dateTo?: string | null;
+    organization?: string | null;
+    hasAttachment?: string | null;
+    localeFilter?: string | null;
+    source?: string | null;
   }) => {
     const qs = new URLSearchParams();
     const status = overrides.status !== undefined ? overrides.status : statusFilter;
@@ -395,6 +485,44 @@ export default function SiteApplicationsListPage({
         : registrationTierParam;
     const paymentStatus =
       overrides.paymentStatus !== undefined ? overrides.paymentStatus : paymentStatusParam;
+    const form =
+      overrides.form !== undefined ? overrides.form : formFilter !== 'all' ? formFilter : null;
+    const dateFrom =
+      overrides.dateFrom !== undefined ? overrides.dateFrom : dateFromParam || null;
+    const dateTo = overrides.dateTo !== undefined ? overrides.dateTo : dateToParam || null;
+    const organization =
+      overrides.organization !== undefined
+        ? overrides.organization
+        : organizationParam || null;
+    const hasAttachment =
+      overrides.hasAttachment !== undefined
+        ? overrides.hasAttachment
+        : hasAttachmentParam || null;
+    const localeFilter =
+      overrides.localeFilter !== undefined
+        ? overrides.localeFilter
+        : localeFilterParam || null;
+    const source = overrides.source !== undefined ? overrides.source : sourceParam || null;
+    const pageVal =
+      overrides.page !== undefined
+        ? overrides.page
+        : overrides.status !== undefined ||
+            overrides.form !== undefined ||
+            overrides.search !== undefined ||
+            overrides.registrationTier !== undefined ||
+            overrides.paymentStatus !== undefined ||
+            overrides.eventId !== undefined ||
+            overrides.eventName !== undefined ||
+            overrides.category !== undefined ||
+            overrides.dateFrom !== undefined ||
+            overrides.dateTo !== undefined ||
+            overrides.organization !== undefined ||
+            overrides.hasAttachment !== undefined ||
+            overrides.localeFilter !== undefined ||
+            overrides.source !== undefined
+          ? 1
+          : page;
+    const searchVal = overrides.search !== undefined ? overrides.search : search;
 
     if (status) qs.set('status', status);
     qs.set('category', category === 'all' ? categoryFilter : category);
@@ -402,9 +530,91 @@ export default function SiteApplicationsListPage({
     if (eventName) qs.set('eventName', eventName);
     if (registrationTier) qs.set('registrationTier', registrationTier);
     if (paymentStatus) qs.set('paymentStatus', paymentStatus);
+    if (form && form !== 'all') qs.set('form', form);
+    if (searchVal?.trim()) qs.set('search', searchVal.trim());
+    if (dateFrom) qs.set('dateFrom', dateFrom);
+    if (dateTo) qs.set('dateTo', dateTo);
+    if (organization?.trim()) qs.set('organization', organization.trim());
+    if (hasAttachment === 'yes' || hasAttachment === 'no') {
+      qs.set('hasAttachment', hasAttachment);
+    }
+    if (localeFilter === 'tr' || localeFilter === 'en') {
+      qs.set('localeFilter', localeFilter);
+    }
+    if (source?.trim()) qs.set('source', source.trim());
+    if (pageVal && pageVal > 1) qs.set('page', String(pageVal));
     const query = qs.toString();
     return query ? `${baseListPath}?${query}` : baseListPath;
   };
+
+  const replaceListQuery = (updates: {
+    form?: string | null;
+    page?: number | null;
+    search?: string | null;
+    dateFrom?: string | null;
+    dateTo?: string | null;
+    organization?: string | null;
+    hasAttachment?: string | null;
+    localeFilter?: string | null;
+    source?: string | null;
+  }) => {
+    router.replace(
+      buildListHref({
+        form: updates.form !== undefined ? updates.form : undefined,
+        page: updates.page !== undefined ? updates.page : undefined,
+        search: updates.search !== undefined ? updates.search : undefined,
+        dateFrom: updates.dateFrom !== undefined ? updates.dateFrom : undefined,
+        dateTo: updates.dateTo !== undefined ? updates.dateTo : undefined,
+        organization: updates.organization !== undefined ? updates.organization : undefined,
+        hasAttachment:
+          updates.hasAttachment !== undefined ? updates.hasAttachment : undefined,
+        localeFilter: updates.localeFilter !== undefined ? updates.localeFilter : undefined,
+        source: updates.source !== undefined ? updates.source : undefined,
+      }),
+      { scroll: false }
+    );
+  };
+
+  // Keep latest list query for debounced search so a late timer cannot
+  // rewrite URL with stale form/status/page filters from an older render.
+  const listQueryRef = useRef({ searchParams, baseListPath });
+  listQueryRef.current = { searchParams, baseListPath };
+
+  useEffect(() => {
+    if (searchInput === search) return;
+    const handle = window.setTimeout(() => {
+      const { searchParams: latestParams, baseListPath: latestBase } =
+        listQueryRef.current;
+      const qs = new URLSearchParams(latestParams.toString());
+      const nextSearch = searchInput.trim();
+      if (nextSearch) qs.set('search', nextSearch);
+      else qs.delete('search');
+      qs.delete('page');
+      const query = qs.toString();
+      router.replace(query ? `${latestBase}?${query}` : latestBase, {
+        scroll: false,
+      });
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [searchInput, search, router]);
+
+  useEffect(() => {
+    if (organizationInput === organizationParam) return;
+    const handle = window.setTimeout(() => {
+      const { searchParams: latestParams, baseListPath: latestBase } =
+        listQueryRef.current;
+      const qs = new URLSearchParams(latestParams.toString());
+      const nextOrg = organizationInput.trim();
+      if (nextOrg) qs.set('organization', nextOrg);
+      else qs.delete('organization');
+      qs.delete('page');
+      const query = qs.toString();
+      router.replace(query ? `${latestBase}?${query}` : latestBase, {
+        scroll: false,
+      });
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [organizationInput, organizationParam, router]);
 
   const load = useCallback(async () => {
     try {
@@ -423,6 +633,12 @@ export default function SiteApplicationsListPage({
       if (eventNameParam) params.set('eventName', eventNameParam);
       if (registrationTierParam) params.set('registrationTier', registrationTierParam);
       if (paymentStatusParam) params.set('paymentStatus', paymentStatusParam);
+      if (dateFromParam) params.set('dateFrom', dateFromParam);
+      if (dateToParam) params.set('dateTo', dateToParam);
+      if (organizationParam) params.set('organization', organizationParam);
+      if (hasAttachmentParam) params.set('hasAttachment', hasAttachmentParam);
+      if (localeFilterParam) params.set('localeFilter', localeFilterParam);
+      if (sourceParam) params.set('source', sourceParam);
 
       const res = await fetch(`/api/site-applications/applications?${params.toString()}`);
       const data = await res.json();
@@ -457,12 +673,40 @@ export default function SiteApplicationsListPage({
     eventNameParam,
     registrationTierParam,
     paymentStatusParam,
+    dateFromParam,
+    dateToParam,
+    organizationParam,
+    hasAttachmentParam,
+    localeFilterParam,
+    sourceParam,
     t.error,
   ]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const syncPaymentsNow = async () => {
+    setSyncingPayments(true);
+    setPaymentSyncFlash(null);
+    try {
+      const res = await fetch('/api/site-applications/payments/reconcile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId: eventIdParam || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'sync failed');
+      setPaymentSyncFlash(t.syncPaymentsOk);
+      await load();
+    } catch {
+      setPaymentSyncFlash(t.syncPaymentsFail);
+    } finally {
+      setSyncingPayments(false);
+    }
+  };
 
   const sendRemind = async (applicationId: string) => {
     setRemindingId(applicationId);
@@ -592,7 +836,17 @@ export default function SiteApplicationsListPage({
         {deleteFlash && (
           <p className="mt-2 text-sm text-[#990000]">{deleteFlash}</p>
         )}
-        {(statusFilter || hasEventScope || registrationTierParam || paymentStatusParam) && (
+        {(statusFilter ||
+          hasEventScope ||
+          registrationTierParam ||
+          paymentStatusParam ||
+          dateFromParam ||
+          dateToParam ||
+          organizationParam ||
+          hasAttachmentParam ||
+          localeFilterParam ||
+          sourceParam ||
+          (formFilter !== 'all')) && (
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <span className="text-xs text-neutral-500">{t.filterActive}:</span>
             {hasEventScope && activeEventLabel && (
@@ -603,6 +857,42 @@ export default function SiteApplicationsListPage({
             {statusFilter && (
               <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusColor(statusFilter)}`}>
                 {t.statusLabels[statusFilter]}
+              </span>
+            )}
+            {formFilter !== 'all' && (
+              <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-100 dark:bg-neutral-800">
+                {formTitleBySlug(formFilter)}
+              </span>
+            )}
+            {(dateFromParam || dateToParam) && (
+              <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-100 dark:bg-neutral-800">
+                {dateFromParam || '…'} → {dateToParam || '…'}
+              </span>
+            )}
+            {organizationParam && (
+              <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-100 dark:bg-neutral-800">
+                {t.organizationFilter}: {organizationParam}
+              </span>
+            )}
+            {hasAttachmentParam && (
+              <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-100 dark:bg-neutral-800">
+                {t.hasAttachment}:{' '}
+                {hasAttachmentParam === 'yes' ? t.attachmentYes : t.attachmentNo}
+              </span>
+            )}
+            {localeFilterParam && (
+              <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-100 dark:bg-neutral-800">
+                {t.localeFilter}: {localeFilterParam.toUpperCase()}
+              </span>
+            )}
+            {sourceParam && (
+              <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-neutral-100 dark:bg-neutral-800">
+                {t.sourceFilter}:{' '}
+                {sourceParam === 'event_website'
+                  ? t.sourceEventWebsite
+                  : sourceParam === 'website'
+                    ? t.sourceWebsite
+                    : sourceParam}
               </span>
             )}
             {registrationTierParam && (
@@ -635,6 +925,14 @@ export default function SiteApplicationsListPage({
                       eventId: eventIdParam || null,
                       eventName: eventNameParam || null,
                       category: 'event',
+                      dateFrom: null,
+                      dateTo: null,
+                      organization: null,
+                      hasAttachment: null,
+                      localeFilter: null,
+                      source: null,
+                      form: null,
+                      search: null,
                     })
                   : baseListPath
               }
@@ -684,7 +982,16 @@ export default function SiteApplicationsListPage({
             if (categoryFilter) params.set('category', categoryFilter);
             if (eventIdParam) params.set('eventId', eventIdParam);
             if (eventNameParam) params.set('eventName', eventNameParam);
+            if (formFilter !== 'all') params.set('form', formFilter);
             if (search) params.set('search', search);
+            if (dateFromParam) params.set('dateFrom', dateFromParam);
+            if (dateToParam) params.set('dateTo', dateToParam);
+            if (organizationParam) params.set('organization', organizationParam);
+            if (hasAttachmentParam) params.set('hasAttachment', hasAttachmentParam);
+            if (localeFilterParam) params.set('localeFilter', localeFilterParam);
+            if (sourceParam) params.set('source', sourceParam);
+            if (registrationTierParam) params.set('registrationTier', registrationTierParam);
+            if (paymentStatusParam) params.set('paymentStatus', paymentStatusParam);
             params.set('locale', locale);
             const qs = params.toString();
             window.open(`/api/site-applications/applications/export${qs ? `?${qs}` : ''}`, '_blank');
@@ -694,6 +1001,25 @@ export default function SiteApplicationsListPage({
           {locale === 'tr' ? "Excel'e Aktar" : 'Export to Excel'}
         </button>
       </div>
+
+      {showEventColumns && (
+        <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-900/10 px-3 py-2.5">
+          <p className="text-xs text-amber-900 dark:text-amber-200 flex-1">
+            {t.paymentStaleHint}
+          </p>
+          <button
+            type="button"
+            onClick={() => void syncPaymentsNow()}
+            disabled={syncingPayments}
+            className="inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-800 text-white hover:bg-amber-900 disabled:opacity-50"
+          >
+            {syncingPayments ? t.syncingPayments : t.syncPayments}
+          </button>
+        </div>
+      )}
+      {paymentSyncFlash && (
+        <p className="mb-4 text-sm text-[#990000]">{paymentSyncFlash}</p>
+      )}
 
       {showEventColumns && (
         <div className="flex flex-wrap gap-2 mb-6">
@@ -755,11 +1081,8 @@ export default function SiteApplicationsListPage({
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
           <input
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             placeholder={t.search}
             className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800"
           />
@@ -768,8 +1091,10 @@ export default function SiteApplicationsListPage({
           <select
             value={formFilter}
             onChange={(e) => {
-              setFormFilter(e.target.value);
-              setPage(1);
+              replaceListQuery({
+                form: e.target.value === 'all' ? null : e.target.value,
+                page: null,
+              });
             }}
             className="px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
           >
@@ -787,6 +1112,106 @@ export default function SiteApplicationsListPage({
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 mb-6">
+        <p className="text-xs font-medium text-neutral-500">{t.moreFilters}</p>
+        <div className="flex flex-wrap gap-3 items-end">
+          <div>
+            <label className="block text-[11px] text-neutral-500 mb-1">{t.dateFrom}</label>
+            <input
+              type="date"
+              value={dateFromParam}
+              onChange={(e) =>
+                replaceListQuery({
+                  dateFrom: e.target.value || null,
+                  page: null,
+                })
+              }
+              className="px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] text-neutral-500 mb-1">{t.dateTo}</label>
+            <input
+              type="date"
+              value={dateToParam}
+              onChange={(e) =>
+                replaceListQuery({
+                  dateTo: e.target.value || null,
+                  page: null,
+                })
+              }
+              className="px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
+            />
+          </div>
+          <div className="min-w-[160px] flex-1">
+            <label className="block text-[11px] text-neutral-500 mb-1">
+              {t.organizationFilter}
+            </label>
+            <input
+              value={organizationInput}
+              onChange={(e) => setOrganizationInput(e.target.value)}
+              placeholder={t.organizationPlaceholder}
+              className="w-full px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] text-neutral-500 mb-1">{t.hasAttachment}</label>
+            <select
+              value={hasAttachmentParam}
+              onChange={(e) =>
+                replaceListQuery({
+                  hasAttachment: e.target.value || null,
+                  page: null,
+                })
+              }
+              className="px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
+            >
+              <option value="">{t.attachmentAll}</option>
+              <option value="yes">{t.attachmentYes}</option>
+              <option value="no">{t.attachmentNo}</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-[11px] text-neutral-500 mb-1">{t.localeFilter}</label>
+            <select
+              value={localeFilterParam}
+              onChange={(e) =>
+                replaceListQuery({
+                  localeFilter: e.target.value || null,
+                  page: null,
+                })
+              }
+              className="px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
+            >
+              <option value="">{t.localeAll}</option>
+              <option value="tr">TR</option>
+              <option value="en">EN</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-[11px] text-neutral-500 mb-1">{t.sourceFilter}</label>
+            <select
+              value={sourceParam}
+              onChange={(e) =>
+                replaceListQuery({
+                  source: e.target.value || null,
+                  page: null,
+                })
+              }
+              className="px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-sm"
+            >
+              <option value="">{t.sourceAll}</option>
+              <option value="website">{t.sourceWebsite}</option>
+              <option value="event_website">{t.sourceEventWebsite}</option>
+              {sourceParam &&
+                !(SOURCE_OPTIONS as readonly string[]).includes(sourceParam) && (
+                  <option value={sourceParam}>{sourceParam}</option>
+                )}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -982,7 +1407,11 @@ export default function SiteApplicationsListPage({
                             </button>
                           )}
                           <Link
-                            href={`${detailBasePath}/${app.id}`}
+                            href={
+                              listQueryString
+                                ? `${detailBasePath}/${app.id}?${listQueryString}`
+                                : `${detailBasePath}/${app.id}`
+                            }
                             className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-[#990000] dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
                           >
                             <Eye className="w-4 h-4" />
@@ -1006,14 +1435,16 @@ export default function SiteApplicationsListPage({
             <div className="flex gap-2">
               <button
                 disabled={page <= 1}
-                onClick={() => setPage((p) => p - 1)}
+                onClick={() =>
+                  replaceListQuery({ page: page <= 2 ? null : page - 1 })
+                }
                 className="p-2 rounded-lg border disabled:opacity-40"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <button
                 disabled={page >= totalPages}
-                onClick={() => setPage((p) => p + 1)}
+                onClick={() => replaceListQuery({ page: page + 1 })}
                 className="p-2 rounded-lg border disabled:opacity-40"
               >
                 <ChevronRight className="w-4 h-4" />

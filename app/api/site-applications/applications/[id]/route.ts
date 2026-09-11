@@ -235,7 +235,10 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     .order('created_at', { ascending: false });
 
   let approvalEmail: { success: boolean; error?: string } | null = null;
+  // Only notify when the admin explicitly checked "notify via email".
+  const notifyApplicant = body.notify_applicant === true;
   if (
+    notifyApplicant &&
     body.status !== undefined &&
     body.status !== existing.status &&
     body.status === 'accepted' &&

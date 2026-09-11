@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import * as XLSX from 'xlsx';
 import {
   siteApplicationsDb,
   applyTeamApplicationsFilter,
@@ -9,8 +10,14 @@ import {
   resolveSiteApplicationsTenantScope,
   applySiteApplicationsTenantScope,
 } from '@/app/api/site-applications/access/_helpers';
+import {
+  APPLICATION_EXPORT_COLUMNS,
+  applyApplicationListFilters,
+  parseApplicationListFilters,
+} from '@/app/lib/siteApplications/listQuery';
 
-const MAX_EXPORT_ROWS = 5000;
+/** Lower than previous 5000 to bound peak RAM for XLSX workbook + buffer. */
+const MAX_EXPORT_ROWS = 2500;
 
 const INTERNAL_SUBMISSION_KEYS = new Set([
   'registration_tier',
@@ -25,13 +32,25 @@ const INTERNAL_SUBMISSION_KEYS = new Set([
   'event_title',
 ]);
 
-function escapeCsvCell(value: unknown): string {
+function cellValue(value: unknown): string {
   if (value === null || value === undefined) return '';
-  const str = String(value).replace(/\r?\n/g, ' ');
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-    return `"${str.replace(/"/g, '""')}"`;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
   }
-  return str;
+  if (Array.isArray(value)) {
+    return value.map(cellValue).filter(Boolean).join(', ');
+  }
+  if (typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    if (typeof obj.file_name === 'string') return obj.file_name;
+    if (typeof obj.url === 'string') return obj.url;
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
 }
 
 export async function GET(request: NextRequest) {
@@ -50,37 +69,27 @@ export async function GET(request: NextRequest) {
   );
 
   const { searchParams } = request.nextUrl;
-  const search = searchParams.get('search')?.trim() || '';
-  const status = searchParams.get('status') || '';
-  const category = searchParams.get('category') || '';
-  const eventId = searchParams.get('eventId')?.trim() || '';
-  const eventName = searchParams.get('eventName')?.trim() || '';
-  const locale = searchParams.get('locale') || 'tr';
+  const filters = parseApplicationListFilters(searchParams);
+  const labelLocale = searchParams.get('locale') || 'tr';
+
+  if (tenantScope.mode === 'none') {
+    return NextResponseEmptyList();
+  }
 
   let query = supabase
     .from(siteApplicationsDb.applications)
-    .select('*')
+    .select(APPLICATION_EXPORT_COLUMNS)
     .order('created_at', { ascending: false })
     .limit(MAX_EXPORT_ROWS);
 
-  if (category === 'event') {
+  if (filters.category === 'event') {
     query = applyEventApplicationsFilter(query);
-  } else if (category === 'team') {
+  } else if (filters.category === 'team') {
     query = applyTeamApplicationsFilter(query);
   }
 
-  if (tenantScope.mode === 'none') {
-    return new Response('', { status: 204 });
-  }
   query = applySiteApplicationsTenantScope(query, tenantScope);
-
-  if (eventId) query = query.eq('event_id', eventId);
-  else if (eventName) query = query.ilike('event_name', eventName);
-  if (status) query = query.eq('status', status);
-  if (search) {
-    const q = `%${search}%`;
-    query = query.or(`first_name.ilike.${q},last_name.ilike.${q},email.ilike.${q}`);
-  }
+  query = applyApplicationListFilters(query, filters);
 
   const { data: rows, error } = await query;
   if (error) {
@@ -90,12 +99,26 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  const applications = rows ?? [];
+  type ExportRow = {
+    form_id?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    status?: string | null;
+    created_at?: string | null;
+    organization?: string | null;
+    event_name?: string | null;
+    source?: string | null;
+    locale?: string | null;
+    submission_data?: Record<string, unknown> | null;
+  };
+
+  const applications = (rows ?? []) as ExportRow[];
   if (applications.length === 0) {
-    return new Response('', { status: 204 });
+    return NextResponseEmptyList();
   }
 
-  // Collect all form_ids to fetch field definitions for labels
   const formIds = [
     ...new Set(
       applications
@@ -111,14 +134,13 @@ export async function GET(request: NextRequest) {
       .select('field_key, label_tr, label_en, form_id')
       .in('form_id', formIds);
     for (const f of fields ?? []) {
-      const label = locale === 'en' ? f.label_en : f.label_tr;
+      const label = labelLocale === 'en' ? f.label_en : f.label_tr;
       if (!fieldLabelMap.has(f.field_key)) {
         fieldLabelMap.set(f.field_key, label || f.field_key);
       }
     }
   }
 
-  // Determine dynamic submission_data columns
   const dynamicKeys: string[] = [];
   const seenKeys = new Set<string>();
   for (const app of applications) {
@@ -133,14 +155,16 @@ export async function GET(request: NextRequest) {
   }
 
   const staticHeaders = [
-    locale === 'tr' ? 'Ad' : 'First Name',
-    locale === 'tr' ? 'Soyad' : 'Last Name',
+    labelLocale === 'tr' ? 'Ad' : 'First Name',
+    labelLocale === 'tr' ? 'Soyad' : 'Last Name',
     'Email',
-    locale === 'tr' ? 'Telefon' : 'Phone',
-    locale === 'tr' ? 'Durum' : 'Status',
-    locale === 'tr' ? 'Başvuru Tarihi' : 'Date',
-    locale === 'tr' ? 'Kurum' : 'Organization',
-    locale === 'tr' ? 'Etkinlik' : 'Event',
+    labelLocale === 'tr' ? 'Telefon' : 'Phone',
+    labelLocale === 'tr' ? 'Durum' : 'Status',
+    labelLocale === 'tr' ? 'Başvuru Tarihi' : 'Date',
+    labelLocale === 'tr' ? 'Kurum' : 'Organization',
+    labelLocale === 'tr' ? 'Etkinlik' : 'Event',
+    labelLocale === 'tr' ? 'Kaynak' : 'Source',
+    labelLocale === 'tr' ? 'Dil' : 'Locale',
   ];
 
   const dynamicHeaders = dynamicKeys.map(
@@ -148,33 +172,69 @@ export async function GET(request: NextRequest) {
   );
 
   const headers = [...staticHeaders, ...dynamicHeaders];
-
-  const csvRows: string[] = [headers.map(escapeCsvCell).join(',')];
+  const worksheetData: unknown[][] = [headers];
 
   for (const app of applications) {
     const sub = (app.submission_data as Record<string, unknown>) || {};
     const staticRow = [
-      app.first_name,
-      app.last_name,
-      app.email,
-      app.phone,
-      app.status,
-      app.created_at ? new Date(app.created_at).toISOString().slice(0, 16).replace('T', ' ') : '',
-      app.organization,
-      app.event_name,
+      cellValue(app.first_name),
+      cellValue(app.last_name),
+      cellValue(app.email),
+      cellValue(app.phone),
+      cellValue(app.status),
+      app.created_at
+        ? new Date(app.created_at).toISOString().slice(0, 16).replace('T', ' ')
+        : '',
+      cellValue(app.organization),
+      cellValue(app.event_name),
+      cellValue(app.source),
+      cellValue(app.locale),
     ];
-    const dynamicRow = dynamicKeys.map((key) => sub[key] ?? '');
-    csvRows.push([...staticRow, ...dynamicRow].map(escapeCsvCell).join(','));
+    const dynamicRow = dynamicKeys.map((key) => cellValue(sub[key]));
+    worksheetData.push([...staticRow, ...dynamicRow]);
   }
 
-  const BOM = '\uFEFF';
-  const csv = BOM + csvRows.join('\r\n');
+  // Drop source rows before encoding workbook to free references sooner.
+  applications.length = 0;
 
-  return new Response(csv, {
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+
+  const colWidths = headers.map((_, colIndex) => {
+    let max = 10;
+    for (let rowIndex = 0; rowIndex < worksheetData.length; rowIndex++) {
+      const val = worksheetData[rowIndex][colIndex];
+      const len = val ? String(val).length : 0;
+      if (len > max) max = len > 50 ? 50 : len;
+    }
+    return { wch: max + 2 };
+  });
+  worksheet['!cols'] = colWidths;
+
+  XLSX.utils.book_append_sheet(
+    workbook,
+    worksheet,
+    labelLocale === 'tr' ? 'Basvurular' : 'Applications'
+  );
+
+  const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+  const filename = labelLocale === 'tr' ? 'basvurular.xlsx' : 'applications.xlsx';
+
+  return new Response(buffer as unknown as BodyInit, {
     status: 200,
     headers: {
-      'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': 'attachment; filename="basvurular.csv"',
+      'Content-Type':
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Cache-Control': 'no-store',
+      'X-Export-Row-Limit': String(MAX_EXPORT_ROWS),
     },
+  });
+}
+
+function NextResponseEmptyList() {
+  return new Response('', {
+    status: 204,
+    headers: { 'Cache-Control': 'no-store' },
   });
 }

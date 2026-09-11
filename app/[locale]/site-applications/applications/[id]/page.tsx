@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, use } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import {
   ArrowLeft,
@@ -181,10 +181,13 @@ export default function SiteApplicationDetailPage({
   const t = texts[locale as keyof typeof texts] || texts.tr;
   const { user } = useUser();
   const pathname = usePathname() || '';
+  const searchParams = useSearchParams();
   const isEventsHub = pathname.includes('/events/registrations');
-  const listHref = isEventsHub
+  const listBasePath = isEventsHub
     ? `/${locale}/events/registrations`
     : `/${locale}/site-applications/applications`;
+  const listQuery = searchParams.toString();
+  const listHref = listQuery ? `${listBasePath}?${listQuery}` : listBasePath;
 
   type FormFieldDef = {
     field_key: string;
@@ -259,7 +262,7 @@ export default function SiteApplicationDetailPage({
       .catch(() => setSmtpConfigured(false));
   }, []);
 
-  const updateStatus = async () => {
+  const updateStatus = async (notifyApplicant = false) => {
     if (!app || !user || newStatus === app.status) return;
     setSaving(true);
     setStatusMessage(null);
@@ -270,6 +273,7 @@ export default function SiteApplicationDetailPage({
         body: JSON.stringify({
           status: newStatus,
           reviewed_by_email: user.primaryEmailAddress?.emailAddress,
+          notify_applicant: notifyApplicant,
         }),
       });
       const data = await res.json();
@@ -278,7 +282,7 @@ export default function SiteApplicationDetailPage({
       setApp(data.application as SiteApplication);
       setHistory((data.history as SiteApplicationStatusHistory[]) || []);
 
-      if (newStatus === 'accepted' && data.approval_email) {
+      if (notifyApplicant && newStatus === 'accepted' && data.approval_email) {
         setStatusMessage(
           data.approval_email.success ? t.approvalEmailSent : t.approvalEmailFailed
         );
@@ -793,11 +797,14 @@ export default function SiteApplicationDetailPage({
                 </select>
                 <button
                   onClick={async () => {
-                    await updateStatus();
-                    if (statusEmailCheck && smtpConfigured && app) {
+                    const notify = Boolean(statusEmailCheck && smtpConfigured);
+                    await updateStatus(notify);
+                    // Acceptance uses the dedicated approval email from the API when notify is on.
+                    // Other statuses (e.g. reject) use the generic status notification only if checked.
+                    if (notify && newStatus !== 'accepted' && app) {
                       const statusLabel = t.statusLabels[newStatus as keyof typeof t.statusLabels] || newStatus;
                       try {
-                        await fetch(`/api/site-applications/applications/${app.id}/send-email`, {
+                        const mailRes = await fetch(`/api/site-applications/applications/${app.id}/send-email`, {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
@@ -809,7 +816,23 @@ export default function SiteApplicationDetailPage({
                               : `Dear ${app.first_name} ${app.last_name},\n\nYour application status has been updated to "${statusLabel}".\n\nBest regards`,
                           }),
                         });
-                      } catch { /* silent */ }
+                        if (!mailRes.ok) {
+                          const mailData = await mailRes.json().catch(() => ({}));
+                          setStatusMessage(
+                            typeof mailData.error === 'string'
+                              ? mailData.error
+                              : locale === 'tr'
+                                ? 'Durum güncellendi ancak e-posta gönderilemedi.'
+                                : 'Status updated but the email could not be sent.'
+                          );
+                        }
+                      } catch {
+                        setStatusMessage(
+                          locale === 'tr'
+                            ? 'Durum güncellendi ancak e-posta gönderilemedi.'
+                            : 'Status updated but the email could not be sent.'
+                        );
+                      }
                     }
                     setStatusEmailCheck(false);
                   }}

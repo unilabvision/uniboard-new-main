@@ -9,6 +9,10 @@ import {
   decryptSmtpPassword,
   normalizeSmtpPassword,
 } from '@/app/_services/smtpEncryption';
+import {
+  assertEmailSendAllowed,
+  auditApplicantEmail,
+} from '@/app/lib/siteApplications/emailSendGuard';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -19,12 +23,29 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
 
+  const rate = assertEmailSendAllowed({
+    userId: authResult.userId,
+    applicationId: id,
+  });
+  if (!rate.ok) {
+    return NextResponse.json({ error: rate.error }, { status: rate.status });
+  }
+
   const supabase = authResult.supabase;
   const body = await request.json();
   const { subject, body_text, body_html } = body;
 
   if (!subject || (!body_text && !body_html)) {
     return NextResponse.json({ error: 'subject and body required' }, { status: 400 });
+  }
+
+  if (typeof subject !== 'string' || subject.length > 200) {
+    return NextResponse.json({ error: 'Invalid subject' }, { status: 400 });
+  }
+  const textLen = typeof body_text === 'string' ? body_text.length : 0;
+  const htmlLen = typeof body_html === 'string' ? body_html.length : 0;
+  if (textLen > 20_000 || htmlLen > 40_000) {
+    return NextResponse.json({ error: 'Email body too large' }, { status: 400 });
   }
 
   // Get the application
@@ -118,9 +139,25 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     transporter.close();
 
+    auditApplicantEmail({
+      userId: authResult.userId,
+      applicationId: id,
+      to: application.email,
+      subject: String(subject),
+      success: true,
+    });
+
     return NextResponse.json({ success: true, sent_to: application.email });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Mail sending failed';
+    auditApplicantEmail({
+      userId: authResult.userId,
+      applicationId: id,
+      to: application.email,
+      subject: String(subject),
+      success: false,
+      error: message,
+    });
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
