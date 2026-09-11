@@ -238,6 +238,11 @@ export async function GET() {
 
     modules = dedupeDashboardModules(modules);
 
+    const { sortDashboardModules } = await import(
+      '@/app/lib/moduleAccess/dashboardOrder'
+    );
+    modules = sortDashboardModules(modules);
+
     // 5. Debug bilgileri (sadece development'ta)
     if (isDev) {
       console.log('📊 Debug Information:');

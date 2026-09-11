@@ -7,6 +7,7 @@ import { useUser, useClerk } from '@clerk/nextjs';
 import { useUserModules } from '../hooks/useUserModules';
 import { getIconComponent } from '@/utils/iconMapper';
 import { getModuleHref } from '@/utils/moduleRoutes';
+import { sortDashboardModules } from '@/app/lib/moduleAccess/dashboardOrder';
 import { GraduationCap, BarChart3, Target, Lock, LogOut, HelpCircle, LucideIcon, Shield } from 'lucide-react';
 import ThemeSwitcher from '@/app/components/ThemeSwitcher'; // Theme switcher import
 
@@ -484,6 +485,8 @@ const DashboardContent = ({ locale }: { locale: string }) => {
   }
 
   // Dashboard with modules
+  const orderedModules = sortDashboardModules(modules);
+
   return (
     <>
       <div className="min-h-screen bg-neutral-50 dark:bg-neutral-900 flex items-center justify-center py-12">
@@ -527,14 +530,14 @@ const DashboardContent = ({ locale }: { locale: string }) => {
                 )}
               </div>
               <p className="text-neutral-600 dark:text-neutral-400">
-                {modules.length} {t.moduleCount}
+                {orderedModules.length} {t.moduleCount}
               </p>
             </div>
           </div>
 
           {/* Modules Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-fr">
-            {modules.map((module, index) => {
+            {orderedModules.map((module, index) => {
               const IconComponent = getIconComponent(module.icon);
               return (
                 <ModuleCard
