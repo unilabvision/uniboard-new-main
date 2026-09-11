@@ -9,6 +9,9 @@ export interface ModuleAccessDefinition {
   dashboardPath: string;
   nameTr: string;
   nameEn: string;
+  /** Dashboard kartı alt metni (DB boşsa kullanılır) */
+  descriptionTr?: string;
+  descriptionEn?: string;
   managePolicy: ModuleAccessManagePolicy;
 }
 
@@ -19,6 +22,8 @@ export const MODULE_ACCESS_REGISTRY: Record<string, ModuleAccessDefinition> = {
     dashboardPath: 'influencer',
     nameTr: 'Influencer Paneli',
     nameEn: 'Influencer Panel',
+    descriptionTr: 'Satış performansınızı ve komisyonlarınızı takip edin.',
+    descriptionEn: 'Track your sales performance and commissions.',
     managePolicy: 'moduleHolder',
   },
   settings: {
@@ -27,6 +32,8 @@ export const MODULE_ACCESS_REGISTRY: Record<string, ModuleAccessDefinition> = {
     dashboardPath: 'settings',
     nameTr: 'Ayarlar',
     nameEn: 'Settings',
+    descriptionTr: 'Hesap ve sistem ayarları.',
+    descriptionEn: 'Account and system settings.',
     managePolicy: 'superAdminOnly',
   },
   certificates: {
@@ -35,6 +42,8 @@ export const MODULE_ACCESS_REGISTRY: Record<string, ModuleAccessDefinition> = {
     dashboardPath: 'certificates',
     nameTr: 'Sertifika Sistemi',
     nameEn: 'Certificate System',
+    descriptionTr: 'Sertifika oluşturma ve yayınlama.',
+    descriptionEn: 'Create and issue certificates.',
     managePolicy: 'moduleHolder',
   },
   lms: {
@@ -43,6 +52,8 @@ export const MODULE_ACCESS_REGISTRY: Record<string, ModuleAccessDefinition> = {
     dashboardPath: 'lms',
     nameTr: 'Kurs Yönetimi',
     nameEn: 'Course Management',
+    descriptionTr: 'Kurslarınızı yönetin ve düzenleyin.',
+    descriptionEn: 'Manage and edit your courses.',
     managePolicy: 'moduleHolder',
   },
   students: {
@@ -51,6 +62,8 @@ export const MODULE_ACCESS_REGISTRY: Record<string, ModuleAccessDefinition> = {
     dashboardPath: 'students',
     nameTr: 'Öğrenci Yönetimi',
     nameEn: 'Student Management',
+    descriptionTr: 'Öğrenci kayıtları, kurs eşleşmeleri ve ilerleme takibi.',
+    descriptionEn: 'Student enrollments, course matching and progress tracking.',
     managePolicy: 'moduleHolder',
   },
   'lms-2': {
@@ -59,6 +72,8 @@ export const MODULE_ACCESS_REGISTRY: Record<string, ModuleAccessDefinition> = {
     dashboardPath: 'lms-2',
     nameTr: 'Kurumsal Eğitim Paneli',
     nameEn: 'Corporate Training Panel',
+    descriptionTr: 'Kurumsal eğitim programlarını ve içeriklerini yönetin.',
+    descriptionEn: 'Manage corporate training programs and content.',
     managePolicy: 'moduleHolder',
   },
   internship: {
@@ -67,6 +82,8 @@ export const MODULE_ACCESS_REGISTRY: Record<string, ModuleAccessDefinition> = {
     dashboardPath: 'internship',
     nameTr: 'Staj Başvuruları',
     nameEn: 'Internship Applications',
+    descriptionTr: 'Staj başvurularını yönetin.',
+    descriptionEn: 'Manage internship applications.',
     managePolicy: 'moduleHolder',
   },
   'site-applications': {
@@ -75,6 +92,8 @@ export const MODULE_ACCESS_REGISTRY: Record<string, ModuleAccessDefinition> = {
     dashboardPath: 'site-applications',
     nameTr: 'Site Başvuruları',
     nameEn: 'Site Applications',
+    descriptionTr: 'Etkinlik ve ekip başvurularını yönetin.',
+    descriptionEn: 'Manage event and team applications.',
     managePolicy: 'moduleHolder',
   },
   analytics: {
@@ -83,6 +102,8 @@ export const MODULE_ACCESS_REGISTRY: Record<string, ModuleAccessDefinition> = {
     dashboardPath: 'analytics',
     nameTr: 'Analitik Raporları',
     nameEn: 'Analytics Reports',
+    descriptionTr: 'Detaylı istatistikler ve performans analizi.',
+    descriptionEn: 'Detailed statistics and performance analysis.',
     managePolicy: 'moduleHolder',
   },
   events: {
@@ -91,6 +112,8 @@ export const MODULE_ACCESS_REGISTRY: Record<string, ModuleAccessDefinition> = {
     dashboardPath: 'events',
     nameTr: 'Etkinlik Yönetimi',
     nameEn: 'Event Management',
+    descriptionTr: 'Etkinlikleri oluşturun ve myunilab.net üzerinde yayınlayın.',
+    descriptionEn: 'Create events and publish them on myunilab.net.',
     managePolicy: 'moduleHolder',
   },
   mentorship: {
@@ -99,6 +122,8 @@ export const MODULE_ACCESS_REGISTRY: Record<string, ModuleAccessDefinition> = {
     dashboardPath: 'mentorship',
     nameTr: 'Mentörlük Paneli',
     nameEn: 'Mentorship Panel',
+    descriptionTr: 'Mentörlük duyurularını ve başvurularını yönetin.',
+    descriptionEn: 'Manage mentorship announcements and applications.',
     managePolicy: 'moduleHolder',
   },
 };
@@ -112,6 +137,25 @@ export function getModuleAccessDefinition(moduleKey: string): ModuleAccessDefini
       def.moduleKeys.includes(moduleKey)
     ) ?? null
   );
+}
+
+/** DB’de açıklama boşsa registry fallback’ini uygular (örn. lms-2). */
+export function withModuleDashboardCopy<
+  T extends {
+    key: string;
+    description_tr?: string | null;
+    description_en?: string | null;
+  },
+>(module: T): T {
+  const def = getModuleAccessDefinition(module.key);
+  if (!def) return module;
+  const tr = String(module.description_tr || '').trim();
+  const en = String(module.description_en || '').trim();
+  return {
+    ...module,
+    description_tr: tr || def.descriptionTr || '',
+    description_en: en || def.descriptionEn || def.descriptionTr || '',
+  };
 }
 
 export const MODULE_ACCESS_SLUGS = Object.keys(MODULE_ACCESS_REGISTRY);

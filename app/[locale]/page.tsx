@@ -8,6 +8,7 @@ import { useUserModules } from '../hooks/useUserModules';
 import { getIconComponent } from '@/utils/iconMapper';
 import { getModuleHref } from '@/utils/moduleRoutes';
 import { sortDashboardModules } from '@/app/lib/moduleAccess/dashboardOrder';
+import { withModuleDashboardCopy } from '@/app/lib/moduleAccess/registry';
 import { GraduationCap, BarChart3, Target, Lock, LogOut, HelpCircle, LucideIcon, Shield } from 'lucide-react';
 import ThemeSwitcher from '@/app/components/ThemeSwitcher'; // Theme switcher import
 
@@ -485,7 +486,7 @@ const DashboardContent = ({ locale }: { locale: string }) => {
   }
 
   // Dashboard with modules
-  const orderedModules = sortDashboardModules(modules);
+  const orderedModules = sortDashboardModules(modules.map(withModuleDashboardCopy));
 
   return (
     <>

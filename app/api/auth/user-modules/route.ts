@@ -241,7 +241,10 @@ export async function GET() {
     const { sortDashboardModules } = await import(
       '@/app/lib/moduleAccess/dashboardOrder'
     );
-    modules = sortDashboardModules(modules);
+    const { withModuleDashboardCopy } = await import(
+      '@/app/lib/moduleAccess/registry'
+    );
+    modules = sortDashboardModules(modules.map(withModuleDashboardCopy));
 
     // 5. Debug bilgileri (sadece development'ta)
     if (isDev) {
