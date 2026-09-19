@@ -243,6 +243,32 @@ export default function VideoUploadModal({
 
       await videoDetailsResponse.json();
 
+      // Dosya yüklemede Vimeo oluştururken embed_domains set ediliyor;
+      // link eklemede mevcut videoya aynı ayarları yazmak gerekir (myunilab.net).
+      setUploadState({
+        status: 'processing',
+        progress: 70,
+        message: 'Vimeo embed ayarları güncelleniyor (myunilab.net)...',
+      });
+
+      const settingsResponse = await fetch('/api/vimeo/update-settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          vimeoId: validation.vimeoId,
+        }),
+      });
+
+      if (!settingsResponse.ok) {
+        const errorData = await settingsResponse.json().catch(() => ({}));
+        throw new Error(
+          errorData.error ||
+            'Vimeo embed ayarları güncellenemedi. Video hesabınıza ait olmalı.'
+        );
+      }
+
       setUploadState({
         status: 'processing',
         progress: 90,
@@ -299,6 +325,12 @@ export default function VideoUploadModal({
           errorMessage = 'Bağlantı hatası. İnternet bağlantınızı kontrol edin.';
         } else if (error.message.includes('Failed to get video details')) {
           errorMessage = 'Vimeo video detayları alınamadı. Linkin doğru olduğundan emin olun.';
+        } else if (
+          error.message.includes('embed ayarları') ||
+          error.message.includes('Failed to update video settings')
+        ) {
+          errorMessage =
+            'Vimeo embed ayarları güncellenemedi. Link hesabınızdaki bir videoya ait olmalı.';
         } else if (error.message.includes('Database save failed')) {
           errorMessage = 'Video kaydedilemedi. Lütfen tekrar deneyin.';
         } else {

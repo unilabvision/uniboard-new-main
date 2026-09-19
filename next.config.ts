@@ -3,6 +3,8 @@ const nextConfig = {
   // Avoid "workspace root" warnings on Windows when Next detects other lockfiles outside the repo.
   // This also makes Vercel output tracing deterministic.
   outputFileTracingRoot: __dirname,
+  // Allow Clerk pk_live_ keys via https://local.myunilab.net (see npm run dev:live)
+  allowedDevOrigins: ['local.myunilab.net'],
   // Server external packages (moved from experimental)
   serverExternalPackages: [],
   images: {

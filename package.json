@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "cross-env NODE_OPTIONS=\"--max-http-header-size=80000 --max-old-space-size=4096\" next dev",
+    "dev:live": "cross-env NODE_OPTIONS=\"--max-http-header-size=80000 --max-old-space-size=4096\" next dev --experimental-https --hostname local.myunilab.net -p 443",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
