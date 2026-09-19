@@ -59,6 +59,10 @@ const texts = {
     emailBodyHint: 'Sertifika mailine eklenecek özel mesaj (opsiyonel)',
     emailBodyPlaceholder:
       'Örn: Etkinliğimize katıldığınız için teşekkür ederiz. Sertifikanız ekte / bağlantıda.',
+    instructor: 'Eğitmen',
+    instructorHint: 'Sertifikada ismin altında / eğitmen satırında görünür',
+    instructorPlaceholder: 'Örn: Dr. Ayşe Yılmaz',
+    needInstructor: 'Eğitmen adını girin (sertifikada görünmesi için gerekli)',
     certDescription: 'Sertifika açıklaması',
     certDescriptionHint:
       'Şablondaki isim altındaki satır (ör. “Embriyoloji 101 etkinliğine katılım”)',
@@ -106,6 +110,10 @@ const texts = {
     emailBodyHint: 'Optional custom message added to the certificate email',
     emailBodyPlaceholder:
       'e.g. Thank you for attending. Your certificate is ready.',
+    instructor: 'Instructor',
+    instructorHint: 'Shown on the certificate instructor line',
+    instructorPlaceholder: 'e.g. Dr. Jane Smith',
+    needInstructor: 'Enter an instructor name (required on the certificate)',
     certDescription: 'Certificate description',
     certDescriptionHint:
       'Line under the name on the template (e.g. “Participation in Embryology 101”)',
@@ -149,6 +157,7 @@ export default function CertificateIssuancePage({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [customMessage, setCustomMessage] = useState('');
   const [certificateDescription, setCertificateDescription] = useState('');
+  const [instructor, setInstructor] = useState('');
   const [generatingDescription, setGeneratingDescription] = useState(false);
 
   const [organizations, setOrganizations] = useState<Organization[]>([]);
@@ -283,6 +292,7 @@ export default function CertificateIssuancePage({
           action: 'generateDescription',
           data: {
             courseName,
+            instructor: instructor.trim() || undefined,
             organization: org?.name || 'MyUNI',
             customPrompt,
             language: locale === 'en' ? 'en' : 'tr',
@@ -317,6 +327,10 @@ export default function CertificateIssuancePage({
       setError(t.needSelection);
       return;
     }
+    if (!instructor.trim()) {
+      setError(t.needInstructor);
+      return;
+    }
     const org = organizations.find((o) => o.slug === orgSlug);
     try {
       setIssuing(true);
@@ -331,6 +345,7 @@ export default function CertificateIssuancePage({
           organizationSlug: orgSlug,
           organizationName: org?.name,
           organizationAbbreviation: org?.abbreviation,
+          instructor: instructor.trim(),
           customMessage,
           description: certificateDescription.trim() || undefined,
           locale,
@@ -456,7 +471,18 @@ export default function CertificateIssuancePage({
             ))}
           </select>
         </label>
-        <div className="flex items-end gap-2 sm:col-span-2">
+        <label className="text-sm sm:col-span-2">
+          <span className="block text-neutral-500 mb-1">{t.instructor}</span>
+          <input
+            type="text"
+            value={instructor}
+            onChange={(e) => setInstructor(e.target.value)}
+            placeholder={t.instructorPlaceholder}
+            className="w-full rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 px-3 py-2"
+          />
+          <span className="mt-1 block text-xs text-neutral-500">{t.instructorHint}</span>
+        </label>
+        <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-4">
           <button
             type="button"
             onClick={selectAll}

@@ -149,6 +149,8 @@ export async function issueCertificatesFromQueue(
               coursename: courseName,
               certificate_title: title,
               description,
+              instructor: params.instructor || '',
+              duration: params.duration || '',
               language: locale === 'en' ? 'en' : 'tr',
               provider_text: fieldTexts.provider_text,
               instructor_label: fieldTexts.instructor_label,
