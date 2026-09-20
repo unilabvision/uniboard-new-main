@@ -30,11 +30,7 @@ export function validateEventImageFile(file: {
     return `Dosya boyutu en fazla ${formatEventImageSize(EVENT_IMAGE_MAX_BYTES)} olabilir.`;
   }
   const mime = (file.type || '').toLowerCase();
-  if (
-    mime &&
-    !(EVENT_IMAGE_MIME_TYPES as readonly string[]).includes(mime) &&
-    !mime.startsWith('image/')
-  ) {
+  if (!(EVENT_IMAGE_MIME_TYPES as readonly string[]).includes(mime)) {
     return 'Sadece görsel dosyaları (JPEG, PNG, WebP, GIF) yüklenebilir.';
   }
   return null;

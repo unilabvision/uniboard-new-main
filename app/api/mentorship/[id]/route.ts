@@ -11,6 +11,7 @@ import {
 } from '@/app/api/mentorship/_helpers';
 import type { MentorshipInput, LocalizedText } from '@/app/types/mentorship';
 import { normalizeMentorshipQuestions } from '@/app/lib/mentorship/questions';
+import { revalidateTag } from 'next/cache';
 
 function asLocalized(value: unknown): LocalizedText {
   if (typeof value === 'string') {
@@ -155,6 +156,8 @@ export async function PATCH(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  revalidateTag('public-mentorships');
+
   return NextResponse.json({ mentorship: data });
 }
 
@@ -176,6 +179,8 @@ export async function DELETE(
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  revalidateTag('public-mentorships');
 
   return NextResponse.json({ ok: true });
 }

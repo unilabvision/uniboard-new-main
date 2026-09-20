@@ -2,9 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireLmsContentAdmin } from '@/app/api/lms/_helpers';
 import {
   buildCourseImageStoragePath,
+  COURSE_BANNER_HEIGHT,
+  COURSE_BANNER_WIDTH,
+  COURSE_THUMBNAIL_HEIGHT,
+  COURSE_THUMBNAIL_WIDTH,
   validateCourseImageFile,
   type CourseImageKind,
 } from '@/app/lib/lms/courseMedia';
+import { IMMUTABLE_ASSET_CACHE_SECONDS } from '@/app/lib/storage/cachePolicy';
+import { hasValidImageSignature } from '@/app/lib/storage/imageValidation';
+import { optimizeImageForStorage } from '@/app/lib/storage/optimizeImage';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -63,18 +70,28 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: validationError }, { status: 400 });
     }
 
+    const originalBuffer = Buffer.from(await file.arrayBuffer());
+    if (!hasValidImageSignature(originalBuffer, file.type)) {
+      return NextResponse.json({ error: 'Dosya içeriği geçerli bir görsel değil' }, { status: 400 });
+    }
+    const image = await optimizeImageForStorage({
+      buffer: originalBuffer,
+      fileName: file.name,
+      mimeType: file.type,
+      maxWidth: kindRaw === 'banner' ? COURSE_BANNER_WIDTH : COURSE_THUMBNAIL_WIDTH,
+      maxHeight: kindRaw === 'banner' ? COURSE_BANNER_HEIGHT : COURSE_THUMBNAIL_HEIGHT,
+    });
     const { bucket, objectPath } = buildCourseImageStoragePath(
       kindRaw,
-      file.name,
+      image.fileName,
       course.slug
     );
-    const buffer = Buffer.from(await file.arrayBuffer());
     const { error: uploadError } = await authResult.supabase.storage
       .from(bucket)
-      .upload(objectPath, buffer, {
-        cacheControl: '3600',
+      .upload(objectPath, image.buffer, {
+        cacheControl: IMMUTABLE_ASSET_CACHE_SECONDS,
         upsert: false,
-        contentType: file.type || 'image/jpeg',
+        contentType: image.contentType,
       });
 
     if (uploadError) {

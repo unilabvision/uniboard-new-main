@@ -11,6 +11,7 @@ import {
 } from '@/app/api/mentorship/_helpers';
 import type { MentorshipInput, LocalizedText } from '@/app/types/mentorship';
 import { normalizeMentorshipQuestions } from '@/app/lib/mentorship/questions';
+import { revalidateTag } from 'next/cache';
 
 function asLocalized(value: unknown): LocalizedText {
   if (typeof value === 'string') {
@@ -73,7 +74,9 @@ export async function GET(request: NextRequest) {
 
   let query = authResult.supabase!
     .from(mentorshipDb.mentorships)
-    .select('*')
+    .select(
+      'id, slug, title, mentor_name, is_application_open, order_index, is_active, is_featured'
+    )
     .order('order_index', { ascending: true })
     .order('created_at', { ascending: true });
 
@@ -119,6 +122,7 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
+  revalidateTag('public-mentorships');
   return NextResponse.json({ success: true });
 }
 
@@ -158,6 +162,8 @@ export async function POST(request: NextRequest) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  revalidateTag('public-mentorships');
 
   return NextResponse.json({ mentorship: data }, { status: 201 });
 }

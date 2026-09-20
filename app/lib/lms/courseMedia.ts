@@ -47,11 +47,7 @@ export function validateCourseImageFile(file: {
     return `Dosya boyutu en fazla ${formatCourseImageSize(COURSE_IMAGE_MAX_BYTES)} olabilir.`;
   }
   const mime = (file.type || '').toLowerCase();
-  if (
-    mime &&
-    !(COURSE_IMAGE_MIME_TYPES as readonly string[]).includes(mime) &&
-    !mime.startsWith('image/')
-  ) {
+  if (!(COURSE_IMAGE_MIME_TYPES as readonly string[]).includes(mime)) {
     return 'Sadece görsel dosyaları (JPEG, PNG, WebP, GIF) yüklenebilir.';
   }
   return null;

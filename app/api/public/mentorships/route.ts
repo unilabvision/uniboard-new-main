@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { unstable_cache } from 'next/cache';
 import {
   mentorshipDb,
   getPublicMentorshipPath,
   getPublicMentorshipApplicationPath,
   getLocalizedJson,
 } from '@/app/lib/mentorship/config';
+import {
+  PUBLIC_CACHE_CONTROL,
+  PUBLIC_CACHE_REVALIDATE_SECONDS,
+} from '@/app/lib/http/publicCache';
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL2;
@@ -16,13 +21,9 @@ function getSupabase() {
   });
 }
 
-/** myunilab.net — mentörlük listesi */
-export async function GET(request: NextRequest) {
-  try {
-    const locale = request.nextUrl.searchParams.get('locale') === 'en' ? 'en' : 'tr';
-    const featuredOnly = request.nextUrl.searchParams.get('featured') === 'true';
+const loadPublicMentorships = unstable_cache(
+  async (featuredOnly: boolean) => {
     const supabase = getSupabase();
-
     let query = supabase
       .from(mentorshipDb.mentorships)
       .select(
@@ -31,17 +32,22 @@ export async function GET(request: NextRequest) {
       .eq('is_active', true)
       .order('order_index', { ascending: true })
       .order('created_at', { ascending: true });
-
-    if (featuredOnly) {
-      query = query.eq('is_featured', true);
-    }
-
+    if (featuredOnly) query = query.eq('is_featured', true);
     const { data, error } = await query;
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  },
+  ['public-mentorships'],
+  { revalidate: PUBLIC_CACHE_REVALIDATE_SECONDS, tags: ['public-mentorships'] }
+);
 
-    const mentorships = (data ?? []).map((row) => ({
+/** myunilab.net — mentörlük listesi */
+export async function GET(request: NextRequest) {
+  try {
+    const locale = request.nextUrl.searchParams.get('locale') === 'en' ? 'en' : 'tr';
+    const featuredOnly = request.nextUrl.searchParams.get('featured') === 'true';
+    const data = await loadPublicMentorships(featuredOnly);
+    const mentorships = data.map((row) => ({
       ...row,
       title_localized: getLocalizedJson(row.title, locale),
       summary_localized: getLocalizedJson(row.summary, locale),
@@ -49,12 +55,10 @@ export async function GET(request: NextRequest) {
       application_url: getPublicMentorshipApplicationPath(locale, row.slug),
     }));
 
-    return NextResponse.json({
-      success: true,
-      locale,
-      mentorships,
-      count: mentorships.length,
-    });
+    return NextResponse.json(
+      { success: true, locale, mentorships, count: mentorships.length },
+      { headers: { 'Cache-Control': PUBLIC_CACHE_CONTROL } }
+    );
   } catch (err) {
     console.error('Public mentorships list error:', err);
     return NextResponse.json(

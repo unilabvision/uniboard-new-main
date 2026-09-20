@@ -1,4 +1,5 @@
 import { certificatesSupabase } from '@/app/_services/certificatesSupabaseClient';
+import { IMMUTABLE_ASSET_CACHE_SECONDS } from '@/app/lib/storage/cachePolicy';
 
 export interface UploadResult {
   success: boolean;
@@ -44,7 +45,7 @@ export async function uploadFileToSupabase(
     const { error } = await supabase.storage
       .from(bucket)
       .upload(filePath, file, {
-        cacheControl: '3600',
+        cacheControl: IMMUTABLE_ASSET_CACHE_SECONDS,
         upsert: false
       });
 

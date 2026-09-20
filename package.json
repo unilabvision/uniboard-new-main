@@ -9,7 +9,9 @@
     "start": "next start",
     "lint": "next lint",
     "test:list-query": "npx --yes tsx app/lib/siteApplications/listQuery.selfcheck.ts",
-    "test:certificate-issue": "npx --yes tsx app/lib/events/certificateIssue.selfcheck.ts"
+    "test:certificate-issue": "npx --yes tsx app/lib/events/certificateIssue.selfcheck.ts",
+    "test:kurum-progress": "ts-node --transpile-only --compiler-options '{\"module\":\"CommonJS\",\"moduleResolution\":\"Node\"}' app/lib/lms/kurumProgress.selfcheck.ts",
+    "test:storage-image": "ts-node --transpile-only --compiler-options '{\"module\":\"CommonJS\",\"moduleResolution\":\"Node\",\"esModuleInterop\":true}' app/lib/storage/optimizeImage.selfcheck.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.18.5",
@@ -45,6 +47,7 @@
     "react-i18next": "^15.4.1",
     "react-icons": "^5.5.0",
     "react-loading-skeleton": "^3.5.0",
+    "sharp": "^0.34.5",
     "ua-parser-js": "^2.0.3",
     "xlsx": "^0.18.5"
   },

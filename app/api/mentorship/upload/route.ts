@@ -5,6 +5,13 @@ import {
   type MentorshipImageKind,
 } from '@/app/lib/mentorship/storage';
 import { requireMentorshipCapability } from '@/app/api/mentorship/_helpers';
+import { IMMUTABLE_ASSET_CACHE_SECONDS } from '@/app/lib/storage/cachePolicy';
+import { hasValidImageSignature } from '@/app/lib/storage/imageValidation';
+import { optimizeImageForStorage } from '@/app/lib/storage/optimizeImage';
+import {
+  MENTORSHIP_BANNER_HEIGHT,
+  MENTORSHIP_BANNER_WIDTH,
+} from '@/app/lib/mentorship/config';
 
 const ALLOWED_KINDS = new Set<MentorshipImageKind>(['thumbnail', 'banner', 'mentor']);
 
@@ -43,19 +50,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: validationError }, { status: 400 });
     }
 
+    const originalBuffer = Buffer.from(await file.arrayBuffer());
+    if (!hasValidImageSignature(originalBuffer, file.type)) {
+      return NextResponse.json({ error: 'Dosya içeriği geçerli bir görsel değil' }, { status: 400 });
+    }
+    const image = await optimizeImageForStorage({
+      buffer: originalBuffer,
+      fileName: file.name,
+      mimeType: file.type,
+      maxWidth: kindRaw === 'banner' ? MENTORSHIP_BANNER_WIDTH : 800,
+      maxHeight: kindRaw === 'banner' ? MENTORSHIP_BANNER_HEIGHT : 800,
+    });
     const { bucket, objectPath } = buildMentorshipImageStoragePath(
       kindRaw,
-      file.name,
+      image.fileName,
       slug
     );
-
-    const buffer = Buffer.from(await file.arrayBuffer());
     const { error: uploadError } = await access.supabase.storage
       .from(bucket)
-      .upload(objectPath, buffer, {
-        cacheControl: '3600',
+      .upload(objectPath, image.buffer, {
+        cacheControl: IMMUTABLE_ASSET_CACHE_SECONDS,
         upsert: false,
-        contentType: file.type || 'image/jpeg',
+        contentType: image.contentType,
       });
 
     if (uploadError) {

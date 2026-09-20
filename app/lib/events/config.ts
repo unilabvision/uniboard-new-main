@@ -34,7 +34,7 @@ export const EVENT_THUMBNAIL_HEIGHT = 450;
 export const EVENT_STORAGE_BUCKET =
   process.env.NEXT_PUBLIC_EVENTS_STORAGE_BUCKET || 'myunilab';
 export const EVENT_STORAGE_FOLDER = 'events';
-export const EVENT_IMAGE_MAX_BYTES = 8 * 1024 * 1024; // 8 MB
+export const EVENT_IMAGE_MAX_BYTES = 4 * 1024 * 1024;
 export const EVENT_IMAGE_MIME_TYPES = [
   'image/jpeg',
   'image/jpg',

@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   buildOpportunityImageStoragePath,
+  OPPORTUNITY_BANNER_HEIGHT,
+  OPPORTUNITY_BANNER_WIDTH,
+  OPPORTUNITY_COVER_HEIGHT,
+  OPPORTUNITY_COVER_WIDTH,
   validateOpportunityImageFile,
   type OpportunityImageKind,
 } from '@/app/lib/siteApplications/opportunityStorage';
 import { requireSiteApplicationsCapability } from '@/app/api/site-applications/access/_helpers';
+import { IMMUTABLE_ASSET_CACHE_SECONDS } from '@/app/lib/storage/cachePolicy';
+import { hasValidImageSignature } from '@/app/lib/storage/imageValidation';
+import { optimizeImageForStorage } from '@/app/lib/storage/optimizeImage';
 
 const ALLOWED_KINDS = new Set<OpportunityImageKind>(['banner', 'cover']);
 
@@ -40,14 +47,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: validationError }, { status: 400 });
     }
 
-    const { bucket, objectPath } = buildOpportunityImageStoragePath(kindRaw, file.name, slug);
-    const buffer = Buffer.from(await file.arrayBuffer());
+    const originalBuffer = Buffer.from(await file.arrayBuffer());
+    if (!hasValidImageSignature(originalBuffer, file.type)) {
+      return NextResponse.json({ error: 'Dosya içeriği geçerli bir görsel değil' }, { status: 400 });
+    }
+    const image = await optimizeImageForStorage({
+      buffer: originalBuffer,
+      fileName: file.name,
+      mimeType: file.type,
+      maxWidth: kindRaw === 'banner' ? OPPORTUNITY_BANNER_WIDTH : OPPORTUNITY_COVER_WIDTH,
+      maxHeight: kindRaw === 'banner' ? OPPORTUNITY_BANNER_HEIGHT : OPPORTUNITY_COVER_HEIGHT,
+    });
+    const { bucket, objectPath } = buildOpportunityImageStoragePath(
+      kindRaw,
+      image.fileName,
+      slug
+    );
     const { error: uploadError } = await authResult.supabase.storage
       .from(bucket)
-      .upload(objectPath, buffer, {
-        cacheControl: '3600',
+      .upload(objectPath, image.buffer, {
+        cacheControl: IMMUTABLE_ASSET_CACHE_SECONDS,
         upsert: false,
-        contentType: file.type || 'image/jpeg',
+        contentType: image.contentType,
       });
 
     if (uploadError) {

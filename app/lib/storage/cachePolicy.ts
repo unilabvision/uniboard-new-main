@@ -1,0 +1,2 @@
+export const IMMUTABLE_ASSET_CACHE_SECONDS = '31536000';
+

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { eventsDb, parseBooleanField } from '@/app/lib/events/config';
 import { requireEventsModuleUser, requireEventsCapability } from '@/app/api/events/_helpers';
 import type { MyuniEventInput } from '@/app/types/events';
+import { revalidateTag } from 'next/cache';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -93,6 +94,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  revalidateTag('public-events');
+
   return NextResponse.json({ event: data });
 }
 
@@ -111,6 +114,8 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  revalidateTag('public-events');
 
   return NextResponse.json({ success: true });
 }

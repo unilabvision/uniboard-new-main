@@ -7,7 +7,6 @@ import {
   Search
 } from 'lucide-react';
 import { useUser } from '@clerk/nextjs';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import Image from 'next/image';
 
 // Batch fetch multiple users
@@ -96,12 +95,6 @@ interface StudentProgress {
   current_section: string | null;
   enrollment_status: 'enrolled' | 'in_progress' | 'completed' | 'not_started';
 }
-
-// Supabase client
-const supabase = createClientComponentClient({
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL2 || 'https://emfvwpztyuykqtepnsfp.supabase.co',
-  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY2 || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtZnZ3cHp0eXV5a3F0ZXBuc2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzg0OTM5MDksImV4cCI6MjA1NDA2OTkwOX0.EbGPYHtXMO2RYGavv-FQa3mgI3RECiFnwAVqpUgghxg'
-});
 
 // Localized texts
 const texts = {
@@ -479,471 +472,81 @@ export default function ProgressAnalyticsPage() {
   const locale = 'tr'; // You can get this from params or context
   const t = texts[locale as keyof typeof texts] || texts.tr;
 
-  // Fetch courses overview data
   useEffect(() => {
     const fetchCoursesOverview = async () => {
       if (!isLoaded || !clerkUser) return;
-      
+
       try {
         setLoading(true);
-        
-        console.log('Fetching courses overview for instructor:', clerkUser.id);
-        
-        // Fetch all courses from new table structure
-        const { data: coursesData, error: coursesError } = await supabase
-          .from('myuni_kurum_courses')
-          .select(`
-            id,
-            title,
-            slug,
-            banner_image_url,
-            instructor_name,
-            is_active
-          `)
-          .eq('is_active', true);
-        
-        if (coursesError) {
-          throw coursesError;
+        setError(null);
+        const response = await fetch('/api/lms/admin-course-progress', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dataset: 'kurum', view: 'overview' }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.error || 'Course progress fetch failed');
         }
-        
-        console.log('Courses data:', coursesData);
-        
-        if (!coursesData || coursesData.length === 0) {
-          setCoursesOverview([]);
-          return;
-        }
-        
-        // For each course, get progress statistics
-        const coursesWithStats = await Promise.all(
-          coursesData.map(async (course) => {
-            // Get all lessons for this course using new table structure
-            const { data: lessonsData, error: lessonsError } = await supabase
-              .from('myuni_kurum_course_lessons_user')
-              .select(`
-                id,
-                lesson_data_id,
-                order_index,
-                myuni_kurum_lessons_data!inner (
-                  id,
-                  title
-                )
-              `)
-              .eq('course_id', course.id)
-              .eq('is_active', true)
-              .order('order_index', { ascending: true });
-            
-            if (lessonsError) {
-              console.error('Error fetching lessons:', lessonsError);
-              return null;
-            }
-            
-            const totalLessons = lessonsData?.length || 0;
-            const lessonIds = lessonsData?.map(lesson => lesson.id) || [];
-            
-            console.log('🔍 Course lesson data:', {
-              courseId: course.id,
-              totalLessons,
-              lessonIds,
-              lessonsData: lessonsData?.slice(0, 2) // Show first 2 lessons for debugging
-            });
-            
-            // Get enrollments for this course
-            const { data: enrollmentsData, error: enrollmentsError } = await supabase
-              .from('myuni_kurum_enrollments')
-              .select(`
-                user_id,
-                enrolled_at,
-                progress_percentage,
-                is_active
-              `)
-              .eq('course_id', course.id)
-              .eq('is_active', true);
-            
-            if (enrollmentsError) {
-              console.error('Error fetching enrollments:', enrollmentsError);
-              return null;
-            }
-            
-            const totalStudents = enrollmentsData?.length || 0;
-            
-            if (totalStudents === 0) {
-              return {
-                course_id: course.id,
-                course_title: course.title,
-                course_slug: course.slug,
-                course_thumbnail: course.banner_image_url,
-                instructor_name: course.instructor_name,
-                total_lessons: totalLessons,
-                total_students: 0,
-                students_completed: 0,
-                students_in_progress: 0,
-                students_not_started: 0,
-                avg_completion_percentage: 0,
-                avg_quiz_score: null,
-                total_watch_time: 0,
-                last_activity: null
-              };
-            }
-            
-            // Get progress data for enrolled students if there are lessons
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            let progressData: any[] = [];
-            if (lessonIds.length > 0) {
-              const { data: pData, error: progressError } = await supabase
-                .from('myuni_kurum_user_progress')
-                .select(`
-                  user_id,
-                  lesson_id,
-                  is_completed,
-                  watch_time_seconds,
-                  quiz_score,
-                  updated_at
-                `)
-                .in('lesson_id', lessonIds)
-                .in('user_id', enrollmentsData.map(e => e.user_id));
-              
-              console.log('🔍 Progress query result:', {
-                courseId: course.id,
-                lessonIds,
-                enrolledUserIds: enrollmentsData.map(e => e.user_id),
-                progressError,
-                progressDataCount: pData?.length || 0,
-                progressDataSample: pData?.slice(0, 3) // Show first 3 progress records
-              });
-              
-              if (!progressError) {
-                progressData = pData || [];
-              }
-            } else {
-              console.log('🔍 No lessons found for course:s', course.id);
-            }
-            
-            // Calculate statistics based on enrollments and progress
-            const studentProgressMap = new Map();
-            let totalWatchTime = 0;
-            const quizScores: number[] = [];
-            let lastActivity: string | null = null;
-            
-            // Initialize all enrolled students
-            enrollmentsData.forEach((enrollment) => {
-              studentProgressMap.set(enrollment.user_id, {
-                completedLessons: 0,
-                enrolled_at: enrollment.enrolled_at,
-                progress_percentage_from_enrollment: enrollment.progress_percentage || 0
-              });
-            });
-            
-            // Add progress data
-            progressData.forEach((progress) => {
-              const userId = progress.user_id;
-              
-              if (studentProgressMap.has(userId)) {
-                const userProgress = studentProgressMap.get(userId);
-                
-                if (progress.is_completed) {
-                  userProgress.completedLessons += 1;
-                }
-                
-                totalWatchTime += progress.watch_time_seconds || 0;
-                
-                if (progress.quiz_score !== null) {
-                  quizScores.push(progress.quiz_score);
-                }
-                
-                if (!lastActivity || progress.updated_at > lastActivity) {
-                  lastActivity = progress.updated_at;
-                }
-              }
-            });
-            
-            let studentsCompleted = 0;
-            let studentsInProgress = 0;
-            let studentsNotStarted = 0;
-            let totalCompletionPercentage = 0;
-            
-            studentProgressMap.forEach((userProgress) => {
-              const completionPercentage = totalLessons > 0 
-                ? (userProgress.completedLessons / totalLessons) * 100 
-                : userProgress.progress_percentage_from_enrollment;
-              
-              totalCompletionPercentage += completionPercentage;
-              
-              if (completionPercentage === 100) {
-                studentsCompleted += 1;
-              } else if (completionPercentage > 0) {
-                studentsInProgress += 1;
-              } else {
-                studentsNotStarted += 1;
-              }
-            });
-            
-            const avgCompletionPercentage = totalStudents > 0 
-              ? totalCompletionPercentage / totalStudents 
-              : 0;
-            
-            const avgQuizScore = quizScores.length > 0
-              ? quizScores.reduce((sum, score) => sum + score, 0) / quizScores.length
-              : null;
-            
-            return {
-              course_id: course.id,
-              course_title: course.title,
-              course_slug: course.slug,
-              course_thumbnail: course.banner_image_url,
-              instructor_name: course.instructor_name,
-              total_lessons: totalLessons,
-              total_students: totalStudents,
-              students_completed: studentsCompleted,
-              students_in_progress: studentsInProgress,
-              students_not_started: studentsNotStarted,
-              avg_completion_percentage: avgCompletionPercentage,
-              avg_quiz_score: avgQuizScore,
-              total_watch_time: totalWatchTime,
-              last_activity: lastActivity
-            };
-          })
-        );
-        
-        const validCourses = coursesWithStats.filter(course => course !== null) as CourseOverview[];
-        setCoursesOverview(validCourses);
-        
-      } catch (error: unknown) {
-        console.error('Error fetching courses overview:', error);
-        setError(error instanceof Error ? error.message : 'An error occurred');
+        setCoursesOverview((payload.courses || []) as CourseOverview[]);
+      } catch (fetchError) {
+        console.error('Error fetching courses overview:', fetchError);
+        setError(fetchError instanceof Error ? fetchError.message : 'An error occurred');
       } finally {
         setLoading(false);
       }
     };
-    
+
     fetchCoursesOverview();
   }, [clerkUser, isLoaded]);
 
-  // Fetch students progress for selected course
   useEffect(() => {
     const fetchStudentsProgress = async () => {
       if (!selectedCourse) {
         setStudentsProgress([]);
         return;
       }
-      
+
       try {
-        // Get all enrollments for the selected course
-        const { data: enrollmentsData, error: enrollmentsError } = await supabase
-          .from('myuni_kurum_enrollments')
-          .select(`
-            user_id,
-            enrolled_at,
-            progress_percentage,
-            is_active
-          `)
-          .eq('course_id', selectedCourse)
-          .eq('is_active', true);
-        
-        if (enrollmentsError) {
-          throw enrollmentsError;
+        setError(null);
+        const response = await fetch('/api/lms/admin-course-progress', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            dataset: 'kurum',
+            view: 'course',
+            courseId: selectedCourse,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.error || 'Student progress fetch failed');
         }
-        
-        if (!enrollmentsData || enrollmentsData.length === 0) {
-          setStudentsProgress([]);
-          return;
-        }
-        
-        // Get all lessons for the selected course using new table structure
-        const { data: lessonsData, error: lessonsError } = await supabase
-          .from('myuni_kurum_course_lessons_user')
-          .select(`
-            id,
-            lesson_data_id,
-            order_index,
-            myuni_kurum_lessons_data!inner (
-              id,
-              title,
-              lesson_type,
-              duration_minutes
-            )
-          `)
-          .eq('course_id', selectedCourse)
-          .eq('is_active', true)
-          .order('order_index', { ascending: true });
-        
-        if (lessonsError) {
-          throw lessonsError;
-        }
-        
-        const lessonIds = lessonsData?.map(lesson => lesson.id) || [];
-        const totalLessons = lessonIds.length;
-        
-        console.log('🔍 Detailed progress - Course lesson data:', {
-          selectedCourse,
-          totalLessons,
-          lessonIds,
-          lessonsData: lessonsData?.slice(0, 2),
-          sortedLessons: lessonsData?.sort((a, b) => a.order_index - b.order_index).slice(0, 2)
-        });
-        
-        // Get progress data for enrolled students
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let progressData: any[] = [];
-        if (lessonIds.length > 0) {
-          const { data: pData, error: progressError } = await supabase
-            .from('myuni_kurum_user_progress')
-            .select(`
-              user_id,
-              lesson_id,
-              is_completed,
-              watch_time_seconds,
-              quiz_score,
-              updated_at
-            `)
-            .in('lesson_id', lessonIds)
-            .in('user_id', enrollmentsData.map(e => e.user_id));
-          
-          console.log('🔍 Detailed progress query result:', {
-            selectedCourse,
-            lessonIds,
-            enrolledUserIds: enrollmentsData.map(e => e.user_id),
-            progressError,
-            progressDataCount: pData?.length || 0,
-            progressDataSample: pData?.slice(0, 5)
-          });
-          
-          if (!progressError) {
-            progressData = pData || [];
-          }
-        } else {
-          console.log('🔍 No lessons found for selected course:', selectedCourse);
-        }
-        
-        // Create a map for each enrolled user
-        const userProgressMap = new Map();
-        
-        // Get all unique user IDs for batch fetching user details
-        const userIds = enrollmentsData.map(e => e.user_id);
-        const userDetailsMap = await fetchMultipleClerkUsers(userIds);
-        
-        // Initialize all enrolled students with real user data
-        enrollmentsData.forEach((enrollment) => {
-          const userDetails = userDetailsMap.get(enrollment.user_id) || {
-            fullName: `Kullanıcı ${enrollment.user_id.substring(0, 8)}`,
-            email: 'email@example.com',
-            imageUrl: null
-          };
-          
-          userProgressMap.set(enrollment.user_id, {
-            user_id: enrollment.user_id,
-            user_name: userDetails.fullName,
-            user_email: userDetails.email,
-            user_image: userDetails.imageUrl,
-            enrolled_at: enrollment.enrolled_at,
-            total_lessons: totalLessons,
-            completed_lessons: 0,
-            total_watch_time: 0,
-            quiz_scores: [],
-            last_activity: enrollment.enrolled_at,
-            current_lesson: null,
-            current_section: null,
-            progress_percentage_from_enrollment: enrollment.progress_percentage || 0
-          });
-        });
-        
-        // Add progress data for users who have started
-        progressData.forEach((progress) => {
-          const userId = progress.user_id;
-          
-          if (userProgressMap.has(userId)) {
-            const userProgress = userProgressMap.get(userId);
-            
-            if (progress.is_completed) {
-              userProgress.completed_lessons += 1;
-            } else {
-              // This is the current lesson (not completed yet)
-              const currentLesson = lessonsData?.find(lesson => lesson.id === progress.lesson_id);
-              if (currentLesson && currentLesson.myuni_kurum_lessons_data) {
-                const lessonData = Array.isArray(currentLesson.myuni_kurum_lessons_data) 
-                  ? currentLesson.myuni_kurum_lessons_data[0] 
-                  : currentLesson.myuni_kurum_lessons_data;
-                userProgress.current_lesson = lessonData?.title || 'Unknown Lesson';
-                userProgress.current_section = 'Course Content';
-              }
-            }
-            
-            userProgress.total_watch_time += progress.watch_time_seconds || 0;
-            
-            if (progress.quiz_score !== null) {
-              userProgress.quiz_scores.push(progress.quiz_score);
-            }
-            
-            if (!userProgress.last_activity || progress.updated_at > userProgress.last_activity) {
-              userProgress.last_activity = progress.updated_at;
-            }
-          }
-        });
-        
-        // For users who have progress but no current lesson set, find their next lesson
-        userProgressMap.forEach((userProgress, userId) => {
-          if (!userProgress.current_lesson && userProgress.completed_lessons < totalLessons && totalLessons > 0) {
-            // Find the next lesson they should start (first incomplete lesson)
-            const sortedLessons = lessonsData?.sort((a, b) => a.order_index - b.order_index) || [];
-            const completedLessonIds = progressData
-              .filter(p => p.user_id === userId && p.is_completed)
-              .map(p => p.lesson_id);
-            
-            const nextLesson = sortedLessons.find(lesson => !completedLessonIds.includes(lesson.id));
-            if (nextLesson && nextLesson.myuni_kurum_lessons_data) {
-              const lessonData = Array.isArray(nextLesson.myuni_kurum_lessons_data) 
-                ? nextLesson.myuni_kurum_lessons_data[0] 
-                : nextLesson.myuni_kurum_lessons_data;
-              userProgress.current_lesson = lessonData?.title || 'Unknown Lesson';
-              userProgress.current_section = 'Course Content';
-            }
-          }
-        });
-        
-        // Convert to array and calculate final stats
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const studentsArray = Array.from(userProgressMap.values()).map((student: any) => {
-          const completionPercentage = student.total_lessons > 0 
-            ? (student.completed_lessons / student.total_lessons) * 100 
-            : student.progress_percentage_from_enrollment;
-          
-          let enrollmentStatus: 'enrolled' | 'in_progress' | 'completed' | 'not_started' = 'enrolled';
-          
-          if (completionPercentage === 100) {
-            enrollmentStatus = 'completed';
-          } else if (completionPercentage > 0) {
-            enrollmentStatus = 'in_progress';
-          } else if (student.completed_lessons === 0 && student.total_watch_time === 0) {
-            enrollmentStatus = 'not_started';
-          }
-          
-          return {
-            user_id: student.user_id,
-            user_name: student.user_name,
-            user_email: student.user_email,
-            user_image: student.user_image,
-            enrolled_at: student.enrolled_at,
-            total_lessons: student.total_lessons,
-            completed_lessons: student.completed_lessons,
-            completion_percentage: completionPercentage,
-            total_watch_time: student.total_watch_time,
-            avg_quiz_score: student.quiz_scores.length > 0
-              ? student.quiz_scores.reduce((sum: number, score: number) => sum + score, 0) / student.quiz_scores.length
-              : null,
-            last_activity: student.last_activity,
-            current_lesson: student.current_lesson,
-            current_section: student.current_section,
-            enrollment_status: enrollmentStatus
-          };
-        });
-        
-        setStudentsProgress(studentsArray);
-        
-      } catch (error: unknown) {
-        console.error('Error fetching students progress:', error);
-        setError(error instanceof Error ? error.message : 'An error occurred');
+
+        const students = (payload.students || []) as Array<
+          Omit<StudentProgress, 'user_name' | 'user_email' | 'user_image'>
+        >;
+        const userDetails = await fetchMultipleClerkUsers(
+          students.map((student) => student.user_id)
+        );
+        setStudentsProgress(
+          students.map((student) => {
+            const details = userDetails.get(student.user_id);
+            return {
+              ...student,
+              user_name:
+                details?.fullName || `Kullanıcı ${student.user_id.substring(0, 8)}`,
+              user_email: details?.email || '',
+              user_image: details?.imageUrl || null,
+            };
+          })
+        );
+      } catch (fetchError) {
+        console.error('Error fetching students progress:', fetchError);
+        setError(fetchError instanceof Error ? fetchError.message : 'An error occurred');
       }
     };
-    
+
     fetchStudentsProgress();
   }, [selectedCourse]);
 

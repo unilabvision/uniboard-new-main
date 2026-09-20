@@ -2,6 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createClient } from '@supabase/supabase-js';
 import { loadUserAccessRows } from '@/app/lib/moduleAccess/rbac';
+import {
+  buildKurumCourseOverviews,
+  buildKurumStudentProgress,
+  type KurumCourseRow,
+  type KurumEnrollmentRow,
+  type KurumLessonRow,
+  type KurumProgressRow,
+} from '@/app/lib/lms/kurumProgress';
+
+const MAX_KURUM_COURSES = 500;
+const MAX_KURUM_LESSONS = 10_000;
+const MAX_KURUM_ENROLLMENTS = 20_000;
+const MAX_KURUM_PROGRESS_ROWS = 50_000;
 
 function getServiceSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL2;
@@ -44,6 +57,127 @@ async function requireLmsOrStudentsAdmin() {
   return { error: null, status: 200 as const, supabase };
 }
 
+function lessonTitle(relation: unknown): string {
+  const value = Array.isArray(relation) ? relation[0] : relation;
+  if (!value || typeof value !== 'object') return '';
+  const title = (value as { title?: unknown }).title;
+  return typeof title === 'string' ? title : '';
+}
+
+async function loadKurumProgressRows(
+  supabase: NonNullable<Awaited<ReturnType<typeof requireLmsOrStudentsAdmin>>['supabase']>,
+  lessonIds: string[]
+): Promise<{ data: KurumProgressRow[]; error: string | null }> {
+  if (lessonIds.length === 0) return { data: [], error: null };
+
+  const rows: KurumProgressRow[] = [];
+  for (let index = 0; index < lessonIds.length; index += 500) {
+    const chunk = lessonIds.slice(index, index + 500);
+    const { data, error } = await supabase
+      .from('myuni_kurum_user_progress')
+      .select('user_id, lesson_id, is_completed, watch_time_seconds, quiz_score, updated_at')
+      .in('lesson_id', chunk)
+      .limit(MAX_KURUM_PROGRESS_ROWS + 1);
+    if (error) return { data: [], error: error.message };
+    rows.push(...((data || []) as KurumProgressRow[]));
+    if (rows.length > MAX_KURUM_PROGRESS_ROWS) {
+      return { data: [], error: 'Progress dataset exceeds the safe response limit' };
+    }
+  }
+  return { data: rows, error: null };
+}
+
+async function loadKurumDataset(
+  supabase: NonNullable<Awaited<ReturnType<typeof requireLmsOrStudentsAdmin>>['supabase']>,
+  courseId?: string
+) {
+  let coursesQuery = supabase
+    .from('myuni_kurum_courses')
+    .select('id, title, slug, banner_image_url, instructor_name')
+    .eq('is_active', true)
+    .limit(MAX_KURUM_COURSES);
+  if (courseId) coursesQuery = coursesQuery.eq('id', courseId);
+
+  let lessonsQuery = supabase
+    .from('myuni_kurum_course_lessons_user')
+    .select('id, course_id, order_index, myuni_kurum_lessons_data!inner(title)')
+    .eq('is_active', true)
+    .order('order_index', { ascending: true })
+    .limit(MAX_KURUM_LESSONS);
+  if (courseId) lessonsQuery = lessonsQuery.eq('course_id', courseId);
+
+  let enrollmentsQuery = supabase
+    .from('myuni_kurum_enrollments')
+    .select('course_id, user_id, enrolled_at, progress_percentage')
+    .eq('is_active', true)
+    .limit(MAX_KURUM_ENROLLMENTS);
+  if (courseId) enrollmentsQuery = enrollmentsQuery.eq('course_id', courseId);
+
+  const [coursesResult, lessonsResult, enrollmentsResult] = await Promise.all([
+    coursesQuery,
+    lessonsQuery,
+    enrollmentsQuery,
+  ]);
+  const firstError = coursesResult.error || lessonsResult.error || enrollmentsResult.error;
+  if (firstError) throw new Error(firstError.message);
+
+  const lessons: KurumLessonRow[] = (lessonsResult.data || []).map((row) => ({
+    id: String(row.id),
+    course_id: String(row.course_id),
+    order_index: Number(row.order_index) || 0,
+    title: lessonTitle(row.myuni_kurum_lessons_data),
+  }));
+  const progressResult = await loadKurumProgressRows(
+    supabase,
+    lessons.map((row) => row.id)
+  );
+  if (progressResult.error) throw new Error(progressResult.error);
+
+  return {
+    courses: (coursesResult.data || []) as KurumCourseRow[],
+    lessons,
+    enrollments: (enrollmentsResult.data || []) as KurumEnrollmentRow[],
+    progress: progressResult.data,
+  };
+}
+
+async function handleKurumProgress(
+  supabase: NonNullable<Awaited<ReturnType<typeof requireLmsOrStudentsAdmin>>['supabase']>,
+  body: Record<string, unknown>
+) {
+  const view = body.view === 'course' ? 'course' : 'overview';
+  const courseId = typeof body.courseId === 'string' ? body.courseId.trim() : '';
+  if (view === 'course' && !courseId) {
+    return NextResponse.json({ error: 'courseId required' }, { status: 400 });
+  }
+
+  try {
+    const dataset = await loadKurumDataset(supabase, courseId || undefined);
+    if (view === 'course') {
+      return NextResponse.json({
+        students: buildKurumStudentProgress(
+          dataset.lessons,
+          dataset.enrollments,
+          dataset.progress
+        ),
+      });
+    }
+    return NextResponse.json({
+      courses: buildKurumCourseOverviews(
+        dataset.courses,
+        dataset.lessons,
+        dataset.enrollments,
+        dataset.progress
+      ),
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Progress query failed' },
+      { status: 500 }
+    );
+  }
+}
+
 /**
  * Admin read of lesson progress for a course (bypasses anon RLS).
  * POST { courseId: string, userIds?: string[] }
@@ -57,7 +191,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const body = await request.json().catch(() => ({}));
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+  if (body.dataset === 'kurum') {
+    return handleKurumProgress(authResult.supabase, body);
+  }
   const courseId =
     typeof body.courseId === 'string' ? body.courseId.trim() : '';
   const courseIds = Array.isArray(body.courseIds)

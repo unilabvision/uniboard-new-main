@@ -34,7 +34,7 @@ export const MENTORSHIP_BANNER_HEIGHT = 600;
 export const MENTORSHIP_STORAGE_BUCKET =
   process.env.NEXT_PUBLIC_MENTORSHIP_STORAGE_BUCKET || 'myunilab';
 export const MENTORSHIP_STORAGE_FOLDER = 'mentorships';
-export const MENTORSHIP_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
+export const MENTORSHIP_IMAGE_MAX_BYTES = 4 * 1024 * 1024;
 export const MENTORSHIP_IMAGE_MIME_TYPES = [
   'image/jpeg',
   'image/jpg',

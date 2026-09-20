@@ -30,11 +30,7 @@ export function validateMentorshipImageFile(file: {
     return `Dosya boyutu en fazla ${formatMentorshipImageSize(MENTORSHIP_IMAGE_MAX_BYTES)} olabilir.`;
   }
   const mime = (file.type || '').toLowerCase();
-  if (
-    mime &&
-    !(MENTORSHIP_IMAGE_MIME_TYPES as readonly string[]).includes(mime) &&
-    !mime.startsWith('image/')
-  ) {
+  if (!(MENTORSHIP_IMAGE_MIME_TYPES as readonly string[]).includes(mime)) {
     return 'Sadece görsel dosyaları (JPEG, PNG, WebP, GIF) yüklenebilir.';
   }
   return null;

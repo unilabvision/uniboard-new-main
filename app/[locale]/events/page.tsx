@@ -23,6 +23,7 @@ const texts = {
     registrationOpen: 'Kayıt açık',
     registrationClosed: 'Kayıt kapalı',
     toggleRegistration: 'Kayıt durumunu değiştir',
+    loadMore: 'Daha fazla yükle',
   },
   en: {
     title: 'Event Management',
@@ -40,6 +41,7 @@ const texts = {
     registrationOpen: 'Registration open',
     registrationClosed: 'Registration closed',
     toggleRegistration: 'Toggle registration',
+    loadMore: 'Load more',
   },
 };
 
@@ -51,6 +53,9 @@ export default function EventsListPage({
   const [locale, setLocale] = useState('tr');
   const [events, setEvents] = useState<MyuniEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
   const t = texts[locale as keyof typeof texts] || texts.tr;
@@ -60,13 +65,31 @@ export default function EventsListPage({
   }, [params]);
 
   useEffect(() => {
-    fetch('/api/events')
+    fetch('/api/events?page=1&perPage=25')
       .then(async (res) => {
         const data = await res.json();
-        if (res.ok) setEvents(data.events || []);
+        if (res.ok) {
+          setEvents(data.events || []);
+          setTotal(data.total || 0);
+        }
       })
       .finally(() => setLoading(false));
   }, []);
+
+  const loadMore = async () => {
+    const nextPage = page + 1;
+    setLoadingMore(true);
+    try {
+      const res = await fetch(`/api/events?page=${nextPage}&perPage=25`);
+      const data = await res.json();
+      if (!res.ok) return;
+      setEvents((current) => [...current, ...(data.events || [])]);
+      setTotal(data.total || 0);
+      setPage(nextPage);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const toggleRegistration = async (event: MyuniEvent) => {
     const nextOpen = !parseBooleanField(event.is_registration_open, true);
@@ -245,6 +268,19 @@ export default function EventsListPage({
             </div>
             );
           })}
+          {events.length < total && (
+            <div className="flex justify-center pt-2">
+              <button
+                type="button"
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="inline-flex items-center gap-2 px-4 py-2 border rounded-lg hover:bg-neutral-50 disabled:opacity-50"
+              >
+                {loadingMore && <Loader2 className="w-4 h-4 animate-spin" />}
+                {t.loadMore}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

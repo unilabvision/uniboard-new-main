@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
+import { auth } from '@clerk/nextjs/server';
 import { createClerkClient } from '@clerk/backend';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
@@ -14,6 +15,36 @@ type UserDetails = {
   fullName: string;
   source?: string;
 };
+
+const USER_CACHE_TTL_MS = 10 * 60 * 1000;
+const USER_CACHE_MAX_ENTRIES = 1_000;
+const userDetailsCache = new Map<
+  string,
+  { value: UserDetails; expiresAt: number }
+>();
+
+function getCachedUser(userId: string): UserDetails | null {
+  const cached = userDetailsCache.get(userId);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    userDetailsCache.delete(userId);
+    return null;
+  }
+  return cached.value;
+}
+
+function cacheUsers(users: Record<string, UserDetails>) {
+  const expiresAt = Date.now() + USER_CACHE_TTL_MS;
+  for (const [userId, value] of Object.entries(users)) {
+    if (!value.email) continue;
+    userDetailsCache.set(userId, { value, expiresAt });
+  }
+  while (userDetailsCache.size > USER_CACHE_MAX_ENTRIES) {
+    const oldestKey = userDetailsCache.keys().next().value;
+    if (typeof oldestKey !== 'string') break;
+    userDetailsCache.delete(oldestKey);
+  }
+}
 
 type ClerkLike = {
   users: {
@@ -408,6 +439,11 @@ async function enrichFromOrders(
 
 export async function POST(request: NextRequest) {
   try {
+    const { userId: requesterId } = await auth();
+    if (!requesterId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { userIds } = body;
 
@@ -422,13 +458,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ users: {} });
     }
 
-    const limitedUserIds = [...new Set(userIds as string[])].slice(0, 300);
+    const limitedUserIds = [
+      ...new Set(
+        userIds
+          .filter((id): id is string => typeof id === 'string')
+          .map((id) => id.trim())
+          .filter(Boolean)
+      ),
+    ].slice(0, 300);
     const usersMap: Record<string, UserDetails> = {};
+    for (const userId of limitedUserIds) {
+      const cached = getCachedUser(userId);
+      if (cached) usersMap[userId] = cached;
+    }
 
-    const fromProfiles = await enrichFromProfiles(limitedUserIds, usersMap);
-    const fromOrders = await enrichFromOrders(limitedUserIds, usersMap);
+    const uncachedUserIds = limitedUserIds.filter((id) => !usersMap[id]);
 
-    const needingClerk = limitedUserIds.filter((id) => !usersMap[id]?.email);
+    const fromProfiles = await enrichFromProfiles(uncachedUserIds, usersMap);
+    const needingOrders = uncachedUserIds.filter((id) => !usersMap[id]?.email);
+    const fromOrders = await enrichFromOrders(needingOrders, usersMap);
+
+    const needingClerk = uncachedUserIds.filter((id) => !usersMap[id]?.email);
     const clerkResult = await fetchClerkUsersBatch(needingClerk, usersMap);
 
     for (const id of limitedUserIds) {
@@ -439,6 +489,8 @@ export async function POST(request: NextRequest) {
         user.emailAddresses = [{ emailAddress: user.email }];
       }
     }
+
+    cacheUsers(usersMap);
 
     const withEmail = limitedUserIds.filter((id) =>
       Boolean(usersMap[id]?.email)

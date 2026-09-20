@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { eventsDb } from '@/app/lib/events/config';
 import { requireEventsModuleUser, requireEventsCapability } from '@/app/api/events/_helpers';
 import type { MyuniEventInput } from '@/app/types/events';
+import { revalidateTag } from 'next/cache';
+
+function parsePositiveInt(value: string | null, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
 
 function pickEventPayload(body: MyuniEventInput) {
   return {
@@ -44,23 +50,38 @@ export async function GET(request: NextRequest) {
   }
 
   const activeOnly = request.nextUrl.searchParams.get('active') === 'true';
+  const page = parsePositiveInt(request.nextUrl.searchParams.get('page'), 1);
+  const perPage = Math.min(
+    100,
+    parsePositiveInt(request.nextUrl.searchParams.get('perPage'), 25)
+  );
+  const from = (page - 1) * perPage;
 
   let query = authResult.supabase!
     .from(eventsDb.events)
-    .select('*')
-    .order('start_date', { ascending: false });
+    .select(
+      'id, slug, title, event_type, status, start_date, current_attendees, is_active, is_featured, is_registration_open',
+      { count: 'exact' }
+    )
+    .order('start_date', { ascending: false })
+    .range(from, from + perPage - 1);
 
   if (activeOnly) {
     query = query.eq('is_active', true);
   }
 
-  const { data, error } = await query;
+  const { data, error, count } = await query;
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ events: data ?? [] });
+  return NextResponse.json({
+    events: data ?? [],
+    total: count ?? 0,
+    page,
+    perPage,
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -88,6 +109,8 @@ export async function POST(request: NextRequest) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  revalidateTag('public-events');
 
   return NextResponse.json({ event: data }, { status: 201 });
 }
