@@ -5,6 +5,41 @@ import { parsePrice } from '@/app/lib/lms/parsePrice';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
+type DatabaseError = {
+  code?: string | null;
+  message?: string | null;
+  details?: string | null;
+};
+
+const PACKAGE_SLUG_CONSTRAINT = 'myuni_course_tiers_course_id_slug_key';
+
+function isPackageSlugConflict(error: DatabaseError | null): boolean {
+  if (!error || error.code !== '23505') return false;
+
+  const errorText = `${error.message || ''} ${error.details || ''}`;
+  return (
+    errorText.includes(PACKAGE_SLUG_CONSTRAINT) ||
+    /\(course_id,\s*slug\)/i.test(errorText)
+  );
+}
+
+function isMissingOptionalColumnError(error: DatabaseError | null): boolean {
+  if (!error) return false;
+  if (error.code === 'PGRST204' || error.code === '42703') return true;
+
+  return /column .+ does not exist|could not find .+ column|schema cache/i.test(
+    error.message || ''
+  );
+}
+
+function findAvailableSlug(baseSlug: string, usedSlugs: Set<string>): string {
+  if (!usedSlugs.has(baseSlug)) return baseSlug;
+
+  let suffix = 2;
+  while (usedSlugs.has(`${baseSlug}-${suffix}`)) suffix += 1;
+  return `${baseSlug}-${suffix}`;
+}
+
 function parseSessionLabels(value: unknown): string[] {
   if (Array.isArray(value)) {
     return value.map((v) => String(v).trim()).filter(Boolean);
@@ -129,6 +164,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: 'Geçersiz fiyat değeri' }, { status: 400 });
   }
 
+  const earlyBirdDeadlineRaw = String(body.early_bird_deadline || '').trim();
+  const earlyBirdDeadline = earlyBirdDeadlineRaw ? new Date(earlyBirdDeadlineRaw) : null;
+  if (earlyBirdDeadline && Number.isNaN(earlyBirdDeadline.getTime())) {
+    return NextResponse.json({ error: 'Geçersiz erken kayıt tarihi' }, { status: 400 });
+  }
+
   const { data: existing } = await authResult.supabase
     .from('myuni_course_tiers')
     .select('order_index')
@@ -140,41 +181,38 @@ export async function POST(request: NextRequest, context: RouteContext) {
     existing && existing.length > 0 ? Number(existing[0].order_index || 0) + 1 : 0;
 
   const slugRaw = String(body.slug || '').trim();
-  const slug = slugRaw || generatePackageSlug(title);
+  const baseSlug = slugRaw || generatePackageSlug(title);
 
-  const insertRow: Record<string, unknown> = {
-    course_id: courseId,
-    title,
-    slug,
-    description: body.description != null ? String(body.description).trim() || null : null,
-    price: price ?? 0,
-    original_price: originalPrice,
-    early_bird_price: earlyBirdPrice,
-    early_bird_deadline:
-      body.early_bird_deadline != null && String(body.early_bird_deadline).trim()
-        ? new Date(String(body.early_bird_deadline)).toISOString()
-        : null,
-    is_full_course: body.is_full_course === true,
-    includes_qa: body.includes_qa === true,
-    is_registration_open: body.is_registration_open !== false,
-    is_active: body.is_active !== false,
-    order_index:
-      body.order_index != null && Number.isFinite(Number(body.order_index))
-        ? Number(body.order_index)
-        : nextOrder,
-    session_labels: parseSessionLabels(body.session_labels),
-  };
+  const createPackage = async (slug: string) => {
+    const insertRow: Record<string, unknown> = {
+      course_id: courseId,
+      title,
+      slug,
+      description: body.description != null ? String(body.description).trim() || null : null,
+      price: price ?? 0,
+      original_price: originalPrice,
+      early_bird_price: earlyBirdPrice,
+      early_bird_deadline: earlyBirdDeadline?.toISOString() ?? null,
+      is_full_course: body.is_full_course === true,
+      includes_qa: body.includes_qa === true,
+      is_registration_open: body.is_registration_open !== false,
+      is_active: body.is_active !== false,
+      order_index:
+        body.order_index != null && Number.isFinite(Number(body.order_index))
+          ? Number(body.order_index)
+          : nextOrder,
+      session_labels: parseSessionLabels(body.session_labels),
+    };
 
-  const { data, error } = await authResult.supabase
-    .from('myuni_course_tiers')
-    .insert([insertRow])
-    .select('*')
-    .single();
+    const result = await authResult.supabase
+      .from('myuni_course_tiers')
+      .insert([insertRow])
+      .select('*')
+      .single();
 
-  if (error) {
-    // Retry without optional columns that may be missing on older schemas
-    console.error('LMS packages POST error (retrying lean insert):', error);
-    const lean = {
+    if (!isMissingOptionalColumnError(result.error)) return result;
+
+    const leanRow = {
       course_id: courseId,
       title,
       slug,
@@ -184,26 +222,54 @@ export async function POST(request: NextRequest, context: RouteContext) {
       is_active: body.is_active !== false,
       order_index: insertRow.order_index,
     };
-    const retry = await authResult.supabase
+    return authResult.supabase
       .from('myuni_course_tiers')
-      .insert([lean])
+      .insert([leanRow])
       .select('*')
       .single();
-    if (retry.error || !retry.data) {
-      console.error('LMS packages POST error:', retry.error || error);
+  };
+
+  let slug = baseSlug;
+  if (!slugRaw) {
+    const { data: slugRows, error: slugError } = await authResult.supabase
+      .from('myuni_course_tiers')
+      .select('slug')
+      .eq('course_id', courseId);
+
+    if (slugError) {
+      console.error('LMS packages POST slug lookup error:', slugError);
+      return NextResponse.json({ error: 'Paket kısa adı oluşturulamadı' }, { status: 500 });
+    }
+
+    const usedSlugs = new Set((slugRows || []).map((row) => String(row.slug || '')));
+    slug = findAvailableSlug(baseSlug, usedSlugs);
+  }
+
+  let result = await createPackage(slug);
+
+  // A concurrent request may claim the generated slug after the lookup.
+  if (!slugRaw && isPackageSlugConflict(result.error)) {
+    slug = `${baseSlug}-${Date.now().toString(36)}`;
+    result = await createPackage(slug);
+  }
+
+  if (result.error || !result.data) {
+    if (isPackageSlugConflict(result.error)) {
       return NextResponse.json(
-        { error: retry.error?.message || error.message || 'Paket oluşturulamadı' },
-        { status: 500 }
+        { error: 'Bu kısa ad bu eğitimde başka bir paket tarafından kullanılıyor' },
+        { status: 409 }
       );
     }
+
+    console.error('LMS packages POST error:', result.error);
     return NextResponse.json(
-      { success: true, package: mapPackageRow(retry.data as Record<string, unknown>) },
-      { status: 201 }
+      { error: result.error?.message || 'Paket oluşturulamadı' },
+      { status: 500 }
     );
   }
 
   return NextResponse.json(
-    { success: true, package: mapPackageRow(data as Record<string, unknown>) },
+    { success: true, package: mapPackageRow(result.data as Record<string, unknown>) },
     { status: 201 }
   );
 }
@@ -333,7 +399,22 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       .single();
 
     if (updateError) {
-      // Drop unknown columns and retry once (older DBs may lack early_bird / description)
+      if (isPackageSlugConflict(updateError)) {
+        return NextResponse.json(
+          { error: 'Bu kısa ad bu eğitimde başka bir paket tarafından kullanılıyor' },
+          { status: 409 }
+        );
+      }
+
+      if (!isMissingOptionalColumnError(updateError)) {
+        console.error('LMS packages PATCH error:', updateError);
+        return NextResponse.json(
+          { error: updateError.message || 'Paket güncellenemedi' },
+          { status: 500 }
+        );
+      }
+
+      // Older schemas may not contain the optional package columns yet.
       const leanPatch = { ...patch };
       delete leanPatch.description;
       delete leanPatch.early_bird_price;
@@ -348,6 +429,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         .select('*')
         .single();
       if (retry.error) {
+        if (isPackageSlugConflict(retry.error)) {
+          return NextResponse.json(
+            { error: 'Bu kısa ad bu eğitimde başka bir paket tarafından kullanılıyor' },
+            { status: 409 }
+          );
+        }
         console.error('LMS packages PATCH error:', retry.error);
         return NextResponse.json(
           { error: retry.error.message || 'Paket güncellenemedi' },
