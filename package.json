@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "migrate:storage-images": "ts-node --transpile-only --compiler-options '{\"module\":\"CommonJS\",\"moduleResolution\":\"Node\",\"esModuleInterop\":true}' scripts/migrate-storage-images.ts",
     "test:list-query": "npx --yes tsx app/lib/siteApplications/listQuery.selfcheck.ts",
     "test:certificate-issue": "npx --yes tsx app/lib/events/certificateIssue.selfcheck.ts",
     "test:kurum-progress": "ts-node --transpile-only --compiler-options '{\"module\":\"CommonJS\",\"moduleResolution\":\"Node\"}' app/lib/lms/kurumProgress.selfcheck.ts",

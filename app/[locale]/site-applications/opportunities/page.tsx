@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useUserModules } from '../../../hooks/useUserModules';
@@ -124,6 +125,83 @@ function formTitle(f: UnlinkedForm, locale: string): string {
   return (locale === 'en' ? f.title_en || f.title_tr : f.title_tr || f.title_en) || f.slug_tr || '—';
 }
 
+type OpportunityListItemProps = {
+  base: string;
+  locale: string;
+  opportunity: OpportunityRow;
+  text: (typeof texts)[keyof typeof texts];
+};
+
+function OpportunityListItem({ base, locale, opportunity, text }: OpportunityListItemProps) {
+  const imageUrl = opportunity.thumbnail_url || opportunity.banner_url;
+  const listingUrl = getAbsoluteOpportunityListingPath(locale, opportunity.slug);
+  const localizedFormSlug = locale === 'en'
+    ? opportunity.form_slug_en
+    : opportunity.form_slug_tr;
+  const formSlug =
+    localizedFormSlug || opportunity.form_slug_tr || opportunity.form_slug_en || opportunity.slug;
+  const formUrl = getAbsoluteSiteApplicationPublicPath(locale, formSlug);
+  const typeLabel =
+    text.type[opportunity.opportunity_type || 'staj'] || opportunity.opportunity_type;
+  const statusClass = opportunity.is_active
+    ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+    : 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300';
+
+  return (
+    <li className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-4 py-4">
+      <div className="min-w-0 flex gap-3">
+        {imageUrl ? (
+          <Image
+            src={imageUrl}
+            alt=""
+            width={80}
+            height={48}
+            sizes="80px"
+            className="hidden sm:block w-20 h-12 rounded-md object-cover shrink-0"
+          />
+        ) : null}
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
+            <span className="font-semibold text-neutral-900 dark:text-neutral-100 truncate">
+              {titleOf(opportunity, locale)}
+            </span>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-600">
+              {typeLabel}
+            </span>
+            <span className={`text-xs px-2 py-0.5 rounded-full ${statusClass}`}>
+              {opportunity.is_active ? text.active : text.inactive}
+            </span>
+            {opportunity.is_featured && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-sky-50 text-sky-700">
+                {text.featured}
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-neutral-500 truncate">
+            {opportunity.company_name || '—'}
+            {opportunity.work_mode ? ` · ${formatWorkMode(opportunity.work_mode, locale)}` : ''}
+            {opportunity.location ? ` · ${opportunity.location}` : ''}
+          </p>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 shrink-0">
+        <a href={listingUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-neutral-600 hover:text-neutral-900 px-2 py-1">
+          <ExternalLink className="w-3.5 h-3.5" />
+          {text.listing}
+        </a>
+        <a href={formUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm text-neutral-600 hover:text-neutral-900 px-2 py-1">
+          <ExternalLink className="w-3.5 h-3.5" />
+          {text.apply}
+        </a>
+        <Link href={`${base}/${opportunity.id}`} className="inline-flex items-center gap-1 text-sm font-medium px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800">
+          <Settings className="w-3.5 h-3.5" />
+          {text.edit}
+        </Link>
+      </div>
+    </li>
+  );
+}
+
 export default function OpportunitiesListPage() {
   const params = useParams();
   const router = useRouter();
@@ -147,6 +225,10 @@ export default function OpportunitiesListPage() {
   const [busyFormId, setBusyFormId] = useState<string | null>(null);
   const [linkSlugByForm, setLinkSlugByForm] = useState<Record<string, string>>({});
   const [linkOpenFor, setLinkOpenFor] = useState<string | null>(null);
+
+  const updateLinkSlug = (formId: string, value: string) => {
+    setLinkSlugByForm((current) => ({ ...current, [formId]: value }));
+  };
 
   const load = async () => {
     setLoading(true);
@@ -360,12 +442,7 @@ export default function OpportunitiesListPage() {
                         className="w-full rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-3 py-2 text-sm"
                         placeholder={t.linkSlugPlaceholder}
                         value={linkSlugByForm[form.id] ?? ''}
-                        onChange={(e) =>
-                          setLinkSlugByForm((prev) => ({
-                            ...prev,
-                            [form.id]: e.target.value,
-                          }))
-                        }
+                        onChange={(event) => updateLinkSlug(form.id, event.target.value)}
                       />
                       <p className="text-xs text-neutral-500 mt-1">{t.linkSlugHint}</p>
                       <p className="text-xs text-neutral-500">{t.linkHintCreate}</p>
@@ -399,89 +476,15 @@ export default function OpportunitiesListPage() {
           </div>
         ) : (
           <ul className="space-y-3">
-            {items.map((opp) => {
-              const listingUrl = getAbsoluteOpportunityListingPath(locale, opp.slug);
-              const formSlug =
-                (locale === 'en' ? opp.form_slug_en : opp.form_slug_tr) ||
-                opp.form_slug_tr ||
-                opp.form_slug_en ||
-                opp.slug;
-              const formUrl = getAbsoluteSiteApplicationPublicPath(locale, formSlug);
-              const typeLabel = t.type[opp.opportunity_type || 'staj'] || opp.opportunity_type;
-              return (
-                <li
-                  key={opp.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 px-4 py-4"
-                >
-                  <div className="min-w-0 flex gap-3">
-                    {(opp.thumbnail_url || opp.banner_url) ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={opp.thumbnail_url || opp.banner_url || ''}
-                        alt=""
-                        className="hidden sm:block w-20 h-12 rounded-md object-cover shrink-0"
-                      />
-                    ) : null}
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <span className="font-semibold text-neutral-900 dark:text-neutral-100 truncate">
-                          {titleOf(opp, locale)}
-                        </span>
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-800 text-neutral-600">
-                          {typeLabel}
-                        </span>
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded-full ${
-                            opp.is_active
-                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                              : 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
-                          }`}
-                        >
-                          {opp.is_active ? t.active : t.inactive}
-                        </span>
-                        {opp.is_featured && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-sky-50 text-sky-700">
-                            {t.featured}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-neutral-500 truncate">
-                        {opp.company_name || '—'}
-                        {opp.work_mode ? ` · ${formatWorkMode(opp.work_mode, locale)}` : ''}
-                        {opp.location ? ` · ${opp.location}` : ''}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 shrink-0">
-                    <a
-                      href={listingUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-sm text-neutral-600 hover:text-neutral-900 px-2 py-1"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      {t.listing}
-                    </a>
-                    <a
-                      href={formUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-sm text-neutral-600 hover:text-neutral-900 px-2 py-1"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      {t.apply}
-                    </a>
-                    <Link
-                      href={`${base}/${opp.id}`}
-                      className="inline-flex items-center gap-1 text-sm font-medium px-3 py-1.5 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800"
-                    >
-                      <Settings className="w-3.5 h-3.5" />
-                      {t.edit}
-                    </Link>
-                  </div>
-                </li>
-              );
-            })}
+            {items.map((opportunity) => (
+              <OpportunityListItem
+                key={opportunity.id}
+                base={base}
+                locale={locale}
+                opportunity={opportunity}
+                text={t}
+              />
+            ))}
           </ul>
         )}
       </section>
