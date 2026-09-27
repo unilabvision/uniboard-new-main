@@ -7,6 +7,10 @@ import {
   MENTORSHIP_CAPABILITIES,
   MENTORSHIP_CAPABILITY_LABELS,
 } from '@/app/lib/mentorship/permissions';
+import {
+  BLOG_CAPABILITIES,
+  BLOG_CAPABILITY_LABELS,
+} from '@/app/lib/blog/permissions';
 
 export type ModuleCapabilityDef = {
   key: string;
@@ -19,6 +23,11 @@ export type ModuleCapabilityDef = {
  * Anahtar: registry `primaryModuleKey` (lms → courses).
  */
 export const MODULE_CAPABILITIES: Record<string, ModuleCapabilityDef[]> = {
+  blog: BLOG_CAPABILITIES.map((key) => ({
+    key,
+    labelTr: BLOG_CAPABILITY_LABELS[key].tr,
+    labelEn: BLOG_CAPABILITY_LABELS[key].en,
+  })),
   events: [
     ...EVENTS_CAPABILITIES.map((key) => ({
       key,

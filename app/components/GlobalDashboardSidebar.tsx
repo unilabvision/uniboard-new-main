@@ -196,6 +196,16 @@ function GlobalDashboardSidebarInner({
               }
               break;
               
+            case 'blog':
+              try {
+                const { blogSidebarContent } = await import('../../app/[locale]/blog/sidebar-content');
+                content = blogSidebarContent;
+              } catch (error) {
+                console.error('Could not load blog sidebar content', error);
+                content = null;
+              }
+              break;
+
             case 'settings':
               // Settings modülü için content yükle
               try {
@@ -473,6 +483,7 @@ function GlobalDashboardSidebarInner({
 
     const moduleAliases: Record<string, string[]> = {
       events: ['events', 'event', 'etkinlik', 'etkinlikler'],
+      blog: ['blog'],
       mentorship: ['mentorship', 'mentorluk', 'mentorships', 'mentor'],
       'site-applications': [
         'site-applications',

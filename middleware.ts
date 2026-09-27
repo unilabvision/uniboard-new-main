@@ -152,6 +152,8 @@ const isProtectedRoute = createRouteMatcher([
   '/en/checkout(.*)', // Checkout requires auth
   '/tr/influencer(.*)', // Influencer panel requires auth
   '/en/influencer(.*)',
+  '/tr/blog(.*)',
+  '/en/blog(.*)',
   '/tr/mentorship(.*)',
   '/en/mentorship(.*)',
 ]);

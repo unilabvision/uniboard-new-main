@@ -4,6 +4,7 @@
  */
 export const DASHBOARD_MODULE_ORDER: string[] = [
   'influencer',
+  'blog',
   'mentorship',
   'mentorluk',
   'mentorships',

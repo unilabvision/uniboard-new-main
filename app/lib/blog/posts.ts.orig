@@ -1,0 +1,173 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { blogDb, BLOG_SITE } from '@/app/lib/blog/config';
+import type { BlogPost, BlogPostInput } from '@/app/types/blog';
+
+const POST_COLUMNS = [
+  'id', 'post_id', 'title', 'slug', 'category', 'excerpt', 'content',
+  'image', 'date', 'featured', 'locale', 'alternate_slug',
+  'alternate_post_id', 'site', 'created_at', 'updated_at',
+].join(',');
+
+function normalizeTags(tags: unknown): string[] {
+  if (!Array.isArray(tags)) return [];
+  return [...new Set(tags
+    .filter((tag): tag is string => typeof tag === 'string')
+    .map((tag) => tag.trim())
+    .filter(Boolean))].slice(0, 20);
+}
+
+export function validateBlogInput(body: BlogPostInput): string | null {
+  if (!body.title?.trim()) return 'Başlık zorunludur';
+  if (!body.slug?.trim()) return 'Slug zorunludur';
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(body.slug.trim())) {
+    return 'Slug yalnızca küçük harf, rakam ve tire içerebilir';
+  }
+  if (!body.category?.trim()) return 'Kategori zorunludur';
+  if (!body.content?.trim()) return 'İçerik zorunludur';
+  if (!['tr', 'en'].includes(body.locale)) return 'Dil tr veya en olmalıdır';
+  if (!body.date || Number.isNaN(new Date(body.date).getTime())) {
+    return 'Geçerli bir yayın tarihi zorunludur';
+  }
+  return null;
+}
+
+export async function getBlogPost(
+  supabase: SupabaseClient,
+  id: string
+): Promise<BlogPost | null> {
+  const { data, error } = await supabase
+    .from(blogDb.posts)
+    .select(POST_COLUMNS)
+    .eq('id', id)
+    .eq('site', BLOG_SITE)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return null;
+
+  const { data: tags, error: tagsError } = await supabase
+    .from(blogDb.tags)
+    .select('tag')
+    .eq('post_id', data.post_id)
+    .eq('locale', data.locale)
+    .eq('site', BLOG_SITE);
+  if (tagsError) throw tagsError;
+
+  return { ...data, tags: (tags ?? []).map((row) => row.tag) } as BlogPost;
+}
+
+async function resolveAlternate(
+  supabase: SupabaseClient,
+  alternateId: string | null | undefined,
+  locale: string
+) {
+  if (!alternateId) return null;
+  const { data, error } = await supabase
+    .from(blogDb.posts)
+    .select('id,post_id,slug,locale')
+    .eq('id', alternateId)
+    .eq('site', BLOG_SITE)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error('Seçilen dil karşılığı bulunamadı');
+  if (data.locale === locale) throw new Error('Dil karşılığı farklı bir dilde olmalıdır');
+  return data;
+}
+
+export async function buildBlogPayload(
+  supabase: SupabaseClient,
+  body: BlogPostInput,
+  currentPostId?: string
+) {
+  const alternate = await resolveAlternate(supabase, body.alternateId, body.locale);
+  const postId = currentPostId || `${body.slug.trim()}-${body.locale}`;
+  return {
+    postId,
+    alternate,
+    tags: normalizeTags(body.tags),
+    post: {
+      post_id: postId,
+      title: body.title.trim(),
+      slug: body.slug.trim(),
+      category: body.category.trim(),
+      excerpt: body.excerpt?.trim() || null,
+      content: body.content.trim(),
+      image: body.image?.trim() || null,
+      date: body.date,
+      featured: body.featured === true,
+      locale: body.locale,
+      alternate_post_id: alternate?.post_id || null,
+      alternate_slug: alternate?.slug || null,
+      site: BLOG_SITE,
+      updated_at: new Date().toISOString(),
+    },
+  };
+}
+
+export async function replaceBlogTags(
+  supabase: SupabaseClient,
+  postId: string,
+  locale: string,
+  tags: string[]
+) {
+  const { error: deleteError } = await supabase
+    .from(blogDb.tags)
+    .delete()
+    .eq('post_id', postId)
+    .eq('locale', locale)
+    .eq('site', BLOG_SITE);
+  if (deleteError) throw deleteError;
+  if (tags.length === 0) return;
+
+  const { error } = await supabase.from(blogDb.tags).insert(
+    tags.map((tag) => ({ post_id: postId, tag, locale, site: BLOG_SITE }))
+  );
+  if (error) throw error;
+}
+
+export async function ensureBlogCategory(
+  supabase: SupabaseClient,
+  name: string,
+  locale: string
+) {
+  const { data, error } = await supabase
+    .from(blogDb.categories)
+    .select('id')
+    .eq('name', name)
+    .eq('locale', locale)
+    .eq('site', BLOG_SITE)
+    .limit(1);
+  if (error) throw error;
+  if (data && data.length > 0) return;
+
+  const { error: insertError } = await supabase
+    .from(blogDb.categories)
+    .insert({ name, locale, site: BLOG_SITE });
+  if (insertError && insertError.code !== '23505') throw insertError;
+}
+
+export async function syncAlternateLink(
+  supabase: SupabaseClient,
+  current: { postId: string; slug: string },
+  alternate: { id: string } | null
+) {
+  await supabase
+    .from(blogDb.posts)
+    .update({ alternate_post_id: null, alternate_slug: null })
+    .eq('alternate_post_id', current.postId)
+    .eq('site', BLOG_SITE);
+
+  if (!alternate) return;
+  const { error } = await supabase
+    .from(blogDb.posts)
+    .update({
+      alternate_post_id: current.postId,
+      alternate_slug: current.slug,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', alternate.id)
+    .eq('site', BLOG_SITE);
+  if (error) throw error;
+}
+
+export { POST_COLUMNS };

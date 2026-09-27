@@ -16,6 +16,16 @@ export interface ModuleAccessDefinition {
 }
 
 export const MODULE_ACCESS_REGISTRY: Record<string, ModuleAccessDefinition> = {
+  blog: {
+    primaryModuleKey: 'blog',
+    moduleKeys: ['blog'],
+    dashboardPath: 'blog',
+    nameTr: 'Blog Yönetimi',
+    nameEn: 'Blog Management',
+    descriptionTr: 'myunilab.net blog yazılarını oluşturun ve düzenleyin.',
+    descriptionEn: 'Create and edit myunilab.net blog posts.',
+    managePolicy: 'moduleHolder',
+  },
   influencer: {
     primaryModuleKey: 'influencer',
     moduleKeys: ['influencer'],
