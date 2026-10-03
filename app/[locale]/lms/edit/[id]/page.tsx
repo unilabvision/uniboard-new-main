@@ -691,6 +691,7 @@ const CourseContentManager = ({
   const [showQuizUpload, setShowQuizUpload] = useState(false);
   const [showResourceLink, setShowResourceLink] = useState(false);
   const [resourceLinkMode, setResourceLinkMode] = useState<'url' | 'resource'>('url');
+  const [editingNote, setEditingNote] = useState<CourseNote | null>(null);
   const [editingQuiz, setEditingQuiz] = useState<CourseQuiz | null>(null);
   
   // Lesson editing
@@ -1266,6 +1267,7 @@ const CourseContentManager = ({
     if (moduleType === 'video') {
       setShowVideoUpload(true);
     } else if (moduleType === 'notes') {
+      setEditingNote(null);
       setShowNoteUpload(true);
     } else if (moduleType === 'quiz') {
       setShowQuizUpload(true);
@@ -1306,13 +1308,14 @@ const CourseContentManager = ({
       ...s,
       lessons: s.lessons.map(l => 
         l.id === selectedLessonForModule 
-          ? { ...l, notes: [...(l.notes || []), uploadedNote] }
+          ? { ...l, lesson_type: 'notes', notes: [uploadedNote] }
           : l
       )
     })));
     
     setShowNoteUpload(false);
     setSelectedLessonForModule(null);
+    setEditingNote(null);
   };
 
   // Handle quiz upload
@@ -1379,6 +1382,7 @@ const CourseContentManager = ({
     setShowResourceLink(false);
     setSelectedLessonForModule(null);
     setSelectedLessonTitle('');
+    setEditingNote(null);
     setEditingQuiz(null);
   };
 
@@ -1926,6 +1930,7 @@ const CourseContentManager = ({
                                           onClick={() => {
                                             setSelectedLessonForModule(lesson.id);
                                             setSelectedLessonTitle(lesson.title);
+                                            setEditingNote(note);
                                             setShowNoteUpload(true);
                                           }}
                                           className="p-1 text-orange-600 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300"
@@ -2041,6 +2046,7 @@ const CourseContentManager = ({
           lessonId={selectedLessonForModule}
           onNoteUploaded={handleNoteUploaded}
           onClose={closeModals}
+          existingNote={editingNote || undefined}
           orderIndex={
             sections
               .flatMap((s) => s.lessons)

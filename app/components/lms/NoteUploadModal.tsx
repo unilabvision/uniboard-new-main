@@ -3,13 +3,7 @@
 import React, { useState } from 'react';
 import { FileText, Upload, X, Save, Eye, AlertCircle, CheckCircle } from 'lucide-react';
 import { CourseNote, NoteFormData } from '../../types/course';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-
-// Supabase client
-const supabase = createClientComponentClient({
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL2 || 'https://emfvwpztyuykqtepnsfp.supabase.co',
-  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY2 || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtZnZ3cHp0eXV5a3F0ZXBuc2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzg0OTM5MDksImV4cCI6MjA1NDA2OTkwOX0.EbGPYHtXMO2RYGavv-FQa3mgI3RECiFnwAVqpUgghxg'
-});
+import { markdownToSafeHtml, sanitizeHtml } from '@/app/lib/lms/htmlContent';
 
 interface NoteUploadModalProps {
   lessonId: string;
@@ -121,52 +115,27 @@ export default function NoteUploadModal({
         message: existingNote ? 'Not güncelleniyor...' : 'Not kaydediliyor...',
       });
 
-      if (existingNote) {
-        // Update existing note
-        const { data, error } = await supabase
-          .from('myuni_notes')
-          .update({
-            title: formData.title.trim(),
-            content: formData.content,
-            content_type: formData.content_type,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingNote.id)
-          .select()
-          .single();
-
-        if (error) throw error;
-
-        setUploadState({
-          status: 'success',
-          message: 'Not başarıyla güncellendi!',
-        });
-
-        onNoteUploaded(data);
-      } else {
-        // Create new note
-        const { data, error } = await supabase
-          .from('myuni_notes')
-          .insert([{
-            lesson_id: lessonId,
-            title: formData.title.trim(),
-            content: formData.content,
-            content_type: formData.content_type,
-            order_index: orderIndex,
-            is_ai_generated: false
-          }])
-          .select()
-          .single();
-
-        if (error) throw error;
-
-        setUploadState({
-          status: 'success',
-          message: 'Not başarıyla kaydedildi!',
-        });
-
-        onNoteUploaded(data);
+      const response = await fetch('/api/lms/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lesson_id: lessonId,
+          title: formData.title.trim(),
+          content: formData.content,
+          content_type: formData.content_type,
+          order_index: orderIndex,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || 'Not kaydedilemedi.');
       }
+
+      setUploadState({
+        status: 'success',
+        message: existingNote ? 'Not başarıyla güncellendi!' : 'Not başarıyla kaydedildi!',
+      });
+      onNoteUploaded(payload.note as CourseNote);
 
       // Close modal after 1 second
       setTimeout(() => {
@@ -188,24 +157,14 @@ export default function NoteUploadModal({
       return (
         <div 
           className="prose prose-sm max-w-none dark:prose-invert"
-          dangerouslySetInnerHTML={{ __html: formData.content }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(formData.content) }}
         />
       );
     } else if (formData.content_type === 'markdown') {
-      // Simple markdown rendering (you might want to use a proper markdown library)
-      const htmlContent = formData.content
-        .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-        .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-        .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-        .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
-        .replace(/\*(.*)\*/gim, '<em>$1</em>')
-        .replace(/\n\n/gim, '</p><p>')
-        .replace(/\n/gim, '<br>');
-      
       return (
         <div 
           className="prose prose-sm max-w-none dark:prose-invert"
-          dangerouslySetInnerHTML={{ __html: `<p>${htmlContent}</p>` }}
+          dangerouslySetInnerHTML={{ __html: markdownToSafeHtml(formData.content) }}
         />
       );
     } else {

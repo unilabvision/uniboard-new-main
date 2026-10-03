@@ -1,5 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireLmsContentAdmin } from '@/app/api/lms/_helpers';
+import { sanitizeHtml } from '@/app/lib/lms/htmlContent';
+
+const CONTENT_TYPES = ['markdown', 'html', 'text'] as const;
+const MAX_CONTENT_BYTES = 5 * 1024 * 1024;
+const MAX_REQUEST_BYTES = MAX_CONTENT_BYTES + 64 * 1024;
+
+export const maxDuration = 10;
+
+type ContentType = (typeof CONTENT_TYPES)[number];
+
+function isContentType(value: unknown): value is ContentType {
+  return typeof value === 'string' && CONTENT_TYPES.includes(value as ContentType);
+}
 
 /**
  * Lesson note / URL / resource module — service role write.
@@ -11,43 +24,64 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
 
+  const contentLength = Number(request.headers.get('content-length'));
+  if (Number.isFinite(contentLength) && contentLength > MAX_REQUEST_BYTES) {
+    return NextResponse.json({ error: 'request must be at most 5 MB' }, { status: 413 });
+  }
+
   const body = await request.json().catch(() => ({}));
   const lessonId = String(body.lesson_id || '').trim();
   const title = String(body.title || '').trim();
-  const content = String(body.content || '').trim();
+  const rawContent = String(body.content || '').trim();
   const fileUrl = body.file_url ? String(body.file_url).trim() : null;
 
   if (!lessonId || !title) {
     return NextResponse.json({ error: 'lesson_id and title are required' }, { status: 400 });
   }
+  if (title.length > 500) {
+    return NextResponse.json({ error: 'title must be at most 500 characters' }, { status: 400 });
+  }
+  if (!rawContent && !fileUrl) {
+    return NextResponse.json({ error: 'content or file_url is required' }, { status: 400 });
+  }
+  if (Buffer.byteLength(rawContent, 'utf8') > MAX_CONTENT_BYTES) {
+    return NextResponse.json({ error: 'content must be at most 5 MB' }, { status: 413 });
+  }
 
-  const contentType = ['markdown', 'html', 'text'].includes(body.content_type)
-    ? body.content_type
-    : 'text';
+  const contentType: ContentType = isContentType(body.content_type) ? body.content_type : 'text';
+  const content = contentType === 'html' ? sanitizeHtml(rawContent) : rawContent;
 
   const orderIndex =
     typeof body.order_index === 'number' && Number.isFinite(body.order_index)
       ? body.order_index
       : 0;
 
-  // Replace existing notes for this lesson (single-module model)
-  await authResult.supabase.from('myuni_notes').delete().eq('lesson_id', lessonId);
-
-  const { data, error } = await authResult.supabase
+  const { data: existingNote, error: lookupError } = await authResult.supabase
     .from('myuni_notes')
-    .insert([
-      {
-        lesson_id: lessonId,
-        title,
-        content: content || fileUrl || '',
-        content_type: contentType,
-        file_url: fileUrl,
-        order_index: orderIndex,
-        is_ai_generated: false,
-      },
-    ])
-    .select('*')
-    .single();
+    .select('id')
+    .eq('lesson_id', lessonId)
+    .limit(1)
+    .maybeSingle();
+
+  if (lookupError) {
+    console.error('[lms/notes] lookup:', lookupError.message);
+    return NextResponse.json({ error: lookupError.message }, { status: 500 });
+  }
+
+  const noteValues = {
+    lesson_id: lessonId,
+    title,
+    content: content || fileUrl || '',
+    content_type: contentType,
+    file_url: fileUrl,
+    order_index: orderIndex,
+    is_ai_generated: false,
+    updated_at: new Date().toISOString(),
+  };
+  const writeQuery = existingNote
+    ? authResult.supabase.from('myuni_notes').update(noteValues).eq('id', existingNote.id)
+    : authResult.supabase.from('myuni_notes').insert([noteValues]);
+  const { data, error } = await writeQuery.select('*').single();
 
   if (error) {
     console.error('[lms/notes] insert:', error.message);
