@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { FileText, Upload, X, Save, Eye, AlertCircle, CheckCircle } from 'lucide-react';
+import { FileText, Upload, X, Save, Eye, AlertCircle, CheckCircle, Sigma } from 'lucide-react';
 import { CourseNote, NoteFormData } from '../../types/course';
-import { markdownToSafeHtml, sanitizeHtml } from '@/app/lib/lms/htmlContent';
+import { sanitizeHtml } from '@/app/lib/lms/htmlContent';
+import MarkdownContent from '@/app/components/lms/MarkdownContent';
 import {
   formatFileSize,
   getUtf8ByteLength,
@@ -44,7 +45,7 @@ export default function NoteUploadModal({
     message: '',
   });
   
-  const [showPreview, setShowPreview] = useState(false);
+  const [showPreview, setShowPreview] = useState(true);
   const isBusy = uploadState.status === 'processing' || uploadState.status === 'saving';
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -176,7 +177,6 @@ export default function NoteUploadModal({
     }
   };
 
-  // Render markdown preview (simplified)
   const renderPreview = () => {
     if (formData.content_type === 'html') {
       return (
@@ -185,20 +185,17 @@ export default function NoteUploadModal({
           dangerouslySetInnerHTML={{ __html: sanitizeHtml(formData.content) }}
         />
       );
-    } else if (formData.content_type === 'markdown') {
-      return (
-        <div 
-          className="prose prose-sm max-w-none dark:prose-invert"
-          dangerouslySetInnerHTML={{ __html: markdownToSafeHtml(formData.content) }}
-        />
-      );
-    } else {
-      return (
-        <pre className="whitespace-pre-wrap text-sm text-neutral-700 dark:text-neutral-300">
-          {formData.content}
-        </pre>
-      );
     }
+
+    if (formData.content_type === 'markdown') {
+      return <MarkdownContent content={formData.content} />;
+    }
+
+    return (
+      <pre className="whitespace-pre-wrap text-sm text-neutral-700 dark:text-neutral-300">
+        {formData.content}
+      </pre>
+    );
   };
 
   return (
@@ -211,7 +208,7 @@ export default function NoteUploadModal({
       
       {/* Modal Container */}
       <div className="absolute inset-0 flex items-center justify-center p-4 pointer-events-none z-[10001]">
-        <div className="relative bg-white dark:bg-neutral-800 rounded-lg shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden transform transition-all duration-200 ease-out scale-100 opacity-100 border border-neutral-200 dark:border-neutral-700 pointer-events-auto">
+        <div className="relative bg-white dark:bg-neutral-800 rounded-xl shadow-2xl max-w-6xl w-full max-h-[92vh] overflow-hidden transform transition-all duration-200 ease-out scale-100 opacity-100 border border-neutral-200 dark:border-neutral-700 pointer-events-auto">
           
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-200 dark:border-neutral-700">
@@ -224,7 +221,7 @@ export default function NoteUploadModal({
                   {existingNote ? 'Notu Düzenle' : 'Not Ekle'}
                 </h2>
                 <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                  Markdown, HTML veya düz metin formatında not ekleyebilirsiniz
+                  Markdown ve LaTeX destekli ders notu hazırlayın
                 </p>
               </div>
             </div>
@@ -238,12 +235,12 @@ export default function NoteUploadModal({
           </div>
 
           {/* Content */}
-          <div className="flex flex-col h-[calc(90vh-8rem)] overflow-hidden">
+          <div className="flex flex-col h-[calc(92vh-8rem)] overflow-hidden">
             {/* Form Section */}
-            <div className="flex-1 flex overflow-hidden">
+            <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
               
               {/* Left Panel - Form */}
-              <div className={`${showPreview ? 'w-1/2' : 'w-full'} p-6 border-r border-neutral-200 dark:border-neutral-700 flex flex-col space-y-4 overflow-y-auto`}>
+              <div className={`${showPreview ? 'lg:w-[46%]' : 'w-full'} w-full p-4 sm:p-6 lg:border-r border-neutral-200 dark:border-neutral-700 flex flex-col space-y-4 lg:overflow-y-auto`}>
                 
                 {/* Title */}
                 <div>
@@ -275,6 +272,18 @@ export default function NoteUploadModal({
                     <option value="html">HTML</option>
                     <option value="text">Düz Metin</option>
                   </select>
+                  {formData.content_type === 'markdown' && (
+                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-500 dark:text-neutral-400">
+                      <span className="inline-flex items-center gap-1">
+                        <FileText className="h-3.5 w-3.5" />
+                        Başlık, liste, tablo, kod ve görev listesi
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <Sigma className="h-3.5 w-3.5" />
+                        LaTeX: $...$ veya $$...$$
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* File Import */}
@@ -300,7 +309,7 @@ export default function NoteUploadModal({
                       Dosya Seç
                     </label>
                     <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">
-                      HTML: 10 MB, kayıpsız GZIP aktarımı • Diğerleri: 4 MB
+                      .md, .html, .txt veya .json • HTML: 10 MB, diğerleri: 4 MB
                     </p>
                   </div>
                 </div>
@@ -325,7 +334,7 @@ export default function NoteUploadModal({
                     className="flex-1 w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors placeholder-neutral-400 dark:placeholder-neutral-500 resize-none font-mono text-sm"
                     placeholder={
                       formData.content_type === 'markdown' 
-                        ? '# Başlık\n\n**Kalın metin** ve *italik metin*\n\n- Liste öğesi 1\n- Liste öğesi 2'
+                        ? '# Başlık\n\n**Kalın metin** ve *italik metin*\n\nDenklem: $E = mc^2$\n\n$$\\int_0^1 x^2 \\, dx = \\frac{1}{3}$$'
                         : formData.content_type === 'html'
                         ? '<h1>Başlık</h1>\n<p><strong>Kalın metin</strong> ve <em>italik metin</em></p>'
                         : 'Not içeriğini buraya yazın...'
@@ -338,12 +347,20 @@ export default function NoteUploadModal({
 
               {/* Right Panel - Preview */}
               {showPreview && (
-                <div className="w-1/2 p-6 overflow-y-auto bg-neutral-50 dark:bg-neutral-900">
+                <div className="w-full lg:w-[54%] border-t lg:border-t-0 border-neutral-200 dark:border-neutral-700 p-4 sm:p-6 lg:overflow-y-auto bg-neutral-50 dark:bg-neutral-900">
                   <div className="mb-4">
-                    <h3 className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
-                      Önizleme
-                    </h3>
-                    <div className="bg-white dark:bg-neutral-800 rounded-md p-4 border border-neutral-200 dark:border-neutral-700 min-h-[300px]">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">
+                        Belge önizlemesi
+                      </h3>
+                      {formData.content_type === 'markdown' && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-xs text-neutral-500 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-400">
+                          <Sigma className="h-3 w-3" />
+                          Markdown + LaTeX
+                        </span>
+                      )}
+                    </div>
+                    <div className="bg-white dark:bg-neutral-800 rounded-lg p-5 sm:p-7 border border-neutral-200 dark:border-neutral-700 min-h-[360px] shadow-sm">
                       {formData.content ? renderPreview() : (
                         <p className="text-neutral-400 dark:text-neutral-500 italic">
                           İçerik görüntülenecek...

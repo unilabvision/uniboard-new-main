@@ -4,6 +4,7 @@ import { Geist_Mono } from "next/font/google";
 import { ClerkProvider } from '@clerk/nextjs';
 import ConditionalLayout from "../components/ConditionalLayout";
 import "../globals.css";
+import "katex/dist/katex.min.css";
 import Script from "next/script";
 
 // Font definitions
