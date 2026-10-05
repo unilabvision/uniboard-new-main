@@ -3,8 +3,8 @@ import { requireLmsContentAdmin } from '@/app/api/lms/_helpers';
 import { sanitizeHtml } from '@/app/lib/lms/htmlContent';
 
 const CONTENT_TYPES = ['markdown', 'html', 'text'] as const;
-const MAX_CONTENT_BYTES = 5 * 1024 * 1024;
-const MAX_REQUEST_BYTES = MAX_CONTENT_BYTES + 64 * 1024;
+const MAX_CONTENT_BYTES = 4 * 1024 * 1024;
+const MAX_REQUEST_BYTES = 4 * 1024 * 1024;
 
 export const maxDuration = 10;
 
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
 
   const contentLength = Number(request.headers.get('content-length'));
   if (Number.isFinite(contentLength) && contentLength > MAX_REQUEST_BYTES) {
-    return NextResponse.json({ error: 'request must be at most 5 MB' }, { status: 413 });
+    return NextResponse.json({ error: 'request must be at most 4 MB' }, { status: 413 });
   }
 
   const body = await request.json().catch(() => ({}));
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'content or file_url is required' }, { status: 400 });
   }
   if (Buffer.byteLength(rawContent, 'utf8') > MAX_CONTENT_BYTES) {
-    return NextResponse.json({ error: 'content must be at most 5 MB' }, { status: 413 });
+    return NextResponse.json({ error: 'content must be at most 4 MB' }, { status: 413 });
   }
 
   const contentType: ContentType = isContentType(body.content_type) ? body.content_type : 'text';

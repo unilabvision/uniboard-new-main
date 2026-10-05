@@ -4,6 +4,13 @@ import React, { useState } from 'react';
 import { FileText, Upload, X, Save, Eye, AlertCircle, CheckCircle } from 'lucide-react';
 import { CourseNote, NoteFormData } from '../../types/course';
 import { markdownToSafeHtml, sanitizeHtml } from '@/app/lib/lms/htmlContent';
+import {
+  formatFileSize,
+  getUtf8ByteLength,
+  MAX_HTML_SOURCE_BYTES,
+  MAX_NOTE_REQUEST_BYTES,
+  minifyHtmlForUpload,
+} from '@/app/lib/lms/htmlUpload';
 
 interface NoteUploadModalProps {
   lessonId: string;
@@ -14,7 +21,7 @@ interface NoteUploadModalProps {
 }
 
 interface UploadState {
-  status: 'idle' | 'saving' | 'success' | 'error';
+  status: 'idle' | 'processing' | 'saving' | 'success' | 'error';
   message: string;
 }
 
@@ -37,13 +44,13 @@ export default function NoteUploadModal({
   });
   
   const [showPreview, setShowPreview] = useState(false);
+  const isBusy = uploadState.status === 'processing' || uploadState.status === 'saving';
 
-  // Handle file selection for import
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
     if (!file) return;
 
-    // Validate file type
     const allowedTypes = ['text/plain', 'text/markdown', 'text/html', 'application/json'];
     if (!allowedTypes.includes(file.type) && !file.name.match(/\.(txt|md|html|json)$/i)) {
       setUploadState({
@@ -53,50 +60,63 @@ export default function NoteUploadModal({
       return;
     }
 
-    // Check file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
+    const isHtml = file.name.toLowerCase().endsWith('.html');
+    const maxSourceBytes = isHtml ? MAX_HTML_SOURCE_BYTES : MAX_NOTE_REQUEST_BYTES;
+    if (file.size > maxSourceBytes) {
       setUploadState({
         status: 'error',
-        message: 'Dosya boyutu 5MB\'dan büyük olamaz.',
+        message: `Dosya boyutu ${isHtml ? '10 MB' : '4 MB'} sınırını aşıyor.`,
       });
       return;
     }
-    
-    // Read file content
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const content = e.target?.result as string;
-      
-      // Determine content type based on file extension
+
+    setUploadState({
+      status: 'processing',
+      message: isHtml ? 'HTML küçültülüyor...' : 'Dosya okunuyor...',
+    });
+
+    try {
+      const sourceContent = await file.text();
+      const content = isHtml ? await minifyHtmlForUpload(sourceContent) : sourceContent;
+      const contentBytes = getUtf8ByteLength(content);
+      if (contentBytes > MAX_NOTE_REQUEST_BYTES) {
+        throw new Error(
+          `İçerik küçültüldükten sonra ${formatFileSize(contentBytes)}. ` +
+            'Vercel sınırı için 4 MB altında olmalıdır.'
+        );
+      }
+
       let contentType: 'markdown' | 'html' | 'text' = 'text';
       if (file.name.toLowerCase().endsWith('.md')) {
         contentType = 'markdown';
-      } else if (file.name.toLowerCase().endsWith('.html')) {
+      } else if (isHtml) {
         contentType = 'html';
       }
-      
-      setFormData({
-        ...formData,
-        title: formData.title || file.name.replace(/\.[^/.]+$/, ''),
-        content: content,
+
+      setFormData((current) => ({
+        ...current,
+        title: current.title || file.name.replace(/\.[^/.]+$/, ''),
+        content,
         content_type: contentType,
-        file
-      });
-      
+        file,
+      }));
+
+      const savedBytes = Math.max(0, file.size - contentBytes);
+      const savedPercentage = file.size > 0 ? Math.round((savedBytes / file.size) * 100) : 0;
       setUploadState({
         status: 'idle',
-        message: '',
+        message: isHtml
+          ? `HTML küçültüldü: ${formatFileSize(file.size)} → ${formatFileSize(contentBytes)} ` +
+            `(%${savedPercentage} kazanç)`
+          : `${formatFileSize(contentBytes)} dosya hazır.`,
       });
-    };
-    
-    reader.onerror = () => {
+    } catch (error) {
       setUploadState({
         status: 'error',
-        message: 'Dosya okuma hatası.',
+        message: error instanceof Error ? error.message : 'Dosya işlenemedi.',
       });
-    };
-    
-    reader.readAsText(file);
+      input.value = '';
+    }
   };
 
   // Handle form submission
@@ -115,16 +135,25 @@ export default function NoteUploadModal({
         message: existingNote ? 'Not güncelleniyor...' : 'Not kaydediliyor...',
       });
 
+      const content =
+        formData.content_type === 'html'
+          ? await minifyHtmlForUpload(formData.content)
+          : formData.content;
+      const requestBody = JSON.stringify({
+        lesson_id: lessonId,
+        title: formData.title.trim(),
+        content,
+        content_type: formData.content_type,
+        order_index: orderIndex,
+      });
+      if (getUtf8ByteLength(requestBody) > MAX_NOTE_REQUEST_BYTES) {
+        throw new Error('Gönderilecek içerik 4 MB sınırını aşıyor. HTML dosyasını küçültün.');
+      }
+
       const response = await fetch('/api/lms/notes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          lesson_id: lessonId,
-          title: formData.title.trim(),
-          content: formData.content,
-          content_type: formData.content_type,
-          order_index: orderIndex,
-        }),
+        body: requestBody,
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -206,7 +235,7 @@ export default function NoteUploadModal({
             <button
               onClick={onClose}
               className="p-1.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded transition-colors"
-              disabled={uploadState.status === 'saving'}
+              disabled={isBusy}
             >
               <X className="w-4 h-4" />
             </button>
@@ -231,7 +260,7 @@ export default function NoteUploadModal({
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                     className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors placeholder-neutral-400 dark:placeholder-neutral-500"
                     placeholder="Not başlığını girin..."
-                    disabled={uploadState.status === 'saving'}
+                    disabled={isBusy}
                   />
                 </div>
 
@@ -244,7 +273,7 @@ export default function NoteUploadModal({
                     value={formData.content_type}
                     onChange={(e) => setFormData({ ...formData, content_type: e.target.value as 'markdown' | 'html' | 'text' })}
                     className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                    disabled={uploadState.status === 'saving'}
+                    disabled={isBusy}
                   >
                     <option value="markdown">Markdown</option>
                     <option value="html">HTML</option>
@@ -265,7 +294,7 @@ export default function NoteUploadModal({
                       onChange={handleFileSelect}
                       className="hidden"
                       id="file-upload"
-                      disabled={uploadState.status === 'saving'}
+                      disabled={isBusy}
                     />
                     <label
                       htmlFor="file-upload"
@@ -275,7 +304,7 @@ export default function NoteUploadModal({
                       Dosya Seç
                     </label>
                     <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">
-                      TXT, MD, HTML • Maksimum: 5MB
+                      HTML: 10 MB kaynak, otomatik küçültme • Diğerleri: 4 MB
                     </p>
                   </div>
                 </div>
@@ -305,7 +334,7 @@ export default function NoteUploadModal({
                         ? '<h1>Başlık</h1>\n<p><strong>Kalın metin</strong> ve <em>italik metin</em></p>'
                         : 'Not içeriğini buraya yazın...'
                     }
-                    disabled={uploadState.status === 'saving'}
+                    disabled={isBusy}
                     rows={12}
                   />
                 </div>
@@ -358,21 +387,25 @@ export default function NoteUploadModal({
               <button
                 onClick={onClose}
                 className="px-4 py-2 text-neutral-600 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-md transition-colors text-sm font-medium"
-                disabled={uploadState.status === 'saving'}
+                disabled={isBusy}
               >
                 İptal
               </button>
               <button
                 onClick={() => setShowPreview(!showPreview)}
                 className="px-4 py-2 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors text-sm font-medium"
-                disabled={uploadState.status === 'saving'}
+                disabled={isBusy}
               >
                 <Eye className="w-4 h-4 mr-2 inline" />
                 {showPreview ? 'Düzenle' : 'Önizle'}
               </button>
               <button
                 onClick={handleSave}
-                disabled={!formData.title.trim() || !formData.content.trim() || uploadState.status === 'saving'}
+                disabled={
+                  !formData.title.trim() ||
+                  !formData.content.trim() ||
+                  isBusy
+                }
                 className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 text-sm font-medium"
               >
                 {uploadState.status === 'saving' ? (
