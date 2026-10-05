@@ -77,17 +77,3 @@ export async function prepareJsonRequest(payload: unknown): Promise<PreparedJson
 
   return { body, contentType: GZIP_CONTENT_TYPE, isCompressed: true, size: body.size };
 }
-
-export async function minifyHtmlForUpload(html: string): Promise<string> {
-  const { minify } = await import('html-minifier-terser/dist/htmlminifier.esm.bundle');
-
-  return minify(html, {
-    caseSensitive: true,
-    collapseWhitespace: true,
-    conservativeCollapse: true,
-    keepClosingSlash: true,
-    preserveLineBreaks: true,
-    removeComments: true,
-    removeRedundantAttributes: true,
-  });
-}

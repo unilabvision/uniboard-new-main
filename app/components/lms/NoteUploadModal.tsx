@@ -10,7 +10,6 @@ import {
   MAX_HTML_SOURCE_BYTES,
   MAX_NOTE_CONTENT_BYTES,
   MAX_NOTE_REQUEST_BYTES,
-  minifyHtmlForUpload,
   prepareJsonRequest,
 } from '@/app/lib/lms/htmlUpload';
 
@@ -74,18 +73,14 @@ export default function NoteUploadModal({
 
     setUploadState({
       status: 'processing',
-      message: isHtml ? 'HTML küçültülüyor...' : 'Dosya okunuyor...',
+      message: 'Dosya okunuyor...',
     });
 
     try {
-      const sourceContent = await file.text();
-      const content = isHtml ? await minifyHtmlForUpload(sourceContent) : sourceContent;
+      const content = await file.text();
       const contentBytes = getUtf8ByteLength(content);
       if (contentBytes > MAX_NOTE_CONTENT_BYTES) {
-        throw new Error(
-          `İçerik küçültüldükten sonra ${formatFileSize(contentBytes)}. ` +
-            'En fazla 10 MB olabilir.'
-        );
+        throw new Error(`İçerik ${formatFileSize(contentBytes)}. En fazla 10 MB olabilir.`);
       }
 
       let contentType: 'markdown' | 'html' | 'text' = 'text';
@@ -103,15 +98,11 @@ export default function NoteUploadModal({
         file,
       }));
 
-      const savedBytes = Math.max(0, file.size - contentBytes);
-      const savedPercentage = file.size > 0 ? Math.round((savedBytes / file.size) * 100) : 0;
       setUploadState({
         status: 'idle',
-        message: isHtml
-          ? `HTML küçültüldü: ${formatFileSize(file.size)} → ${formatFileSize(contentBytes)} ` +
-            `(%${savedPercentage} kazanç)` +
-            (contentBytes > MAX_NOTE_REQUEST_BYTES ? ' • Kayıtta GZIP ile gönderilecek.' : '')
-          : `${formatFileSize(contentBytes)} dosya hazır.`,
+        message:
+          `${formatFileSize(contentBytes)} dosya hazır.` +
+          (contentBytes > MAX_NOTE_REQUEST_BYTES ? ' Kayıtta GZIP ile gönderilecek.' : ''),
       });
     } catch (error) {
       setUploadState({
@@ -138,12 +129,9 @@ export default function NoteUploadModal({
         message: existingNote ? 'Not güncelleniyor...' : 'Not kaydediliyor...',
       });
 
-      const content =
-        formData.content_type === 'html'
-          ? await minifyHtmlForUpload(formData.content)
-          : formData.content;
+      const content = formData.content;
       if (getUtf8ByteLength(content) > MAX_NOTE_CONTENT_BYTES) {
-        throw new Error('Küçültülmüş içerik 10 MB sınırını aşıyor.');
+        throw new Error('İçerik 10 MB sınırını aşıyor.');
       }
 
       const preparedRequest = await prepareJsonRequest({
@@ -312,7 +300,7 @@ export default function NoteUploadModal({
                       Dosya Seç
                     </label>
                     <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">
-                      HTML: 10 MB kaynak, otomatik küçültme • Diğerleri: 4 MB
+                      HTML: 10 MB, kayıpsız GZIP aktarımı • Diğerleri: 4 MB
                     </p>
                   </div>
                 </div>
