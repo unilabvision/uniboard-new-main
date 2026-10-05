@@ -1,18 +1,63 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { FileText, Upload, X, Save, Eye, AlertCircle, CheckCircle, Sigma } from 'lucide-react';
 import { CourseNote, NoteFormData } from '../../types/course';
 import { sanitizeHtml } from '@/app/lib/lms/htmlContent';
 import MarkdownContent from '@/app/components/lms/MarkdownContent';
-import {
-  formatFileSize,
-  getUtf8ByteLength,
-  MAX_HTML_SOURCE_BYTES,
-  MAX_NOTE_CONTENT_BYTES,
-  MAX_NOTE_REQUEST_BYTES,
-  prepareJsonRequest,
-} from '@/app/lib/lms/htmlUpload';
+import { formatFileSize } from '@/app/lib/lms/htmlUpload';
+import { isNoteStorageRef, MAX_NOTE_FILE_BYTES, validateNoteFile } from '@/app/lib/lms/noteStorage';
+
+type NoteContentType = 'markdown' | 'html' | 'text';
+
+const CONTENT_MIME_TYPES: Record<NoteContentType, string> = {
+  markdown: 'text/markdown',
+  html: 'text/html',
+  text: 'text/plain',
+};
+
+const CONTENT_EXTENSIONS: Record<NoteContentType, string> = {
+  markdown: 'md',
+  html: 'html',
+  text: 'txt',
+};
+
+interface NoteStorageUpload {
+  lessonId: string;
+  title: string;
+  content: string;
+  contentType: NoteContentType;
+  sourceFileName?: string;
+}
+
+async function uploadNoteContent(input: NoteStorageUpload): Promise<string> {
+  const mimeType = CONTENT_MIME_TYPES[input.contentType];
+  const fileName =
+    input.sourceFileName || `${input.title}.${CONTENT_EXTENSIONS[input.contentType]}`;
+  const file = new Blob([input.content], { type: mimeType });
+
+  const metadataResponse = await fetch('/api/lms/notes/upload-url', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      lesson_id: input.lessonId,
+      file_name: fileName,
+      file_size: file.size,
+      mime_type: mimeType,
+    }),
+  });
+  const metadata = await metadataResponse.json().catch(() => ({}));
+  if (!metadataResponse.ok) throw new Error(metadata.error || 'Yükleme adresi alınamadı.');
+
+  const uploadResponse = await fetch(metadata.signedUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': mimeType },
+    body: file,
+  });
+  if (!uploadResponse.ok) throw new Error('Not dosyası Storage alanına yüklenemedi.');
+
+  return metadata.storageRef;
+}
 
 interface NoteUploadModalProps {
   lessonId: string;
@@ -36,7 +81,7 @@ export default function NoteUploadModal({
 }: NoteUploadModalProps) {
   const [formData, setFormData] = useState<NoteFormData>({
     title: existingNote?.title || '',
-    content: existingNote?.content || '',
+    content: isNoteStorageRef(existingNote?.file_url) ? '' : existingNote?.content || '',
     content_type: (existingNote?.content_type as 'markdown' | 'html' | 'text') || 'markdown',
   });
   
@@ -48,26 +93,55 @@ export default function NoteUploadModal({
   const [showPreview, setShowPreview] = useState(true);
   const isBusy = uploadState.status === 'processing' || uploadState.status === 'saving';
 
+  useEffect(() => {
+    if (!existingNote?.id || !isNoteStorageRef(existingNote.file_url)) return;
+
+    const controller = new AbortController();
+    setUploadState({ status: 'processing', message: 'Not Storage üzerinden okunuyor...' });
+    fetch(`/api/lms/notes/content?note_id=${encodeURIComponent(existingNote.id)}`, {
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload.error || 'Not içeriği okunamadı.');
+        }
+        return response.text();
+      })
+      .then((content) => {
+        setFormData((current) => ({ ...current, content }));
+        setUploadState({ status: 'idle', message: 'Not Storage üzerinden yüklendi.' });
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setUploadState({
+          status: 'error',
+          message: error instanceof Error ? error.message : 'Not içeriği okunamadı.',
+        });
+      });
+
+    return () => controller.abort();
+  }, [existingNote?.file_url, existingNote?.id]);
+
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const input = event.currentTarget;
     const file = input.files?.[0];
     if (!file) return;
 
     const allowedTypes = ['text/plain', 'text/markdown', 'text/html', 'application/json'];
-    if (!allowedTypes.includes(file.type) && !file.name.match(/\.(txt|md|html|json)$/i)) {
+    if (!allowedTypes.includes(file.type) && !file.name.match(/\.(txt|md|markdown|html|json)$/i)) {
       setUploadState({
         status: 'error',
-        message: 'Desteklenmeyen dosya formatı. TXT, MD, HTML veya JSON dosyası yükleyin.',
+        message: 'Desteklenmeyen dosya formatı. TXT, MD, MARKDOWN, HTML veya JSON yükleyin.',
       });
       return;
     }
 
-    const isHtml = file.name.toLowerCase().endsWith('.html');
-    const maxSourceBytes = isHtml ? MAX_HTML_SOURCE_BYTES : MAX_NOTE_REQUEST_BYTES;
-    if (file.size > maxSourceBytes) {
+    const validationError = validateNoteFile(file);
+    if (validationError) {
       setUploadState({
         status: 'error',
-        message: `Dosya boyutu ${isHtml ? '10 MB' : '4 MB'} sınırını aşıyor.`,
+        message: validationError,
       });
       return;
     }
@@ -79,15 +153,16 @@ export default function NoteUploadModal({
 
     try {
       const content = await file.text();
-      const contentBytes = getUtf8ByteLength(content);
-      if (contentBytes > MAX_NOTE_CONTENT_BYTES) {
-        throw new Error(`İçerik ${formatFileSize(contentBytes)}. En fazla 10 MB olabilir.`);
+      const contentBytes = new Blob([content]).size;
+      if (contentBytes > MAX_NOTE_FILE_BYTES) {
+        throw new Error(`İçerik ${formatFileSize(contentBytes)}. En fazla 15 MB olabilir.`);
       }
 
-      let contentType: 'markdown' | 'html' | 'text' = 'text';
-      if (file.name.toLowerCase().endsWith('.md')) {
+      const lowerFileName = file.name.toLowerCase();
+      let contentType: NoteContentType = 'text';
+      if (lowerFileName.endsWith('.md') || lowerFileName.endsWith('.markdown')) {
         contentType = 'markdown';
-      } else if (isHtml) {
+      } else if (lowerFileName.endsWith('.html')) {
         contentType = 'html';
       }
 
@@ -101,9 +176,7 @@ export default function NoteUploadModal({
 
       setUploadState({
         status: 'idle',
-        message:
-          `${formatFileSize(contentBytes)} dosya hazır.` +
-          (contentBytes > MAX_NOTE_REQUEST_BYTES ? ' Kayıtta GZIP ile gönderilecek.' : ''),
+        message: `${formatFileSize(contentBytes)} dosya hazır. Kayıtta Storage alanına aktarılacak.`,
       });
     } catch (error) {
       setUploadState({
@@ -131,22 +204,29 @@ export default function NoteUploadModal({
       });
 
       const content = formData.content;
-      if (getUtf8ByteLength(content) > MAX_NOTE_CONTENT_BYTES) {
-        throw new Error('İçerik 10 MB sınırını aşıyor.');
+      if (new Blob([content]).size > MAX_NOTE_FILE_BYTES) {
+        throw new Error('İçerik 15 MB sınırını aşıyor.');
       }
 
-      const preparedRequest = await prepareJsonRequest({
-        lesson_id: lessonId,
+      const storageRef = await uploadNoteContent({
+        lessonId,
         title: formData.title.trim(),
         content,
-        content_type: formData.content_type,
-        order_index: orderIndex,
+        contentType: formData.content_type,
+        sourceFileName: formData.file?.name,
       });
 
       const response = await fetch('/api/lms/notes', {
         method: 'POST',
-        headers: { 'Content-Type': preparedRequest.contentType },
-        body: preparedRequest.body,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lesson_id: lessonId,
+          title: formData.title.trim(),
+          content: '',
+          content_type: formData.content_type,
+          file_url: storageRef,
+          order_index: orderIndex,
+        }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -155,11 +235,9 @@ export default function NoteUploadModal({
 
       setUploadState({
         status: 'success',
-        message: preparedRequest.isCompressed
-          ? `Not kayıpsız sıkıştırılarak gönderildi (${formatFileSize(preparedRequest.size)}).`
-          : existingNote
-            ? 'Not başarıyla güncellendi!'
-            : 'Not başarıyla kaydedildi!',
+        message: existingNote
+          ? 'Not Storage üzerinde güncellendi!'
+          : 'Not Storage alanına kaydedildi!',
       });
       onNoteUploaded({ ...payload.note, content } as CourseNote);
 
@@ -276,7 +354,7 @@ export default function NoteUploadModal({
                     <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-500 dark:text-neutral-400">
                       <span className="inline-flex items-center gap-1">
                         <FileText className="h-3.5 w-3.5" />
-                        Başlık, liste, tablo, kod ve görev listesi
+                        Başlık, tablo, kod, görev listesi ve Mermaid flowchart
                       </span>
                       <span className="inline-flex items-center gap-1">
                         <Sigma className="h-3.5 w-3.5" />
@@ -295,7 +373,7 @@ export default function NoteUploadModal({
                     </p>
                     <input
                       type="file"
-                      accept=".txt,.md,.html,.json"
+                      accept=".txt,.md,.markdown,.html,.json"
                       onChange={handleFileSelect}
                       className="hidden"
                       id="file-upload"
@@ -309,7 +387,7 @@ export default function NoteUploadModal({
                       Dosya Seç
                     </label>
                     <p className="text-xs text-neutral-400 dark:text-neutral-500 mt-1">
-                      .md, .html, .txt veya .json • HTML: 10 MB, diğerleri: 4 MB
+                      .md, .markdown, .html, .txt veya .json • En fazla 15 MB
                     </p>
                   </div>
                 </div>
@@ -334,7 +412,7 @@ export default function NoteUploadModal({
                     className="flex-1 w-full px-3 py-2 border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-800 text-neutral-900 dark:text-neutral-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors placeholder-neutral-400 dark:placeholder-neutral-500 resize-none font-mono text-sm"
                     placeholder={
                       formData.content_type === 'markdown' 
-                        ? '# Başlık\n\n**Kalın metin** ve *italik metin*\n\nDenklem: $E = mc^2$\n\n$$\\int_0^1 x^2 \\, dx = \\frac{1}{3}$$'
+                        ? '# Başlık\n\n**Kalın metin** ve *italik metin*\n\nDenklem: $E = mc^2$\n\n```mermaid\nflowchart LR\n  A[Başlangıç] --> B[Sonuç]\n```'
                         : formData.content_type === 'html'
                         ? '<h1>Başlık</h1>\n<p><strong>Kalın metin</strong> ve <em>italik metin</em></p>'
                         : 'Not içeriğini buraya yazın...'

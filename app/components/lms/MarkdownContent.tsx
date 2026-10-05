@@ -1,13 +1,21 @@
 'use client';
 
+import { isValidElement } from 'react';
 import ReactMarkdown from 'react-markdown';
 import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
+import MermaidDiagram from '@/app/components/lms/MermaidDiagram';
 
 interface MarkdownContentProps {
   content: string;
   className?: string;
+}
+
+function isMermaidLanguage(className?: string): boolean {
+  return Boolean(
+    className?.includes('language-mermaid') || className?.includes('language-flowchart')
+  );
 }
 
 function normalizeLatexDelimiters(content: string): string {
@@ -52,6 +60,23 @@ export default function MarkdownContent({ content, className = '' }: MarkdownCon
               {children}
             </a>
           ),
+          pre: ({ children }) => {
+            const child = Array.isArray(children) ? children[0] : children;
+            const className = isValidElement<{ className?: string }>(child)
+              ? child.props.className
+              : '';
+            return isMermaidLanguage(className) ? <>{children}</> : <pre>{children}</pre>;
+          },
+          code: ({ className, children, ...props }) => {
+            if (isMermaidLanguage(className)) {
+              return <MermaidDiagram chart={String(children).replace(/\n$/, '')} />;
+            }
+            return (
+              <code className={className} {...props}>
+                {children}
+              </code>
+            );
+          },
           input: (props) => <input {...props} disabled className="mr-2 accent-[#990000]" />,
         }}
       >

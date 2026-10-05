@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { gunzipSync } from 'node:zlib';
 import { requireLmsContentAdmin } from '@/app/api/lms/_helpers';
 import { sanitizeHtml } from '@/app/lib/lms/htmlContent';
+import { parseNoteStorageRef } from '@/app/lib/lms/noteStorage';
 
 const CONTENT_TYPES = ['markdown', 'html', 'text'] as const;
 const GZIP_CONTENT_TYPE = 'application/vnd.myuni.note+gzip';
@@ -87,7 +88,7 @@ export async function POST(request: NextRequest) {
 
   const { data: existingNote, error: lookupError } = await authResult.supabase
     .from('myuni_notes')
-    .select('id')
+    .select('id,file_url')
     .eq('lesson_id', lessonId)
     .limit(1)
     .maybeSingle();
@@ -117,6 +118,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  const previousStorage = parseNoteStorageRef(existingNote?.file_url || '');
+  if (previousStorage && existingNote?.file_url !== fileUrl) {
+    const { error: removeError } = await authResult.supabase.storage
+      .from(previousStorage.bucket)
+      .remove([previousStorage.objectPath]);
+    if (removeError) console.error('[lms/notes] old file cleanup:', removeError.message);
+  }
+
   await authResult.supabase
     .from('myuni_course_lessons')
     .update({ lesson_type: 'notes', updated_at: new Date().toISOString() })
@@ -137,6 +146,15 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'lesson_id is required' }, { status: 400 });
   }
 
+  const { data: notes, error: lookupError } = await authResult.supabase
+    .from('myuni_notes')
+    .select('file_url')
+    .eq('lesson_id', lessonId);
+
+  if (lookupError) {
+    return NextResponse.json({ error: lookupError.message }, { status: 500 });
+  }
+
   const { error } = await authResult.supabase
     .from('myuni_notes')
     .delete()
@@ -145,6 +163,18 @@ export async function DELETE(request: NextRequest) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  const storageObjects = (notes || [])
+    .map((note) => parseNoteStorageRef(note.file_url || ''))
+    .filter((storage): storage is NonNullable<typeof storage> => Boolean(storage));
+  await Promise.all(
+    storageObjects.map(async ({ bucket, objectPath }) => {
+      const { error: removeError } = await authResult.supabase.storage
+        .from(bucket)
+        .remove([objectPath]);
+      if (removeError) console.error('[lms/notes] delete file cleanup:', removeError.message);
+    })
+  );
 
   return NextResponse.json({ success: true });
 }
