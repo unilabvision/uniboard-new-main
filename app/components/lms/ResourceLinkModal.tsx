@@ -34,8 +34,6 @@ export default function ResourceLinkModal({
     }
 
     try {
-      // Basic URL check
-      // eslint-disable-next-line no-new
       new URL(url.trim());
     } catch {
       setStatus('error');
@@ -47,13 +45,14 @@ export default function ResourceLinkModal({
     setMessage('');
 
     try {
+      const content = description.trim() || (isUrl ? 'Harici bağlantı' : 'Eğitim kaynağı');
       const res = await fetch('/api/lms/notes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           lesson_id: lessonId,
           title: title.trim(),
-          content: description.trim() || (isUrl ? 'Harici bağlantı' : 'Eğitim kaynağı'),
+          content,
           content_type: 'text',
           file_url: url.trim(),
           order_index: orderIndex,
@@ -64,7 +63,7 @@ export default function ResourceLinkModal({
 
       setStatus('success');
       setMessage('Kaydedildi');
-      onSaved(data.note as CourseNote);
+      onSaved({ ...data.note, content } as CourseNote);
       setTimeout(onClose, 600);
     } catch (err) {
       setStatus('error');

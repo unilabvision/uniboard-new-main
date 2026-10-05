@@ -8,8 +8,10 @@ import {
   formatFileSize,
   getUtf8ByteLength,
   MAX_HTML_SOURCE_BYTES,
+  MAX_NOTE_CONTENT_BYTES,
   MAX_NOTE_REQUEST_BYTES,
   minifyHtmlForUpload,
+  prepareJsonRequest,
 } from '@/app/lib/lms/htmlUpload';
 
 interface NoteUploadModalProps {
@@ -79,10 +81,10 @@ export default function NoteUploadModal({
       const sourceContent = await file.text();
       const content = isHtml ? await minifyHtmlForUpload(sourceContent) : sourceContent;
       const contentBytes = getUtf8ByteLength(content);
-      if (contentBytes > MAX_NOTE_REQUEST_BYTES) {
+      if (contentBytes > MAX_NOTE_CONTENT_BYTES) {
         throw new Error(
           `İçerik küçültüldükten sonra ${formatFileSize(contentBytes)}. ` +
-            'Vercel sınırı için 4 MB altında olmalıdır.'
+            'En fazla 10 MB olabilir.'
         );
       }
 
@@ -107,7 +109,8 @@ export default function NoteUploadModal({
         status: 'idle',
         message: isHtml
           ? `HTML küçültüldü: ${formatFileSize(file.size)} → ${formatFileSize(contentBytes)} ` +
-            `(%${savedPercentage} kazanç)`
+            `(%${savedPercentage} kazanç)` +
+            (contentBytes > MAX_NOTE_REQUEST_BYTES ? ' • Kayıtta GZIP ile gönderilecek.' : '')
           : `${formatFileSize(contentBytes)} dosya hazır.`,
       });
     } catch (error) {
@@ -139,21 +142,22 @@ export default function NoteUploadModal({
         formData.content_type === 'html'
           ? await minifyHtmlForUpload(formData.content)
           : formData.content;
-      const requestBody = JSON.stringify({
+      if (getUtf8ByteLength(content) > MAX_NOTE_CONTENT_BYTES) {
+        throw new Error('Küçültülmüş içerik 10 MB sınırını aşıyor.');
+      }
+
+      const preparedRequest = await prepareJsonRequest({
         lesson_id: lessonId,
         title: formData.title.trim(),
         content,
         content_type: formData.content_type,
         order_index: orderIndex,
       });
-      if (getUtf8ByteLength(requestBody) > MAX_NOTE_REQUEST_BYTES) {
-        throw new Error('Gönderilecek içerik 4 MB sınırını aşıyor. HTML dosyasını küçültün.');
-      }
 
       const response = await fetch('/api/lms/notes', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: requestBody,
+        headers: { 'Content-Type': preparedRequest.contentType },
+        body: preparedRequest.body,
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -162,9 +166,13 @@ export default function NoteUploadModal({
 
       setUploadState({
         status: 'success',
-        message: existingNote ? 'Not başarıyla güncellendi!' : 'Not başarıyla kaydedildi!',
+        message: preparedRequest.isCompressed
+          ? `Not kayıpsız sıkıştırılarak gönderildi (${formatFileSize(preparedRequest.size)}).`
+          : existingNote
+            ? 'Not başarıyla güncellendi!'
+            : 'Not başarıyla kaydedildi!',
       });
-      onNoteUploaded(payload.note as CourseNote);
+      onNoteUploaded({ ...payload.note, content } as CourseNote);
 
       // Close modal after 1 second
       setTimeout(() => {

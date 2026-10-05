@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { gunzipSync } from 'node:zlib';
 import { requireLmsContentAdmin } from '@/app/api/lms/_helpers';
 import { sanitizeHtml } from '@/app/lib/lms/htmlContent';
 
 const CONTENT_TYPES = ['markdown', 'html', 'text'] as const;
-const MAX_CONTENT_BYTES = 4 * 1024 * 1024;
+const GZIP_CONTENT_TYPE = 'application/vnd.myuni.note+gzip';
+const MAX_CONTENT_BYTES = 10 * 1024 * 1024;
 const MAX_REQUEST_BYTES = 4 * 1024 * 1024;
+const MAX_DECOMPRESSED_REQUEST_BYTES = MAX_CONTENT_BYTES * 2 + 64 * 1024;
+const NOTE_RESPONSE_COLUMNS =
+  'id,lesson_id,title,content_type,file_url,order_index,is_ai_generated,created_at,updated_at';
 
 export const maxDuration = 10;
 
@@ -12,6 +17,22 @@ type ContentType = (typeof CONTENT_TYPES)[number];
 
 function isContentType(value: unknown): value is ContentType {
   return typeof value === 'string' && CONTENT_TYPES.includes(value as ContentType);
+}
+
+async function readRequestBody(request: NextRequest): Promise<Record<string, unknown>> {
+  if (!request.headers.get('content-type')?.startsWith(GZIP_CONTENT_TYPE)) {
+    return request.json();
+  }
+
+  const compressed = Buffer.from(await request.arrayBuffer());
+  if (compressed.byteLength > MAX_REQUEST_BYTES) {
+    throw new Error('Compressed request is too large');
+  }
+
+  const decompressed = gunzipSync(compressed, {
+    maxOutputLength: MAX_DECOMPRESSED_REQUEST_BYTES,
+  });
+  return JSON.parse(decompressed.toString('utf8'));
 }
 
 /**
@@ -29,7 +50,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'request must be at most 4 MB' }, { status: 413 });
   }
 
-  const body = await request.json().catch(() => ({}));
+  let body: Record<string, unknown>;
+  try {
+    body = await readRequestBody(request);
+  } catch {
+    return NextResponse.json(
+      { error: 'Invalid or oversized compressed request' },
+      { status: 400 }
+    );
+  }
   const lessonId = String(body.lesson_id || '').trim();
   const title = String(body.title || '').trim();
   const rawContent = String(body.content || '').trim();
@@ -45,7 +74,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'content or file_url is required' }, { status: 400 });
   }
   if (Buffer.byteLength(rawContent, 'utf8') > MAX_CONTENT_BYTES) {
-    return NextResponse.json({ error: 'content must be at most 4 MB' }, { status: 413 });
+    return NextResponse.json({ error: 'content must be at most 10 MB' }, { status: 413 });
   }
 
   const contentType: ContentType = isContentType(body.content_type) ? body.content_type : 'text';
@@ -81,10 +110,10 @@ export async function POST(request: NextRequest) {
   const writeQuery = existingNote
     ? authResult.supabase.from('myuni_notes').update(noteValues).eq('id', existingNote.id)
     : authResult.supabase.from('myuni_notes').insert([noteValues]);
-  const { data, error } = await writeQuery.select('*').single();
+  const { data, error } = await writeQuery.select(NOTE_RESPONSE_COLUMNS).single();
 
   if (error) {
-    console.error('[lms/notes] insert:', error.message);
+    console.error('[lms/notes] write:', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
