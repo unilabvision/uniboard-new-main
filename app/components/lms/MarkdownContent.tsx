@@ -18,6 +18,31 @@ function isMermaidLanguage(className?: string): boolean {
   );
 }
 
+function normalizeMermaidSource(source: string): string {
+  const normalized = source
+    .replace(/\\"/g, '"')
+    .replace(/\\'/g, "'")
+    .replace(/\\([<>])/g, '$1')
+    .replace(/(^|[\s;])([a-zA-Z][\w-]*)"([^"\n]*)"/g, '$1$2["$3"]');
+
+  if (!/^(?:flowchart|graph)\s+(?:TD|TB|BT|RL|LR)\s+/i.test(normalized)) {
+    return normalized;
+  }
+
+  return normalized
+    .replace(/^(flowchart|graph)\s+(TD|TB|BT|RL|LR)\s+/i, '$1 $2\n')
+    .replace(/]\s+(?=[a-zA-Z][\w-]*\[)/g, ']\n')
+    .replace(/\s+(?=[a-zA-Z][\w-]*\s*(?:-->|---|-.->|==>))/g, '\n')
+    .replace(/\s+(?=(?:classDef|class|style|linkStyle|click|subgraph|end)\b)/g, '\n');
+}
+
+function normalizeMermaidDirectives(content: string): string {
+  return content.replace(
+    /:::\s*(?:mermaid(?:\.js)?|flowchart)\s+([\s\S]*?)\s*:::/gi,
+    (_, source: string) => `\n\`\`\`mermaid\n${normalizeMermaidSource(source.trim())}\n\`\`\`\n`
+  );
+}
+
 function normalizeLatexDelimiters(content: string): string {
   return content
     .split(/(```[\s\S]*?```|~~~[\s\S]*?~~~)/g)
@@ -80,7 +105,7 @@ export default function MarkdownContent({ content, className = '' }: MarkdownCon
           input: (props) => <input {...props} disabled className="mr-2 accent-[#990000]" />,
         }}
       >
-        {normalizeLatexDelimiters(content)}
+        {normalizeLatexDelimiters(normalizeMermaidDirectives(content))}
       </ReactMarkdown>
     </article>
   );
