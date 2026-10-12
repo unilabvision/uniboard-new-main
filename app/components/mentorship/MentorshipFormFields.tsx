@@ -232,9 +232,10 @@ export default function MentorshipFormFields({
     try {
       const fd = new FormData();
       fd.append('file', file);
+      fd.append('scope', 'mentorship');
       fd.append('kind', kind);
       fd.append('slug', form.slug || 'draft');
-      const res = await fetch('/api/mentorship/upload', { method: 'POST', body: fd });
+      const res = await fetch('/api/admin/media', { method: 'POST', body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Upload failed');
       if (kind === 'banner') update('banner_url', data.url);

@@ -52,9 +52,11 @@ export default function CourseImageUpload({
     try {
       const body = new FormData();
       body.append('file', file);
+      body.append('scope', 'course');
       body.append('kind', kind);
+      body.append('entityId', courseId);
       body.append('persist', 'true');
-      const res = await fetch(`/api/lms/courses/${encodeURIComponent(courseId)}/media`, {
+      const res = await fetch('/api/admin/media', {
         method: 'POST',
         body,
       });
