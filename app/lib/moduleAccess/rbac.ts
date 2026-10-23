@@ -31,7 +31,11 @@ const VIEWER_EXCLUDED = new Set([
   'matching',
   'templates',
   'campaigns',
+  'publish',
+  'passes',
 ]);
+
+const EDITOR_EXCLUDED = new Set(['access', 'publish']);
 
 const CAPABILITIES_NOTES_PREFIX = 'uba_caps:';
 
@@ -82,7 +86,7 @@ export function defaultCapabilitiesForLevel(
   const all = getModuleCapabilityKeys(moduleSlugOrPrimary);
   if (all.length === 0) return [];
   if (level === 'admin') return [...all];
-  if (level === 'editor') return all.filter((k) => k !== 'access');
+  if (level === 'editor') return all.filter((k) => !EDITOR_EXCLUDED.has(k));
   return all.filter((k) => !VIEWER_EXCLUDED.has(k));
 }
 

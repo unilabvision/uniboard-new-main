@@ -335,6 +335,16 @@ function GlobalDashboardSidebarInner({
                 content = null;
               }
               break;
+
+            case 'memberships':
+              try {
+                const { membershipsSidebarContent } = await import('../../app/[locale]/memberships/sidebar-content');
+                content = membershipsSidebarContent;
+              } catch (error) {
+                console.error('Could not load memberships sidebar content', error);
+                content = null;
+              }
+              break;
             // case 'sales':
             //   const { salesSidebarContent } = await import('@/app/[locale]/dashboard/sales/sidebar-content');
             //   content = salesSidebarContent;

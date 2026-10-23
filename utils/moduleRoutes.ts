@@ -24,6 +24,7 @@ const modulePathOverrides: Record<string, string> = {
   mentorluk: 'mentorship',
   mentorships: 'mentorship',
   mentor: 'mentorship',
+  memberships: 'memberships',
 };
 
 export const getModuleHref = (locale: string, moduleKey: string) => {

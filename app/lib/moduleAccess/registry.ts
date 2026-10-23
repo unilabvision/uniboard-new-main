@@ -136,6 +136,16 @@ export const MODULE_ACCESS_REGISTRY: Record<string, ModuleAccessDefinition> = {
     descriptionEn: 'Manage mentorship announcements and applications.',
     managePolicy: 'moduleHolder',
   },
+  memberships: {
+    primaryModuleKey: 'memberships',
+    moduleKeys: ['memberships'],
+    dashboardPath: 'memberships',
+    nameTr: 'Üyelik Paketleri',
+    nameEn: 'Membership Plans',
+    descriptionTr: 'Süreli paketleri, fiyatları ve hizmet kapsamını yönetin.',
+    descriptionEn: 'Manage fixed-term plans, prices and included services.',
+    managePolicy: 'moduleHolder',
+  },
 };
 
 export function getModuleAccessDefinition(moduleKey: string): ModuleAccessDefinition | null {

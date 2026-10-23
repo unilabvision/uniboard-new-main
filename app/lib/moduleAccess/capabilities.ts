@@ -11,6 +11,10 @@ import {
   BLOG_CAPABILITIES,
   BLOG_CAPABILITY_LABELS,
 } from '@/app/lib/blog/permissions';
+import {
+  MEMBERSHIPS_CAPABILITIES,
+  MEMBERSHIPS_CAPABILITY_LABELS,
+} from '@/app/lib/memberships/permissions';
 
 export type ModuleCapabilityDef = {
   key: string;
@@ -23,6 +27,18 @@ export type ModuleCapabilityDef = {
  * Anahtar: registry `primaryModuleKey` (lms → courses).
  */
 export const MODULE_CAPABILITIES: Record<string, ModuleCapabilityDef[]> = {
+  memberships: [
+    ...MEMBERSHIPS_CAPABILITIES.map((key) => ({
+      key,
+      labelTr: MEMBERSHIPS_CAPABILITY_LABELS[key].tr,
+      labelEn: MEMBERSHIPS_CAPABILITY_LABELS[key].en,
+    })),
+    {
+      key: 'access',
+      labelTr: 'Yetkilendirme yönetimi',
+      labelEn: 'Access management',
+    },
+  ],
   blog: BLOG_CAPABILITIES.map((key) => ({
     key,
     labelTr: BLOG_CAPABILITY_LABELS[key].tr,
