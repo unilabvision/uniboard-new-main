@@ -156,6 +156,7 @@ export default function CertificateIssuancePage({
   const [items, setItems] = useState<CertificateIssuanceRow[]>([]);
   const [latestEvent, setLatestEvent] = useState<LatestEventInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [issuing, setIssuing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -225,7 +226,7 @@ export default function CertificateIssuancePage({
       setLoading(true);
       setError(null);
       setMessage(null);
-      const res = await fetch(`/api/certificates/issuance?kind=${tab}&sync=1`);
+      const res = await fetch(`/api/certificates/issuance?kind=${tab}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
       setItems((data.items as CertificateIssuanceRow[]) || []);
@@ -250,6 +251,29 @@ export default function CertificateIssuancePage({
   useEffect(() => {
     load();
   }, [load]);
+
+  const syncAndLoad = async () => {
+    try {
+      setSyncing(true);
+      setError(null);
+      setMessage(null);
+      const res = await fetch('/api/certificates/issuance/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: tab,
+          eventId: tab === 'event_participation' ? latestEvent?.id : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Sync failed');
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Sync failed');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -420,11 +444,11 @@ export default function CertificateIssuancePage({
         </div>
         <button
           type="button"
-          onClick={load}
-          disabled={loading}
+          onClick={syncAndLoad}
+          disabled={loading || syncing}
           className="inline-flex items-center gap-2 px-4 py-2.5 border border-neutral-300 dark:border-neutral-600 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 text-sm shrink-0"
         >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-4 h-4 ${loading || syncing ? 'animate-spin' : ''}`} />
           {t.refresh}
         </button>
       </div>

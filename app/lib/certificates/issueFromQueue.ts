@@ -8,6 +8,8 @@ import {
   type OrganizationForNumber,
 } from '@/app/lib/certificates/issuance';
 import { buildIssuanceCertificateFields } from '@/app/lib/certificates/issuanceFields';
+import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
+import { isCertificateEligible } from '@/app/lib/certificates/syncIssuanceQueue';
 
 export type IssueRequestItem = {
   queueIds: string[];
@@ -30,6 +32,68 @@ export type IssueResult = {
   errors: Array<{ id: string; error: string }>;
 };
 
+function readSubmission(raw: unknown): Record<string, unknown> {
+  return raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+}
+
+type EventCertificateLinkInput = {
+  row: CertificateIssuanceRow;
+  submission: Record<string, unknown>;
+  certificateId: number;
+  certificateNumber: string;
+  certificateUrl: string;
+  organizationName: string;
+  instructor: string;
+  duration: string;
+};
+
+async function linkEventCertificateToUser(
+  supabase: ReturnType<typeof getCertificatesServiceSupabase>,
+  input: EventCertificateLinkInput
+) {
+  const userId =
+    typeof input.submission.certificate_user_id === 'string'
+      ? input.submission.certificate_user_id.trim()
+      : '';
+  if (input.row.kind !== 'event_participation' || !input.row.event_id || !userId) return;
+
+  const payload = {
+    certificate_number: input.certificateNumber,
+    user_id: userId,
+    event_id: input.row.event_id,
+    student_full_name: input.row.recipient_name,
+    event_name: input.row.event_name || 'Etkinlik',
+    organizer_name: input.instructor,
+    event_duration: input.duration,
+    organization_name: input.organizationName,
+    organization_description: '',
+    organizer_bio: '',
+    certificate_url: input.certificateUrl,
+    certificate_metadata: {
+      source: 'uniboard_issuance',
+      source_id: input.row.source_id,
+      public_certificate_id: input.certificateId,
+    },
+    is_active: true,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data: existing, error: existingError } = await supabase
+    .from('myuni_event_certificates')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('event_id', input.row.event_id)
+    .eq('is_active', true)
+    .maybeSingle();
+  if (existingError) throw new Error(existingError.message);
+
+  const query = existing?.id
+    ? supabase.from('myuni_event_certificates').update(payload).eq('id', existing.id)
+    : supabase.from('myuni_event_certificates').insert(payload);
+  const { error } = await query;
+  if (error) throw new Error(error.message);
+}
+
 function formatIssueDateForDb(): string {
   // certificates.issuedate — create sayfası ile aynı (YYYY-MM-DD); görüntüleme renderer'da locale ile yapılır
   return new Date().toISOString().split('T')[0];
@@ -40,7 +104,7 @@ export async function issueCertificatesFromQueue(
 ): Promise<IssueResult> {
   const supabase = getCertificatesServiceSupabase();
   const queueIds = [...new Set(params.queueIds.filter(Boolean))];
-  const result: IssueResult = { issued: 0, emailed: 0, failed: 0, errors: [] };
+  const result: IssueResult = { issued: 0, emailed: 0, failed: 0, skipped: 0, errors: [] };
 
   if (queueIds.length === 0) {
     return result;
@@ -65,8 +129,40 @@ export async function issueCertificatesFromQueue(
     abbreviation: params.organizationAbbreviation || null,
   };
 
+  const applicationIds = (rows || [])
+    .filter((row) => row.source_type === 'site_application')
+    .map((row) => row.source_id);
+  const applicationsById = new Map<string, Record<string, unknown>>();
+
+  if (applicationIds.length > 0) {
+    const { data: applications, error: applicationsError } = await supabase
+      .from(siteApplicationsDb.applications)
+      .select('id, submission_data')
+      .in('id', applicationIds);
+
+    if (applicationsError) {
+      throw new Error(applicationsError.message);
+    }
+    for (const application of applications || []) {
+      applicationsById.set(String(application.id), readSubmission(application.submission_data));
+    }
+  }
+
   for (const row of (rows || []) as CertificateIssuanceRow[]) {
     try {
+      if (row.source_type === 'site_application') {
+        const submission = applicationsById.get(row.source_id);
+        if (!submission || !isCertificateEligible(submission)) {
+          const message = 'Certificate package payment is no longer valid';
+          await supabase
+            .from(CERTIFICATE_ISSUANCE_TABLE)
+            .update({ status: 'skipped', error: message, updated_at: new Date().toISOString() })
+            .eq('id', row.id);
+          result.skipped = (result.skipped || 0) + 1;
+          continue;
+        }
+      }
+
       // Avoid Gmail SMTP 454 "Too many login attempts" on bulk issue.
       await new Promise((r) => setTimeout(r, 1500));
 
@@ -166,6 +262,18 @@ export async function issueCertificatesFromQueue(
       const publicUrl =
         certificateurl ||
         buildCertificatePublicUrl(params.organizationSlug, certificatenumber);
+
+      const sourceSubmission = applicationsById.get(row.source_id) || {};
+      await linkEventCertificateToUser(supabase, {
+        row,
+        submission: sourceSubmission,
+        certificateId,
+        certificateNumber: certificatenumber,
+        certificateUrl: publicUrl,
+        organizationName: org.name || params.organizationSlug,
+        instructor: params.instructor?.trim() || '',
+        duration: params.duration?.trim() || '',
+      });
 
       const emailResult = await sendCertificateCompletionEmail(
         { name: row.recipient_name, email: row.recipient_email },

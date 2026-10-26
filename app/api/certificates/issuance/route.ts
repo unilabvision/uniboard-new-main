@@ -7,7 +7,6 @@ import {
 } from '@/app/lib/certificates/issuance';
 import {
   resolveLatestEventForIssuance,
-  syncCertificateIssuanceQueue,
 } from '@/app/lib/certificates/syncIssuanceQueue';
 
 export async function GET(request: NextRequest) {
@@ -19,23 +18,9 @@ export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const kind = searchParams.get('kind') as CertificateIssuanceKind | null;
   const status = searchParams.get('status') as CertificateIssuanceStatus | null;
-  const sync = searchParams.get('sync') === '1';
-
   let latestEvent: Awaited<ReturnType<typeof resolveLatestEventForIssuance>> = null;
-  let syncMeta: unknown = null;
 
-  if (sync) {
-    try {
-      syncMeta = await syncCertificateIssuanceQueue();
-      latestEvent =
-        (syncMeta as { events?: { latestEvent?: typeof latestEvent } })?.events
-          ?.latestEvent || null;
-    } catch (err) {
-      console.error('Issuance list sync warning:', err);
-    }
-  }
-
-  if (!latestEvent && kind === 'event_participation') {
+  if (kind === 'event_participation') {
     try {
       latestEvent = await resolveLatestEventForIssuance();
     } catch (err) {
@@ -70,6 +55,5 @@ export async function GET(request: NextRequest) {
     items: data ?? [],
     total: count ?? 0,
     latestEvent,
-    sync: syncMeta,
   });
 }
