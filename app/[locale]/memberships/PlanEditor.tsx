@@ -46,6 +46,10 @@ function emptyDraft(): PlanDraft {
   };
 }
 
+function planCodeForDuration(months: PlanDraft['duration_months']): string {
+  return `MYUNI_${months}_${months === 1 ? 'MONTH' : 'MONTHS'}`;
+}
+
 function planToDraft(plan: MembershipPlan | null): PlanDraft {
   if (!plan) return emptyDraft();
   return {
@@ -233,7 +237,14 @@ export default function PlanEditor({
               <select
                 value={draft.duration_months}
                 disabled={Boolean(plan)}
-                onChange={(event) => update('duration_months', Number(event.target.value) as 1 | 3 | 6)}
+                onChange={(event) => {
+                  const duration = Number(event.target.value) as PlanDraft['duration_months'];
+                  setDraft((current) => ({
+                    ...current,
+                    duration_months: duration,
+                    code: planCodeForDuration(duration),
+                  }));
+                }}
                 className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 disabled:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-950"
               >
                 {[1, 3, 6].map((months) => (
@@ -245,8 +256,7 @@ export default function PlanEditor({
               {isTr ? 'Paket kodu' : 'Plan code'}
               <input
                 value={draft.code}
-                disabled={Boolean(plan)}
-                onChange={(event) => update('code', event.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ''))}
+                disabled
                 className="mt-1.5 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2.5 font-mono text-sm disabled:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-950"
               />
             </label>

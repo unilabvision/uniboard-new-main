@@ -10,6 +10,10 @@ import {
   loadUserAccessRows,
   resolveMembershipFromRows,
 } from '@/app/lib/moduleAccess/rbac';
+import type { MembershipBenefit } from '@/app/lib/memberships/types';
+
+const MAX_MEMBERSHIP_BENEFITS = 500;
+const MAX_MEMBERSHIP_PAYLOAD_BYTES = 512 * 1024;
 
 function getMembershipsSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL2;
@@ -60,10 +64,38 @@ export function validateMembershipPlanPayload(plan: Record<string, unknown>): st
   const durationMonths = Number(plan.duration_months);
   const code = typeof plan.code === 'string' ? plan.code.trim() : '';
   const nameTr = typeof plan.name_tr === 'string' ? plan.name_tr.trim() : '';
+  const expectedCode = `MYUNI_${durationMonths}_${durationMonths === 1 ? 'MONTH' : 'MONTHS'}`;
 
   if (!Number.isFinite(price) || price < 0) return 'Price must be zero or greater';
   if (![1, 3, 6].includes(durationMonths)) return 'Duration must be 1, 3 or 6 months';
   if (!/^[A-Z0-9_]+$/.test(code)) return 'Plan code is invalid';
+  if (code !== expectedCode) return `Plan code must be ${expectedCode}`;
   if (!nameTr) return 'Turkish plan name is required';
   return null;
+}
+
+export function validateMembershipBenefitsPayload(
+  benefits: MembershipBenefit[]
+): string | null {
+  if (benefits.length > MAX_MEMBERSHIP_BENEFITS) {
+    return `A plan can contain at most ${MAX_MEMBERSHIP_BENEFITS} benefits`;
+  }
+
+  const keys = new Set<string>();
+  for (const benefit of benefits) {
+    const key = [
+      benefit.resource_type,
+      benefit.access_scope,
+      benefit.resource_id ?? '',
+      benefit.capability,
+    ].join(':');
+    if (keys.has(key)) return 'Plan benefits must be unique';
+    keys.add(key);
+  }
+  return null;
+}
+
+export function isMembershipPayloadTooLarge(request: Request): boolean {
+  const contentLength = Number(request.headers.get('content-length'));
+  return Number.isFinite(contentLength) && contentLength > MAX_MEMBERSHIP_PAYLOAD_BYTES;
 }

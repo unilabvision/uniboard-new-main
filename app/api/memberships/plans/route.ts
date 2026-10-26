@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  isMembershipPayloadTooLarge,
   requireMembershipsCapability,
+  validateMembershipBenefitsPayload,
   validateMembershipPlanPayload,
 } from '@/app/api/memberships/_helpers';
 import type { MembershipBenefit } from '@/app/lib/memberships/types';
@@ -18,7 +20,15 @@ export async function GET() {
 
   const { data, error } = await access.supabase
     .from('myuni_membership_plans')
-    .select('*, myuni_membership_plan_benefits(*)')
+    .select(`
+      id, family_code, code, version, duration_months, name_tr, name_en,
+      description_tr, description_en, price, currency, status, is_visible,
+      published_at, updated_at,
+      myuni_membership_plan_benefits(
+        id, plan_id, resource_type, access_scope, resource_id,
+        capability, label_tr, label_en, sort_order
+      )
+    `)
     .order('duration_months', { ascending: true })
     .order('version', { ascending: false });
 
@@ -34,14 +44,21 @@ export async function POST(request: NextRequest) {
   if (access.error || !access.supabase || !access.userId) {
     return NextResponse.json({ error: access.error }, { status: access.status });
   }
+  if (isMembershipPayloadTooLarge(request)) {
+    return NextResponse.json({ error: 'Membership payload is too large' }, { status: 413 });
+  }
 
   const body = (await request.json().catch(() => null)) as SaveBody | null;
   if (!body?.plan || !Array.isArray(body.benefits)) {
     return NextResponse.json({ error: 'plan and benefits are required' }, { status: 400 });
   }
   const validationError = validateMembershipPlanPayload(body.plan);
-  if (validationError) {
-    return NextResponse.json({ error: validationError }, { status: 400 });
+  const benefitsValidationError = validateMembershipBenefitsPayload(body.benefits);
+  if (validationError || benefitsValidationError) {
+    return NextResponse.json(
+      { error: validationError || benefitsValidationError },
+      { status: 400 }
+    );
   }
 
   const { data, error } = await access.supabase.rpc('myuni_membership_save_draft', {

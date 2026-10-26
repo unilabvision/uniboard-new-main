@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { BadgeCheck, CopyPlus, Loader2, Plus, Rocket, ShieldCheck } from 'lucide-react';
+import { BadgeCheck, CopyPlus, Loader2, Plus, Rocket, ShieldCheck, Trash2 } from 'lucide-react';
 import PlanEditor from './PlanEditor';
 import type { MembershipCatalogItem, MembershipPlan } from '@/app/lib/memberships/types';
 
@@ -95,6 +95,20 @@ export default function MembershipPlansPage({
     await runAction(
       () => fetch(`/api/memberships/plans/${plan.id}/publish`, { method: 'POST' }),
       isTr ? 'Paket MyUNI için yayınlandı.' : 'Plan published for MyUNI.'
+    );
+  };
+
+  const deletePlan = async (plan: MembershipPlan) => {
+    const confirmed = window.confirm(
+      isTr
+        ? `${plan.name_tr} v${plan.version} kalıcı olarak silinsin mi?`
+        : `Permanently delete ${plan.name_en || plan.name_tr} v${plan.version}?`
+    );
+    if (!confirmed) return;
+
+    await runAction(
+      () => fetch(`/api/memberships/plans/${plan.id}`, { method: 'DELETE' }),
+      isTr ? 'Paket sürümü silindi.' : 'Plan version deleted.'
     );
   };
 
@@ -222,17 +236,28 @@ export default function MembershipPlansPage({
         }}
       />
 
-      {canManage && selectedPlan?.status === 'draft' && (
-        <div className="mt-4 flex justify-end">
+      {canManage && selectedPlan && selectedPlan.status !== 'published' && (
+        <div className="mt-4 flex flex-wrap justify-end gap-3">
           <button
             type="button"
-            disabled={busy || selectedPlan.myuni_membership_plan_benefits.length === 0}
-            onClick={() => publishPlan(selectedPlan)}
-            className="inline-flex items-center gap-2 rounded-lg bg-[#166534] px-5 py-3 text-sm font-semibold text-white hover:bg-[#14532d] disabled:cursor-not-allowed disabled:opacity-45"
+            disabled={busy}
+            onClick={() => deletePlan(selectedPlan)}
+            className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-5 py-3 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-45 dark:border-red-900 dark:bg-neutral-900 dark:hover:bg-red-950/30"
           >
-            <Rocket className="h-4 w-4" />
-            {isTr ? 'MyUNI üzerinde yayınla' : 'Publish on MyUNI'}
+            <Trash2 className="h-4 w-4" />
+            {isTr ? 'Bu sürümü sil' : 'Delete this version'}
           </button>
+          {selectedPlan.status === 'draft' && (
+            <button
+              type="button"
+              disabled={busy || selectedPlan.myuni_membership_plan_benefits.length === 0}
+              onClick={() => publishPlan(selectedPlan)}
+              className="inline-flex items-center gap-2 rounded-lg bg-[#166534] px-5 py-3 text-sm font-semibold text-white hover:bg-[#14532d] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <Rocket className="h-4 w-4" />
+              {isTr ? 'MyUNI üzerinde yayınla' : 'Publish on MyUNI'}
+            </button>
+          )}
         </div>
       )}
     </div>

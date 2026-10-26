@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { mentorshipDb } from '@/app/lib/mentorship/config';
+import { getLocalizedJson, mentorshipDb } from '@/app/lib/mentorship/config';
 import {
   normalizeMentorshipQuestions,
   splitLegacyAnswerFields,
   validateRequiredAnswers,
 } from '@/app/lib/mentorship/questions';
 import type { MentorshipApplicationInput } from '@/app/types/mentorship';
+import { sendMentorshipApplicationEmails } from '@/app/_services/mentorshipApplicationEmail';
 
 function getSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL2;
@@ -58,54 +59,34 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabase();
 
-    let mentorshipId = body.mentorship_id;
-    let applicationQuestions: unknown = [];
-
     const selectCols =
-      'id, is_active, is_application_open, max_mentees, current_mentees, application_questions';
+      'id, slug, title, mentor_name, is_active, is_application_open, max_mentees, current_mentees, application_questions';
+    const lookupColumn = body.mentorship_id ? 'id' : 'slug';
+    const lookupValue = body.mentorship_id || body.mentorship_slug!;
+    const { data: mentorship, error: mentorshipError } = await supabase
+      .from(mentorshipDb.mentorships)
+      .select(selectCols)
+      .eq(lookupColumn, lookupValue)
+      .maybeSingle();
 
-    if (!mentorshipId && body.mentorship_slug) {
-      const { data: m, error: mErr } = await supabase
-        .from(mentorshipDb.mentorships)
-        .select(selectCols)
-        .eq('slug', body.mentorship_slug)
-        .maybeSingle();
-
-      if (mErr) {
-        return NextResponse.json({ error: mErr.message }, { status: 500 });
-      }
-      if (!m || !m.is_active) {
-        return NextResponse.json({ error: 'Mentörlük bulunamadı' }, { status: 404 });
-      }
-      if (!m.is_application_open) {
-        return NextResponse.json({ error: 'Başvurular kapalı' }, { status: 400 });
-      }
-      if (m.max_mentees != null && m.current_mentees >= m.max_mentees) {
-        return NextResponse.json({ error: 'Kontenjan dolu' }, { status: 400 });
-      }
-      mentorshipId = m.id;
-      applicationQuestions = m.application_questions;
-    } else if (mentorshipId) {
-      const { data: m, error: mErr } = await supabase
-        .from(mentorshipDb.mentorships)
-        .select(selectCols)
-        .eq('id', mentorshipId)
-        .maybeSingle();
-
-      if (mErr) {
-        return NextResponse.json({ error: mErr.message }, { status: 500 });
-      }
-      if (!m || !m.is_active) {
-        return NextResponse.json({ error: 'Mentörlük bulunamadı' }, { status: 404 });
-      }
-      if (!m.is_application_open) {
-        return NextResponse.json({ error: 'Başvurular kapalı' }, { status: 400 });
-      }
-      if (m.max_mentees != null && m.current_mentees >= m.max_mentees) {
-        return NextResponse.json({ error: 'Kontenjan dolu' }, { status: 400 });
-      }
-      applicationQuestions = m.application_questions;
+    if (mentorshipError) {
+      return NextResponse.json({ error: mentorshipError.message }, { status: 500 });
     }
+    if (!mentorship || !mentorship.is_active) {
+      return NextResponse.json({ error: 'Mentörlük bulunamadı' }, { status: 404 });
+    }
+    if (!mentorship.is_application_open) {
+      return NextResponse.json({ error: 'Başvurular kapalı' }, { status: 400 });
+    }
+    if (
+      mentorship.max_mentees != null &&
+      mentorship.current_mentees >= mentorship.max_mentees
+    ) {
+      return NextResponse.json({ error: 'Kontenjan dolu' }, { status: 400 });
+    }
+
+    const mentorshipId = mentorship.id;
+    const applicationQuestions = mentorship.application_questions;
 
     const questions = normalizeMentorshipQuestions(applicationQuestions);
     const answers = buildAnswers(body);
@@ -165,6 +146,29 @@ export async function POST(request: NextRequest) {
       changed_by: null,
       note: 'Public application submitted',
     });
+
+    const locale = body.locale === 'en' ? 'en' : 'tr';
+    const emailResult = await sendMentorshipApplicationEmails({
+      applicationId: data.id,
+      applicantEmail: email,
+      firstName,
+      lastName,
+      phone: body.phone?.trim() || null,
+      school: body.school?.trim() || null,
+      department: body.department?.trim() || null,
+      locale,
+      mentorshipTitle: getLocalizedJson(mentorship.title, locale, 'MyUNI Mentorship'),
+      mentorName: mentorship.mentor_name,
+    });
+
+    if (!emailResult.applicantSent || !emailResult.notificationSent) {
+      console.error('[mentorship] application email delivery failed', {
+        applicationId: data.id,
+        applicantSent: emailResult.applicantSent,
+        notificationSent: emailResult.notificationSent,
+        error: emailResult.error,
+      });
+    }
 
     return NextResponse.json({ application: data }, { status: 201 });
   } catch (err) {

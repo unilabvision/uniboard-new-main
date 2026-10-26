@@ -13,6 +13,9 @@ import {
 } from 'lucide-react';
 import { certificatesSupabase as supabase } from '@/app/_services/certificatesSupabaseClient';
 import type { CertificateIssuanceRow } from '@/app/lib/certificates/issuance';
+import CertificateIssuancePreview, {
+  type CertificateIssuancePreviewTemplate,
+} from '@/app/components/certificates/CertificateIssuancePreview';
 
 type TabKey = 'event_participation' | 'course_achievement';
 
@@ -23,11 +26,7 @@ type Organization = {
   abbreviation?: string | null;
 };
 
-type Template = {
-  id: number;
-  name: string;
-  organization_slug: string | null;
-};
+type Template = CertificateIssuancePreviewTemplate;
 
 type LatestEventInfo = {
   id: string;
@@ -63,6 +62,9 @@ const texts = {
     instructorHint: 'Sertifikada ismin altında / eğitmen satırında görünür',
     instructorPlaceholder: 'Örn: Dr. Ayşe Yılmaz',
     needInstructor: 'Eğitmen adını girin (sertifikada görünmesi için gerekli)',
+    duration: 'Program süresi',
+    durationHint: 'Sertifikadaki süre alanında görünür ve tüm seçili alıcılara uygulanır',
+    durationPlaceholder: 'Örn: 6 saat',
     certDescription: 'Sertifika açıklaması',
     certDescriptionHint:
       'Şablondaki isim altındaki satır (ör. “Embriyoloji 101 etkinliğine katılım”)',
@@ -114,6 +116,9 @@ const texts = {
     instructorHint: 'Shown on the certificate instructor line',
     instructorPlaceholder: 'e.g. Dr. Jane Smith',
     needInstructor: 'Enter an instructor name (required on the certificate)',
+    duration: 'Program duration',
+    durationHint: 'Shown in the certificate duration field and applied to all selected recipients',
+    durationPlaceholder: 'e.g. 6 hours',
     certDescription: 'Certificate description',
     certDescriptionHint:
       'Line under the name on the template (e.g. “Participation in Embryology 101”)',
@@ -158,6 +163,7 @@ export default function CertificateIssuancePage({
   const [customMessage, setCustomMessage] = useState('');
   const [certificateDescription, setCertificateDescription] = useState('');
   const [instructor, setInstructor] = useState('');
+  const [duration, setDuration] = useState('');
   const [generatingDescription, setGeneratingDescription] = useState(false);
 
   const [organizations, setOrganizations] = useState<Organization[]>([]);
@@ -177,7 +183,9 @@ export default function CertificateIssuancePage({
         supabase.from('organizations').select('id, name, slug, abbreviation').order('name'),
         supabase
           .from('certificate_templates')
-          .select('id, name, organization_slug')
+          .select(
+            'id, name, description, background_image, organization_slug, is_default, design_settings, created_at, updated_at'
+          )
           .order('name'),
       ]);
       setOrganizations((orgs as Organization[]) || []);
@@ -263,6 +271,21 @@ export default function CertificateIssuancePage({
     return items[0]?.course_name || '';
   }, [tab, latestEvent, items]);
 
+  const selectedTemplate = useMemo(
+    () => templates.find((template) => template.id === templateId) || null,
+    [templateId, templates]
+  );
+
+  const previewItem = useMemo(
+    () => items.find((item) => selected.has(item.id)) || items[0] || null,
+    [items, selected]
+  );
+
+  const selectedOrganization = useMemo(
+    () => organizations.find((organization) => organization.slug === orgSlug),
+    [orgSlug, organizations]
+  );
+
   const generateDescriptionWithAi = async () => {
     const courseName = eventOrCourseName.trim();
     if (!courseName) {
@@ -285,19 +308,20 @@ export default function CertificateIssuancePage({
           ? `Write a complete professional course-completion description in 2-3 sentences (about 200-350 characters). Mention successful completion of "${courseName}". Do not truncate.`
           : `2-3 tam cümlelik resmi kurs tamamlama açıklaması yaz (yaklaşık 200-350 karakter). "${courseName}" programını başarıyla tamamladığını belirt. Cümleyi yarıda kesme.`;
 
+      const requestBody = {
+        action: 'generateDescription',
+        data: {
+          courseName,
+          instructor: instructor.trim() || undefined,
+          organization: org?.name || 'MyUNI',
+          customPrompt,
+          language: locale === 'en' ? 'en' : 'tr',
+        },
+      };
       const response = await fetch('/api/ai/gemini', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'generateDescription',
-          data: {
-            courseName,
-            instructor: instructor.trim() || undefined,
-            organization: org?.name || 'MyUNI',
-            customPrompt,
-            language: locale === 'en' ? 'en' : 'tr',
-          },
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await response.json().catch(() => ({}));
@@ -346,6 +370,7 @@ export default function CertificateIssuancePage({
           organizationName: org?.name,
           organizationAbbreviation: org?.abbreviation,
           instructor: instructor.trim(),
+          duration: duration.trim() || undefined,
           customMessage,
           description: certificateDescription.trim() || undefined,
           locale,
@@ -442,7 +467,8 @@ export default function CertificateIssuancePage({
         </div>
       )}
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-xl p-4">
+      <div className="mb-6 grid items-start gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(420px,7fr)]">
+        <div className="grid gap-3 sm:grid-cols-2 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-xl p-4">
         <label className="text-sm">
           <span className="block text-neutral-500 mb-1">{t.organization}</span>
           <select
@@ -471,7 +497,7 @@ export default function CertificateIssuancePage({
             ))}
           </select>
         </label>
-        <label className="text-sm sm:col-span-2">
+        <label className="text-sm">
           <span className="block text-neutral-500 mb-1">{t.instructor}</span>
           <input
             type="text"
@@ -482,7 +508,18 @@ export default function CertificateIssuancePage({
           />
           <span className="mt-1 block text-xs text-neutral-500">{t.instructorHint}</span>
         </label>
-        <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-4">
+        <label className="text-sm">
+          <span className="block text-neutral-500 mb-1">{t.duration}</span>
+          <input
+            type="text"
+            value={duration}
+            onChange={(event) => setDuration(event.target.value)}
+            placeholder={t.durationPlaceholder}
+            className="w-full rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 px-3 py-2"
+          />
+          <span className="mt-1 block text-xs text-neutral-500">{t.durationHint}</span>
+        </label>
+        <div className="flex items-end gap-2 sm:col-span-2">
           <button
             type="button"
             onClick={selectAll}
@@ -511,7 +548,7 @@ export default function CertificateIssuancePage({
             {issuing ? t.issuing : `${t.issue} (${selected.size})`}
           </button>
         </div>
-        <div className="sm:col-span-2 lg:col-span-4 space-y-1.5">
+        <div className="sm:col-span-2 space-y-1.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-sm text-neutral-500">{t.certDescription}</span>
             <button
@@ -539,7 +576,7 @@ export default function CertificateIssuancePage({
             {t.certDescriptionHint}
           </span>
         </div>
-        <label className="text-sm sm:col-span-2 lg:col-span-4">
+        <label className="text-sm sm:col-span-2">
           <span className="block text-neutral-500 mb-1">{t.emailBody}</span>
           <textarea
             value={customMessage}
@@ -550,6 +587,19 @@ export default function CertificateIssuancePage({
           />
           <span className="mt-1 block text-xs text-neutral-500">{t.emailBodyHint}</span>
         </label>
+        </div>
+        <CertificateIssuancePreview
+          template={selectedTemplate}
+          kind={tab}
+          locale={locale === 'en' ? 'en' : 'tr'}
+          recipientName={previewItem?.recipient_name || ''}
+          sourceName={eventOrCourseName}
+          organizationName={selectedOrganization?.name || ''}
+          certificateTitle={previewItem?.certificate_title}
+          description={certificateDescription}
+          instructor={instructor}
+          duration={duration}
+        />
       </div>
 
       {error && (

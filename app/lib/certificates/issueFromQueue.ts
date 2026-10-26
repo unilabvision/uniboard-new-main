@@ -7,6 +7,7 @@ import {
   type CertificateIssuanceRow,
   type OrganizationForNumber,
 } from '@/app/lib/certificates/issuance';
+import { buildIssuanceCertificateFields } from '@/app/lib/certificates/issuanceFields';
 
 export type IssueRequestItem = {
   queueIds: string[];
@@ -32,45 +33,6 @@ export type IssueResult = {
 function formatIssueDateForDb(): string {
   // certificates.issuedate — create sayfası ile aynı (YYYY-MM-DD); görüntüleme renderer'da locale ile yapılır
   return new Date().toISOString().split('T')[0];
-}
-
-function getIssuanceFieldTexts(locale: string, kind: CertificateIssuanceRow['kind']) {
-  const isEn = locale === 'en';
-  if (kind === 'event_participation') {
-    return {
-      certificate_title: isEn ? 'Certificate of Participation' : 'Katılım Sertifikası',
-      provider_text: isEn ? 'provided by' : 'tarafından sağlanmıştır',
-      instructor_label: isEn ? 'Instructor' : 'Eğitmen',
-      date_label: isEn ? 'Issue Date' : 'Veriliş Tarihi',
-      certificate_number_label: isEn ? 'Certificate No' : 'Sertifika No',
-      total_hours_label: isEn ? 'Total Hours' : 'Toplam Süre',
-      completion_text: isEn
-        ? 'has successfully participated in this event.'
-        : 'etkinliğine katılım',
-      skills_label: isEn ? 'Skills' : 'Kazanılan Yetkinlikler',
-      descriptionFor: (eventName: string) =>
-        isEn
-          ? `Participation in ${eventName}`
-          : `${eventName} etkinliğine katılım`,
-    };
-  }
-
-  return {
-    certificate_title: isEn ? 'Certificate of Achievement' : 'Başarı Sertifikası',
-    provider_text: isEn ? 'provided by' : 'tarafından sağlanmıştır',
-    instructor_label: isEn ? 'Instructor' : 'Eğitmen',
-    date_label: isEn ? 'Issue Date' : 'Veriliş Tarihi',
-    certificate_number_label: isEn ? 'Certificate No' : 'Sertifika No',
-    total_hours_label: isEn ? 'Total Hours' : 'Toplam Süre',
-    completion_text: isEn
-      ? 'has successfully completed the course.'
-      : 'kursunu başarıyla tamamladı',
-    skills_label: isEn ? 'Skills' : 'Kazanılan Yetkinlikler',
-    descriptionFor: (courseName: string) =>
-      isEn
-        ? `Successfully completed ${courseName}`
-        : `${courseName} kursunu başarıyla tamamladı`,
-  };
 }
 
 export async function issueCertificatesFromQueue(
@@ -113,10 +75,23 @@ export async function issueCertificatesFromQueue(
           ? row.event_name || 'Etkinlik'
           : row.course_name || 'Kurs';
       const locale = params.locale || row.locale || 'tr';
-      const fieldTexts = getIssuanceFieldTexts(locale, row.kind);
-      const title = row.certificate_title || fieldTexts.certificate_title;
-      const description =
-        params.description?.trim() || fieldTexts.descriptionFor(courseName);
+      const certificateFields = buildIssuanceCertificateFields({
+        kind: row.kind,
+        locale,
+        recipientName: row.recipient_name,
+        sourceName: courseName,
+        certificateTitle: row.certificate_title,
+        description: params.description,
+        instructor: params.instructor,
+        duration: params.duration,
+        templateId: params.templateId,
+        organizationSlug: params.organizationSlug,
+      });
+      const description = certificateFields.description;
+      const certificateUpdates = {
+        ...certificateFields,
+        updated_at: new Date().toISOString(),
+      };
 
       let certificateId = row.issued_certificate_id;
       let certificatenumber = row.issued_certificatenumber;
@@ -144,25 +119,7 @@ export async function issueCertificatesFromQueue(
 
           await supabase
             .from('certificates')
-            .update({
-              fullname: row.recipient_name,
-              coursename: courseName,
-              certificate_title: title,
-              description,
-              instructor: params.instructor || '',
-              duration: params.duration || '',
-              language: locale === 'en' ? 'en' : 'tr',
-              provider_text: fieldTexts.provider_text,
-              instructor_label: fieldTexts.instructor_label,
-              date_label: fieldTexts.date_label,
-              certificate_number_label: fieldTexts.certificate_number_label,
-              total_hours_label: fieldTexts.total_hours_label,
-              completion_text: fieldTexts.completion_text,
-              skills_label: fieldTexts.skills_label,
-              template_id: params.templateId,
-              organization_slug: params.organizationSlug,
-              updated_at: new Date().toISOString(),
-            })
+            .update(certificateUpdates)
             .eq('id', existingCert.id);
         } else {
           certificateId = null;
@@ -179,25 +136,10 @@ export async function issueCertificatesFromQueue(
         );
 
         const certificatePayload = {
-          fullname: row.recipient_name,
-          coursename: courseName,
+          ...certificateFields,
           issuedate: formatIssueDateForDb(),
-          instructor: params.instructor || '',
-          duration: params.duration || '',
-          language: locale === 'en' ? 'en' : 'tr',
-          certificate_title: title,
-          provider_text: fieldTexts.provider_text,
-          instructor_label: fieldTexts.instructor_label,
-          date_label: fieldTexts.date_label,
-          certificate_number_label: fieldTexts.certificate_number_label,
-          total_hours_label: fieldTexts.total_hours_label,
-          completion_text: fieldTexts.completion_text,
-          skills_label: fieldTexts.skills_label,
-          description,
-          organization_slug: params.organizationSlug,
           certificatenumber,
           certificateurl,
-          template_id: params.templateId,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
