@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireLmsContentAdmin } from '@/app/api/lms/_helpers';
 import { generateCourseSlug } from '@/app/lib/lms/courseUtils';
 import { normalizeDescriptionForStorage } from '@/app/lib/lms/htmlContent';
+import { revalidatePublicCourseCache } from '@/app/lib/lms/revalidatePublicCourseCache.server';
 
 /**
  * GET – Active courses for discount code course picker.
@@ -132,6 +133,8 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    await revalidatePublicCourseCache();
 
     return NextResponse.json({ success: true, course }, { status: 201 });
   } catch (e) {

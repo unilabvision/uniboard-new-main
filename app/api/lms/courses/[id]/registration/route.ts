@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireLmsContentAdmin } from '@/app/api/lms/_helpers';
+import { revalidatePublicCourseCache } from '@/app/lib/lms/revalidatePublicCourseCache.server';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -87,6 +88,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     console.error('LMS registration update error:', error);
     return NextResponse.json({ error: error.message || 'Kayıt durumu güncellenemedi' }, { status: 500 });
   }
+
+  await revalidatePublicCourseCache();
 
   return NextResponse.json({ success: true, course: data });
 }

@@ -8,12 +8,11 @@ import {
   PlayCircle, Calendar, Clock,
   Users, Video,
   TrendingUp, Check, X, Tag, Layers,
-  Download, ClipboardList, ChevronDown, ChevronUp, ExternalLink
+  Download, ClipboardList, ChevronDown, ChevronUp, ExternalLink, Star
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import Image from 'next/image';
 import { sanitizeHtml } from '@/app/lib/lms/htmlContent';
 import {
@@ -39,11 +38,51 @@ function isCourseRegistrationOpen(course: {
 // Utility function to sanitize HTML content
 const sanitizeHtmlForCard = sanitizeHtml;
 
-// Supabase client
-const supabase = createClientComponentClient({
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL2 || 'https://emfvwpztyuykqtepnsfp.supabase.co',
-  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY2 || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtZnZ3cHp0eXV5a3F0ZXBuc2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzg0OTM5MDksImV4cCI6MjA1NDA2OTkwOX0.EbGPYHtXMO2RYGavv-FQa3mgI3RECiFnwAVqpUgghxg'
-});
+async function resolveCourseTypeFilter(
+  searchParams?: Promise<{ type?: string }>
+): Promise<string | undefined> {
+  if (!searchParams) return undefined;
+
+  try {
+    return (await searchParams).type;
+  } catch (error) {
+    console.error('Error resolving search params:', error);
+    return undefined;
+  }
+}
+
+type CourseApplication = {
+  course_id?: string | null;
+  form_id: string;
+  status: string;
+};
+
+type CourseApplicationForm = {
+  id: string;
+  course_id?: string | null;
+};
+
+function summarizeCourseApplications(
+  apps: CourseApplication[],
+  forms: CourseApplicationForm[]
+) {
+  const formCourseMap = new Map(
+    forms
+      .filter((form) => form.course_id)
+      .map((form) => [String(form.id), String(form.course_id)])
+  );
+  const counts: Record<string, number> = {};
+  let pending = 0;
+
+  apps.forEach((application) => {
+    const courseId =
+      application.course_id || formCourseMap.get(application.form_id) || null;
+    if (courseId) counts[courseId] = (counts[courseId] || 0) + 1;
+    if (application.status === 'pending') pending++;
+  });
+
+  return { counts, pending };
+}
 
 // Types based on database schema
 interface Course {
@@ -63,6 +102,7 @@ interface Course {
   thumbnail_url?: string;
   banner_url?: string;
   is_active: boolean;
+  is_featured: boolean;
   created_at: string;
   updated_at: string;
   course_type: 'online' | 'live' | 'hybrid';
@@ -162,6 +202,9 @@ const texts = {
     registrationUpdated: "Kayıt durumu güncellendi",
     registrationUpdateError: "Kayıt durumu güncellenemedi",
     registrationDeadlineExpired: "Kayıt son tarihi geçmiş — açınca tarih temizlenir",
+    featureCourse: "Öne çıkar",
+    unfeatureCourse: "Öne çıkarmayı kaldır",
+    featureUpdateError: "Öne çıkarma durumu güncellenemedi",
   },
   en: {
     title: "Course Management",
@@ -241,6 +284,9 @@ const texts = {
     registrationUpdated: "Registration status updated",
     registrationUpdateError: "Could not update registration status",
     registrationDeadlineExpired: "Deadline has passed — opening will clear the deadline",
+    featureCourse: "Feature course",
+    unfeatureCourse: "Remove from featured",
+    featureUpdateError: "Could not update featured status",
   }
 };
 
@@ -370,6 +416,7 @@ const CourseCard = ({
   onDelete,
   onPriceUpdate,
   onRegistrationUpdate,
+  onFeaturedUpdate,
   applicationCount,
 }: {
   course: Course;
@@ -383,6 +430,7 @@ const CourseCard = ({
     courseId: string,
     patch: { is_registration_open: boolean; registration_deadline?: string | null }
   ) => void;
+  onFeaturedUpdate: (courseId: string, isFeatured: boolean) => void;
   applicationCount?: number;
 }) => {
   const [showMenu, setShowMenu] = useState(false);
@@ -399,6 +447,21 @@ const CourseCard = ({
   >({});
   const [savingPackages, setSavingPackages] = useState(false);
   const [savingRegistration, setSavingRegistration] = useState(false);
+  const [savingFeatured, setSavingFeatured] = useState(false);
+
+  const updatePackageDraft = (
+    packageId: string,
+    field: 'price' | 'original',
+    value: string
+  ) => {
+    setPackageDrafts((prev) => ({
+      ...prev,
+      [packageId]: {
+        ...(prev[packageId] || { price: '0', original: '' }),
+        [field]: value,
+      },
+    }));
+  };
 
   const registrationOpen = isCourseRegistrationOpen(course);
   const deadlineExpired =
@@ -567,6 +630,31 @@ const CourseCard = ({
     }
   };
 
+  const toggleFeatured = async () => {
+    setShowMenu(false);
+    const nextFeatured = !course.is_featured;
+
+    try {
+      setSavingFeatured(true);
+      const response = await fetch(`/api/lms/courses/${course.id}/featured`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_featured: nextFeatured }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || t.featureUpdateError);
+      }
+
+      onFeaturedUpdate(course.id, Boolean(payload.course?.is_featured));
+    } catch (error) {
+      console.error('Featured toggle failed:', error);
+      alert(error instanceof Error ? error.message : t.featureUpdateError);
+    } finally {
+      setSavingFeatured(false);
+    }
+  };
+
   return (
     <div className="relative bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 hover:shadow-lg transition-all duration-300">
       {/* Course Thumbnail */}
@@ -591,6 +679,13 @@ const CourseCard = ({
             <span className="ml-1">{t.courseTypes[course.course_type]}</span>
           </div>
         </div>
+
+        {course.is_featured && (
+          <div className="absolute bottom-3 left-3 inline-flex items-center rounded-full bg-amber-100/95 px-2 py-1 text-xs font-medium text-amber-800 shadow-sm dark:bg-amber-900/80 dark:text-amber-200">
+            <Star className="mr-1 h-3 w-3 fill-current" />
+            {locale === 'tr' ? 'Öne çıkan' : 'Featured'}
+          </div>
+        )}
         
         {/* Status Badge */}
         <div className="absolute top-3 right-3">
@@ -623,6 +718,25 @@ const CourseCard = ({
               <Eye className="w-3 h-3 mr-2" />
               {t.viewCourse}
             </Link>
+            <button
+              type="button"
+              onClick={() => {
+                void toggleFeatured();
+              }}
+              disabled={savingFeatured}
+              className={`w-full px-3 py-2 text-left rounded-md flex items-center text-sm disabled:opacity-50 ${
+                course.is_featured
+                  ? 'text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+                  : 'text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700'
+              }`}
+            >
+              <Star className={`w-3 h-3 mr-2 ${course.is_featured ? 'fill-current' : ''}`} />
+              {savingFeatured
+                ? '...'
+                : course.is_featured
+                  ? t.unfeatureCourse
+                  : t.featureCourse}
+            </button>
             <button
               onClick={() => {
                 onEdit(course);
@@ -827,12 +941,7 @@ const CourseCard = ({
                                 type="text"
                                 inputMode="decimal"
                                 value={draft.price}
-                                onChange={(e) =>
-                                  setPackageDrafts((prev) => ({
-                                    ...prev,
-                                    [pkg.id]: { ...draft, price: e.target.value },
-                                  }))
-                                }
+                                onChange={(e) => updatePackageDraft(pkg.id, 'price', e.target.value)}
                                 className="w-full px-2 py-1.5 text-sm border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-900"
                                 placeholder="0,00"
                               />
@@ -845,12 +954,7 @@ const CourseCard = ({
                                 type="text"
                                 inputMode="decimal"
                                 value={draft.original}
-                                onChange={(e) =>
-                                  setPackageDrafts((prev) => ({
-                                    ...prev,
-                                    [pkg.id]: { ...draft, original: e.target.value },
-                                  }))
-                                }
+                                onChange={(e) => updatePackageDraft(pkg.id, 'original', e.target.value)}
                                 className="w-full px-2 py-1.5 text-sm border border-neutral-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-900"
                                 placeholder="—"
                               />
@@ -1104,6 +1208,7 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
   
   // Clerk user hook
   const { user: clerkUser, isLoaded } = useUser();
+  const clerkUserId = clerkUser?.id;
   const params = useParams();
   const router = useRouter();
   const locale = (params?.locale as string) || 'tr';
@@ -1111,20 +1216,11 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
 
   // Handle search params
   useEffect(() => {
-    const handleSearchParams = async () => {
-      if (searchParams) {
-        try {
-          const resolvedParams = await searchParams;
-          if (resolvedParams?.type && resolvedParams.type !== selectedType) {
-            setSelectedType(resolvedParams.type);
-          }
-        } catch (error) {
-          console.error('Error resolving search params:', error);
-        }
+    void resolveCourseTypeFilter(searchParams).then((type) => {
+      if (type && type !== selectedType) {
+        setSelectedType(type);
       }
-    };
-    
-    handleSearchParams();
+    });
   }, [searchParams, selectedType]);
 
   // Reset page when search or filters change
@@ -1135,8 +1231,8 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
   // Fetch courses data
   useEffect(() => {
     const fetchCourses = async () => {
-      if (!clerkUser?.id || !isLoaded) {
-        if (isLoaded && !clerkUser) {
+      if (!clerkUserId || !isLoaded) {
+        if (isLoaded && !clerkUserId) {
           setCoursesLoading(false);
         }
         return;
@@ -1145,65 +1241,13 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
       try {
         setCoursesLoading(true);
         
-        // Fetch courses with sections and lessons count
-        const { data: coursesData, error: coursesError } = await supabase
-          .from('myuni_courses')
-          .select(`
-            *,
-            myuni_course_sections(
-              id,
-              myuni_course_lessons(
-                id,
-                myuni_videos(
-                  id,
-                  duration_seconds
-                )
-              )
-            )
-          `)
-          .order('created_at', { ascending: false });
-        
-        if (coursesError) {
-          throw coursesError;
+        const response = await fetch('/api/lms/courses/manage');
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.error || t.error);
         }
-        
-        // Process courses data to add computed fields
-        const processedCourses = (coursesData || []).map(course => {
-          const sections = course.myuni_course_sections || [];
-          const sectionsCount = sections.length;
-          
-          let lessonsCount = 0;
-          let totalVideos = 0;
-          let totalDuration = 0;
-          
-          sections.forEach((section: { myuni_course_lessons?: Array<{ myuni_videos?: Array<{ duration_seconds?: number }> }> }) => {
-            const lessons = section.myuni_course_lessons || [];
-            lessonsCount += lessons.length;
-            
-            lessons.forEach((lesson: { myuni_videos?: Array<{ duration_seconds?: number }> }) => {
-              const videos = lesson.myuni_videos || [];
-              totalVideos += videos.length;
-              
-              videos.forEach((video: { duration_seconds?: number }) => {
-                if (video.duration_seconds) {
-                  totalDuration += video.duration_seconds;
-                }
-              });
-            });
-          });
-          
-          return {
-            ...course,
-            sections_count: sectionsCount,
-            lessons_count: lessonsCount,
-            total_videos: totalVideos,
-            total_duration: Math.round(totalDuration / 60), // Convert to minutes
-            // Remove the nested data to clean up the object
-            myuni_course_sections: undefined
-          };
-        });
-        
-        setCourses(processedCourses);
+
+        setCourses(payload.courses || []);
         
       } catch (error: unknown) {
         console.error('Error fetching courses:', error);
@@ -1214,11 +1258,11 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
     };
     
     fetchCourses();
-  }, [clerkUser?.id, isLoaded]);
+  }, [clerkUserId, isLoaded, t.error]);
 
   // Fetch application counts for all courses
   useEffect(() => {
-    if (!clerkUser?.id || !isLoaded) return;
+    if (!clerkUserId || !isLoaded) return;
 
     const fetchApplicationCounts = async () => {
       setApplicationsLoading(true);
@@ -1226,25 +1270,9 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
         const res = await fetch('/api/lms/course-applications');
         if (!res.ok) return;
         const data = await res.json().catch(() => ({}));
-        const apps: Array<{ course_id?: string | null; form_id: string; status: string }> = data.applications || [];
-        const forms: Array<{ id: string; course_id?: string | null }> = data.forms || [];
-
-        // Build form → courseId map
-        const formCourseMap = new Map<string, string>();
-        forms.forEach((f) => {
-          if (f.course_id) formCourseMap.set(String(f.id), String(f.course_id));
-        });
-
-        // Count per course
-        const counts: Record<string, number> = {};
-        let pending = 0;
-        apps.forEach((app) => {
-          const cid = app.course_id || formCourseMap.get(app.form_id) || null;
-          if (cid) {
-            counts[cid] = (counts[cid] || 0) + 1;
-          }
-          if (app.status === 'pending') pending++;
-        });
+        const apps: CourseApplication[] = data.applications || [];
+        const forms: CourseApplicationForm[] = data.forms || [];
+        const { counts, pending } = summarizeCourseApplications(apps, forms);
 
         setApplicationCountByCourse(counts);
         setAllApplicationsCount(apps.length);
@@ -1257,7 +1285,7 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
     };
 
     void fetchApplicationCounts();
-  }, [clerkUser?.id, isLoaded]);
+  }, [clerkUserId, isLoaded]);
 
   // Filter data based on search and filters
   const getFilteredData = () => {
@@ -1365,13 +1393,12 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
     setIsDeleting(true);
     
     try {
-      const { error } = await supabase
-        .from('myuni_courses')
-        .delete()
-        .eq('id', courseToDelete.id);
-      
-      if (error) {
-        throw error;
+      const response = await fetch(`/api/lms/courses/${courseToDelete.id}`, {
+        method: 'DELETE',
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || t.deleteError);
       }
       
       // Remove course from local state
@@ -1435,6 +1462,14 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
                   : patch.registration_deadline || undefined,
             }
           : course
+      )
+    );
+  };
+
+  const handleFeaturedUpdate = (courseId: string, isFeatured: boolean) => {
+    setCourses((prev) =>
+      prev.map((course) =>
+        course.id === courseId ? { ...course, is_featured: isFeatured } : course
       )
     );
   };
@@ -1771,6 +1806,7 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
                   onDelete={handleDeleteCourse}
                   onPriceUpdate={handlePriceUpdate}
                   onRegistrationUpdate={handleRegistrationUpdate}
+                  onFeaturedUpdate={handleFeaturedUpdate}
                   applicationCount={applicationCountByCourse[course.id]}
                 />
               ))}

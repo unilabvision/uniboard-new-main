@@ -12,6 +12,7 @@ export interface Course {
   thumbnail_url?: string;
   banner_url?: string;
   is_active: boolean;
+  is_featured?: boolean;
   created_at?: string;
   updated_at?: string;
   instructor_description?: string;

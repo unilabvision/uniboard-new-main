@@ -3,8 +3,19 @@ import { requireLmsContentAdmin } from '@/app/api/lms/_helpers';
 import { buildCourseUpdatePayload } from '@/app/lib/lms/courseUtils';
 import { normalizeDescriptionForStorage } from '@/app/lib/lms/htmlContent';
 import type { Course } from '@/app/types/course';
+import { revalidatePublicCourseCache } from '@/app/lib/lms/revalidatePublicCourseCache.server';
 
 type RouteContext = { params: Promise<{ id: string }> };
+
+const COURSE_UPDATE_RESPONSE_COLUMNS = `
+  id, slug, title, description, instructor_name, instructor_description,
+  instructor_email, instructor_linkedin, instructor_image_url, duration,
+  level, price, original_price, thumbnail_url, banner_url, is_active,
+  is_featured, created_at, updated_at, course_type, live_start_date,
+  live_end_date, live_timezone, max_participants, current_participants,
+  session_count, session_duration_minutes, registration_deadline,
+  is_registration_open
+`;
 
 /**
  * PATCH – Update course fields via service role (bypasses anon RLS).
@@ -95,7 +106,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     .from('myuni_courses')
     .update(payload)
     .eq('id', id)
-    .select('*')
+    .select(COURSE_UPDATE_RESPONSE_COLUMNS)
     .single();
 
   if (error) {
@@ -117,5 +128,34 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: 'Kurs bulunamadı' }, { status: 404 });
   }
 
+  await revalidatePublicCourseCache();
+
   return NextResponse.json({ success: true, course: data });
+}
+
+export async function DELETE(_request: NextRequest, context: RouteContext) {
+  const authResult = await requireLmsContentAdmin();
+  if (authResult.error || !authResult.supabase) {
+    return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+  }
+
+  const { id } = await context.params;
+  const { data, error } = await authResult.supabase
+    .from('myuni_courses')
+    .delete()
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
+
+  if (error) {
+    console.error('LMS course DELETE error:', error.message);
+    return NextResponse.json({ error: 'Kurs silinemedi' }, { status: 500 });
+  }
+  if (!data) {
+    return NextResponse.json({ error: 'Kurs bulunamadı' }, { status: 404 });
+  }
+
+  await revalidatePublicCourseCache();
+
+  return NextResponse.json({ success: true });
 }

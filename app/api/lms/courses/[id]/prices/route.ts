@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireLmsContentAdmin } from '@/app/api/lms/_helpers';
 import { parsePrice } from '@/app/lib/lms/parsePrice';
+import { revalidatePublicCourseCache } from '@/app/lib/lms/revalidatePublicCourseCache.server';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -45,6 +46,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (!data) {
     return NextResponse.json({ error: 'Kurs bulunamadı' }, { status: 404 });
   }
+
+  await revalidatePublicCourseCache();
 
   return NextResponse.json({ success: true, course: data });
 }
