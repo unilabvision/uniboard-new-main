@@ -45,7 +45,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL || !process.env.SUPABASE_LEARNING_SECRET_KEY) {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL || !process.env.SUPABASE_IDENTITY_SECRET_KEY) {
       console.log('❌ Missing environment variables');
       return NextResponse.json({ 
         error: 'Configuration error',
@@ -57,8 +57,8 @@ export async function GET() {
     const { createClient } = await import('@supabase/supabase-js');
     
     const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL,
-      process.env.SUPABASE_LEARNING_SECRET_KEY,
+      process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL,
+      process.env.SUPABASE_IDENTITY_SECRET_KEY,
       {
         auth: {
           autoRefreshToken: false,

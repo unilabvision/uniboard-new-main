@@ -23,6 +23,15 @@ export function getMentorshipSupabase() {
   });
 }
 
+function getModuleAccessSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL;
+  const key = process.env.SUPABASE_IDENTITY_SECRET_KEY;
+  if (!url || !key) throw new Error('Identity database configuration missing');
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
 function capsFromMembership(
   membership: PanelMembership | null
 ): MentorshipCapability[] | null {
@@ -38,7 +47,7 @@ async function loadAccess(userId: string) {
   const supabase = getMentorshipSupabase();
   let rows: Awaited<ReturnType<typeof loadUserAccessRows>>;
   try {
-    rows = await loadUserAccessRows(supabase, userId);
+    rows = await loadUserAccessRows(getModuleAccessSupabase(), userId);
   } catch (e) {
     return {
       error: e instanceof Error ? e.message : 'Error',

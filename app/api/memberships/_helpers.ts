@@ -26,6 +26,15 @@ function getMembershipsSupabase() {
   });
 }
 
+function getModuleAccessSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL;
+  const key = process.env.SUPABASE_IDENTITY_SECRET_KEY;
+  if (!url || !key) throw new Error('Identity database configuration missing');
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
 export async function requireMembershipsCapability(
   required: MembershipsCapability,
   options: { superAdminOnly?: boolean } = {}
@@ -37,7 +46,7 @@ export async function requireMembershipsCapability(
 
   const supabase = getMembershipsSupabase();
   try {
-    const rows = await loadUserAccessRows(supabase, userId);
+    const rows = await loadUserAccessRows(getModuleAccessSupabase(), userId);
     const access = resolveMembershipFromRows(rows, MEMBERSHIPS_MODULE_KEY);
     if (!hasMembershipsAccess(access.moduleKeys, access.isSuperAdmin)) {
       return { error: 'Forbidden', status: 403 as const, userId: null, supabase: null };

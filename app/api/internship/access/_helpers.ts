@@ -10,8 +10,8 @@ import {
 export const INTERNSHIP_MODULE_KEYS = [...INTERNSHIP_PLATFORM_MODULE_KEYS] as string[];
 
 export function getServiceSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL;
-  const key = process.env.SUPABASE_LEARNING_SECRET_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL;
+  const key = process.env.SUPABASE_IDENTITY_SECRET_KEY;
   if (!url || !key) throw new Error('Database configuration missing');
   return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },

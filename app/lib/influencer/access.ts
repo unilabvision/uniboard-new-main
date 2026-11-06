@@ -16,6 +16,15 @@ export function getInfluencerSupabase(): SupabaseClient {
   });
 }
 
+function getModuleAccessSupabase(): SupabaseClient {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL;
+  const key = process.env.SUPABASE_IDENTITY_SECRET_KEY;
+  if (!url || !key) throw new Error('Identity database configuration missing');
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
 /** Influencer modülü (veya süper admin) zorunlu. */
 export async function requireInfluencerUser(requiredCapability?: string) {
   const { userId } = await auth();
@@ -31,9 +40,10 @@ export async function requireInfluencerUser(requiredCapability?: string) {
   }
 
   const supabase = getInfluencerSupabase();
+  const accessSupabase = getModuleAccessSupabase();
   let rows: Awaited<ReturnType<typeof loadUserAccessRows>>;
   try {
-    rows = await loadUserAccessRows(supabase, userId);
+    rows = await loadUserAccessRows(accessSupabase, userId);
   } catch (e) {
     return {
       error: e instanceof Error ? e.message : 'Error',

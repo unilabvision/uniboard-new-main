@@ -11,6 +11,15 @@ export function getLmsServiceSupabase() {
   });
 }
 
+function getModuleAccessSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL;
+  const key = process.env.SUPABASE_IDENTITY_SECRET_KEY;
+  if (!url || !key) throw new Error('Identity database configuration missing');
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
 /** LMS content admin: super-admin or lms/courses/students module. */
 export async function requireLmsContentAdmin() {
   const { userId } = await auth();
@@ -19,9 +28,10 @@ export async function requireLmsContentAdmin() {
   }
 
   const supabase = getLmsServiceSupabase();
+  const accessSupabase = getModuleAccessSupabase();
   let rows: Awaited<ReturnType<typeof loadUserAccessRows>>;
   try {
-    rows = await loadUserAccessRows(supabase, userId);
+    rows = await loadUserAccessRows(accessSupabase, userId);
   } catch (e) {
     return {
       error: e instanceof Error ? e.message : 'Error',

@@ -23,6 +23,15 @@ export function getEventsSupabase() {
   });
 }
 
+function getModuleAccessSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL;
+  const key = process.env.SUPABASE_IDENTITY_SECRET_KEY;
+  if (!url || !key) throw new Error('Identity database configuration missing');
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
 function eventsCapsFromMembership(
   membership: PanelMembership | null
 ): EventsCapability[] | null {
@@ -36,9 +45,10 @@ function eventsCapsFromMembership(
 
 async function loadAccess(userId: string) {
   const supabase = getEventsSupabase();
+  const accessSupabase = getModuleAccessSupabase();
   let rows: Awaited<ReturnType<typeof loadUserAccessRows>>;
   try {
-    rows = await loadUserAccessRows(supabase, userId);
+    rows = await loadUserAccessRows(accessSupabase, userId);
   } catch (e) {
     return {
       error: e instanceof Error ? e.message : 'Error',

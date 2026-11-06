@@ -20,6 +20,15 @@ function getBlogSupabase() {
   });
 }
 
+function getModuleAccessSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL;
+  const key = process.env.SUPABASE_IDENTITY_SECRET_KEY;
+  if (!url || !key) throw new Error('Identity database configuration missing');
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
 function getBlogCapabilities(membership: PanelMembership | null) {
   if (!membership?.capabilities) return null;
   return membership.capabilities.filter(isBlogCapability);
@@ -33,7 +42,7 @@ export async function requireBlogModuleUser() {
 
   try {
     const supabase = getBlogSupabase();
-    const rows = await loadUserAccessRows(supabase, userId);
+    const rows = await loadUserAccessRows(getModuleAccessSupabase(), userId);
     const resolved = resolveMembershipFromRows(rows, BLOG_MODULE_KEY);
     const hasAccess = resolved.isSuperAdmin || resolved.moduleKeys.includes(BLOG_MODULE_KEY);
     if (!hasAccess) {
