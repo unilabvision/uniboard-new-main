@@ -78,18 +78,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL;
-    const serviceKey = process.env.SUPABASE_LEARNING_SECRET_KEY;
+    const learningUrl = process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL;
+    const learningKey = process.env.SUPABASE_LEARNING_SECRET_KEY;
+    const formUrl = process.env.NEXT_PUBLIC_SUPABASE_FORM_URL;
+    const formKey = process.env.SUPABASE_FORM_SECRET_KEY;
 
-    if (!supabaseUrl || !serviceKey) {
+    if (!learningUrl || !learningKey || !formUrl || !formKey) {
       return NextResponse.json({ error: 'Database configuration missing' }, { status: 500 });
     }
 
-    const supabase = createClient(supabaseUrl, serviceKey, {
+    const learningSupabase = createClient(learningUrl, learningKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const formSupabase = createClient(formUrl, formKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const careerTags = await fetchAllCareerTagLabels(supabase, locale);
+    const careerTags = await fetchAllCareerTagLabels(learningSupabase, locale);
 
     let applicantName = 'Aday';
     let position = '';
@@ -101,7 +106,7 @@ export async function POST(request: NextRequest) {
     let jobRequirements = '';
 
     if (applicationId) {
-      const { data: application, error } = await supabase
+      const { data: application, error } = await formSupabase
         .from(internshipDb.applications)
         .select('*')
         .eq('id', applicationId)
@@ -121,7 +126,7 @@ export async function POST(request: NextRequest) {
         position.toLowerCase().includes(tag.toLowerCase().slice(0, 4))
       );
     } else if (opportunityApplicationId) {
-      const { data: oppApp, error } = await supabase
+      const { data: oppApp, error } = await formSupabase
         .from(internshipDb.opportunityApplications)
         .select('*')
         .eq('id', opportunityApplicationId)
@@ -134,9 +139,9 @@ export async function POST(request: NextRequest) {
       applicantName = oppApp.applicant_email;
       motivation = textFromSubmissionData(oppApp.submission_data);
       cvFileName = oppApp.cv_file_name || undefined;
-      tagKeywords = await fetchOpportunityTagKeywords(supabase, oppApp.opportunity_id, locale);
+      tagKeywords = await fetchOpportunityTagKeywords(learningSupabase, oppApp.opportunity_id, locale);
 
-      const { data: opportunity } = await supabase
+      const { data: opportunity } = await learningSupabase
         .from(internshipDb.opportunities)
         .select('*')
         .eq('id', oppApp.opportunity_id)

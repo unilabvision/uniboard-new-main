@@ -5,10 +5,19 @@ import { verifyCourseEnrollmentToken } from '@/app/lib/lms/courseEnrollmentInvit
 import { resolveEnrollmentTierId } from '@/app/lib/lms/enrollmentTiers';
 import { getMyuniPublicOrigin } from '@/app/lib/siteApplications/publicUrls';
 
-function serviceSupabase() {
+function learningSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL;
   const key = process.env.SUPABASE_LEARNING_SECRET_KEY;
   if (!url || !key) throw new Error('Database configuration missing');
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
+function identitySupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL;
+  const key = process.env.SUPABASE_IDENTITY_SECRET_KEY;
+  if (!url || !key) throw new Error('Identity database configuration missing');
   return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
@@ -97,8 +106,9 @@ export async function GET(request: NextRequest) {
 
   const userId = user.id;
 
-  const supabase = serviceSupabase();
-  const { data: course, error: courseError } = await supabase
+  const learning = learningSupabase();
+  const identity = identitySupabase();
+  const { data: course, error: courseError } = await learning
     .from('myuni_courses')
     .select('id, slug, current_participants')
     .eq('id', parsed.courseId)
@@ -111,13 +121,13 @@ export async function GET(request: NextRequest) {
   }
 
   const tierResult = await resolveEnrollmentTierId(
-    supabase,
+    learning,
     parsed.courseId,
     parsed.tierId
   );
   const tierId = tierResult.error ? null : tierResult.tierId;
 
-  const { data: allRows, error: existingError } = await supabase
+  const { data: allRows, error: existingError } = await identity
     .from('myuni_enrollments')
     .select('id, is_active, progress_percentage, tier_id')
     .eq('course_id', parsed.courseId)
@@ -137,7 +147,7 @@ export async function GET(request: NextRequest) {
   if (activeRow) {
     // Already enrolled — still sync package from the invitation when needed.
     if ((activeRow.tier_id ?? null) !== tierId) {
-      const { error } = await supabase
+      const { error } = await identity
         .from('myuni_enrollments')
         .update({ tier_id: tierId })
         .eq('id', activeRow.id);
@@ -146,7 +156,7 @@ export async function GET(request: NextRequest) {
       }
     }
   } else if (inactiveRow) {
-    const { error } = await supabase
+    const { error } = await identity
       .from('myuni_enrollments')
       .update({
         is_active: true,
@@ -160,7 +170,7 @@ export async function GET(request: NextRequest) {
     }
     newlyActivated = !error;
   } else {
-    const { error } = await supabase.from('myuni_enrollments').insert({
+    const { error } = await identity.from('myuni_enrollments').insert({
       course_id: parsed.courseId,
       user_id: userId,
       enrolled_at: new Date().toISOString(),
@@ -177,7 +187,7 @@ export async function GET(request: NextRequest) {
   // Idempotency: only bump participant count when access becomes active
   // for the first time (no previously-active row for this user+course).
   if (newlyActivated && !hadActiveCourseAccess) {
-    await supabase
+    await learning
       .from('myuni_courses')
       .update({
         current_participants: (course.current_participants || 0) + 1,

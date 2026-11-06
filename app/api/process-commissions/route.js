@@ -3,11 +3,11 @@
 import { createClient } from '@supabase/supabase-js';
 
 function getSupabaseMain() {
-  const supabaseUrl = process.env.SUPABASE_LEARNING_URL || process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL;
-  const supabaseKey = process.env.SUPABASE_LEARNING_SECRET_KEY;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL;
+  const supabaseKey = process.env.SUPABASE_IDENTITY_SECRET_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Learning database configuration is missing. Set SUPABASE_LEARNING_URL and SUPABASE_LEARNING_SECRET_KEY.');
+    throw new Error('Identity database configuration is missing. Set NEXT_PUBLIC_SUPABASE_IDENTITY_URL and SUPABASE_IDENTITY_SECRET_KEY.');
   }
 
   return createClient(supabaseUrl, supabaseKey, {

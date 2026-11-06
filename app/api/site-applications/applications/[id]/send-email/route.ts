@@ -4,6 +4,7 @@ import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
 import {
   requireSiteApplicationsOrEventsUser,
   resolveSiteApplicationsPanelOrganizationScope,
+  getAccessSupabase,
 } from '@/app/api/site-applications/access/_helpers';
 import {
   decryptSmtpPassword,
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         .eq('id', application.form_id)
         .single();
       if (form?.created_by) {
-        const { data: access } = await supabase
+        const { data: access } = await getAccessSupabase()
           .from('user_module_access')
           .select('panel_organization_id')
           .eq('clerk_user_id', form.created_by)

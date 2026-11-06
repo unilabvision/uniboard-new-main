@@ -9,6 +9,7 @@ import { inferFormType } from '@/app/lib/siteApplications/formTypes';
 import {
   requireEventFormsWriteUser,
   resolveSiteApplicationsPanelOrganizationScope,
+  getAccessSupabase,
 } from '@/app/api/site-applications/access/_helpers';
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Form not found' }, { status: 404 });
     }
 
-    const { data: ownerRows } = await supabase
+    const { data: ownerRows } = await getAccessSupabase()
       .from('user_module_access')
       .select('clerk_user_id')
       .eq('is_enabled', true)

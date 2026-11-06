@@ -1,8 +1,13 @@
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
-const supabase = createClientComponentClient({
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL || 'https://emfvwpztyuykqtepnsfp.supabase.co',
-  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_LEARNING_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtZnZ3cHp0eXV5a3F0ZXBuc2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzg0OTM5MDksImV4cCI6MjA1NDA2OTkwOX0.EbGPYHtXMO2RYGavv-FQa3mgI3RECiFnwAVqpUgghxg',
+const identitySupabase = createClientComponentClient({
+  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL,
+  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_PUBLISHABLE_KEY,
+});
+
+const learningSupabase = createClientComponentClient({
+  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL,
+  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_LEARNING_PUBLISHABLE_KEY,
 });
 
 export interface Enrollment {
@@ -15,7 +20,7 @@ export interface Enrollment {
 }
 
 export async function getUserEnrollment(userId: string, courseId: string): Promise<Enrollment | null> {
-  const { data, error } = await supabase
+  const { data, error } = await identitySupabase
     .from('myuni_enrollments')
     .select('*')
     .eq('user_id', userId)
@@ -31,7 +36,7 @@ export async function enrollUser(userId: string, courseId: string): Promise<Enro
   const existing = await getUserEnrollment(userId, courseId);
   if (existing) return existing;
 
-  const { data, error } = await supabase
+  const { data, error } = await identitySupabase
     .from('myuni_enrollments')
     .insert([{
       course_id: courseId,
@@ -45,14 +50,14 @@ export async function enrollUser(userId: string, courseId: string): Promise<Enro
 
   if (error) throw error;
 
-  const { data: courseRow } = await supabase
+  const { data: courseRow } = await learningSupabase
     .from('myuni_courses')
     .select('current_participants')
     .eq('id', courseId)
     .single();
 
   if (courseRow) {
-    await supabase
+    await learningSupabase
       .from('myuni_courses')
       .update({ current_participants: (courseRow.current_participants || 0) + 1 })
       .eq('id', courseId);
@@ -62,31 +67,27 @@ export async function enrollUser(userId: string, courseId: string): Promise<Enro
 }
 
 export async function getUserEnrolledCourses(userId: string) {
-  const { data, error } = await supabase
+  const { data, error } = await identitySupabase
     .from('myuni_enrollments')
-    .select(`
-      id,
-      course_id,
-      enrolled_at,
-      progress_percentage,
-      is_active,
-      myuni_courses (
-        id,
-        slug,
-        title,
-        description,
-        instructor_name,
-        thumbnail_url,
-        duration,
-        level,
-        course_type,
-        is_active
-      )
-    `)
+    .select('id, course_id, enrolled_at, progress_percentage, is_active')
     .eq('user_id', userId)
     .eq('is_active', true)
     .order('enrolled_at', { ascending: false });
 
   if (error) throw error;
-  return data || [];
+  const enrollments = data || [];
+  const courseIds = [...new Set(enrollments.map((row) => row.course_id).filter(Boolean))];
+  if (courseIds.length === 0) return [];
+
+  const { data: courses, error: coursesError } = await learningSupabase
+    .from('myuni_courses')
+    .select('id, slug, title, description, instructor_name, thumbnail_url, duration, level, course_type, is_active')
+    .in('id', courseIds);
+  if (coursesError) throw coursesError;
+
+  const courseById = new Map((courses || []).map((course) => [course.id, course]));
+  return enrollments.map((row) => ({
+    ...row,
+    myuni_courses: courseById.get(row.course_id) ?? null,
+  }));
 }

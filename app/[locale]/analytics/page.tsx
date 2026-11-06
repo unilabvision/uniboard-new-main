@@ -38,13 +38,14 @@ import {
   calculateCommissionAmount,
 } from '@/app/lib/influencer/codes';
 
-const supabase = createClientComponentClient({
-  supabaseUrl:
-    process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL ||
-    'https://emfvwpztyuykqtepnsfp.supabase.co',
-  supabaseKey:
-    process.env.NEXT_PUBLIC_SUPABASE_LEARNING_PUBLISHABLE_KEY ||
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtZnZ3cHp0eXV5a3F0ZXBuc2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzg0OTM5MDksImV4cCI6MjA1NDA2OTkwOX0.EbGPYHtXMO2RYGavv-FQa3mgI3RECiFnwAVqpUgghxg',
+const supabaseIdentity = createClientComponentClient({
+  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL,
+  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_PUBLISHABLE_KEY,
+});
+
+const supabaseLearning = createClientComponentClient({
+  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL,
+  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_LEARNING_PUBLISHABLE_KEY,
 });
 
 type PeriodKey =
@@ -1800,7 +1801,7 @@ export default function AnalyticsPage({
     const all: OrderRow[] = [];
 
     for (;;) {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseIdentity
         .from('orders')
         .select(
           'id, orderid, courseid, coursename, amount, discountamount, discountcode, paymentmethod, status, created_at, updated_at, useremail, enrolled, custom_data'
@@ -1831,14 +1832,14 @@ export default function AnalyticsPage({
       const [orders, enrollmentsResult, coursesResult, tiersResult, metaRes] =
         await Promise.all([
           fetchAllOrders(),
-          supabase
+          supabaseIdentity
             .from('myuni_enrollments')
             .select(
               'course_id, user_id, enrolled_at, progress_percentage, tier_id'
             )
             .eq('is_active', true),
-          supabase.from('myuni_courses').select('id, title, is_active, price, original_price'),
-          supabase
+          supabaseLearning.from('myuni_courses').select('id, title, is_active, price, original_price'),
+          supabaseLearning
             .from('myuni_course_tiers')
             .select('id, course_id, title, is_full_course, price, original_price'),
           fetch('/api/analytics/meta')

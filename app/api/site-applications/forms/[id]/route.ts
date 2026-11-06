@@ -6,6 +6,7 @@ import {
   requireSiteApplicationsOrEventsUser,
   requireEventFormsWriteUser,
   resolveSiteApplicationsPanelOrganizationScope,
+  getAccessSupabase,
 } from '@/app/api/site-applications/access/_helpers';
 import type { SiteApplicationFormInput } from '@/app/types/siteApplicationForms';
 import {
@@ -45,7 +46,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Form not found' }, { status: 404 });
     }
 
-    const { data: ownerRows } = await authResult.supabase!
+    const { data: ownerRows } = await getAccessSupabase()
       .from('user_module_access')
       .select('clerk_user_id')
       .eq('is_enabled', true)
@@ -115,7 +116,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Form not found' }, { status: 404 });
     }
 
-    const { data: ownerRows } = await authResult.supabase!
+    const { data: ownerRows } = await getAccessSupabase()
       .from('user_module_access')
       .select('clerk_user_id')
       .eq('is_enabled', true)
@@ -293,7 +294,7 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Form not found' }, { status: 404 });
     }
 
-    const { data: ownerRows } = await authResult.supabase!
+    const { data: ownerRows } = await getAccessSupabase()
       .from('user_module_access')
       .select('clerk_user_id')
       .eq('is_enabled', true)

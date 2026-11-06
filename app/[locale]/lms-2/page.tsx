@@ -35,6 +35,10 @@ const supabase = createClientComponentClient({
   supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL || 'https://emfvwpztyuykqtepnsfp.supabase.co',
   supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_LEARNING_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtZnZ3cHp0eXV5a3F0ZXBuc2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzg0OTM5MDksImV4cCI6MjA1NDA2OTkwOX0.EbGPYHtXMO2RYGavv-FQa3mgI3RECiFnwAVqpUgghxg'
 });
+const supabaseAccess = createClientComponentClient({
+  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL,
+  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_PUBLISHABLE_KEY,
+});
 
 // Types based on database schema
 interface Course {
@@ -691,7 +695,7 @@ export default function LMSPage({ searchParams }: { searchParams?: Promise<{ typ
         });
         
         // Fetch user's organization access from the database
-        const { data, error } = await supabase
+        const { data, error } = await supabaseAccess
           .from('user_module_access')
           .select(`
             *,

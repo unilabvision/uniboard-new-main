@@ -23,8 +23,8 @@ import { keywordsFromPosition } from '@/app/lib/internship/permissions';
 import { internshipDb, getCareerTagLabel } from '@/app/lib/internship/config';
 
 const supabase = createClientComponentClient({
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL || '',
-  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_LEARNING_PUBLISHABLE_KEY || '',
+  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_FORM_URL || '',
+  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_FORM_PUBLISHABLE_KEY || '',
 });
 
 const AGENT_STEP_LABELS: Record<string, { tr: string; en: string }> = {

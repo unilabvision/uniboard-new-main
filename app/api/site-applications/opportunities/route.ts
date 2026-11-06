@@ -5,6 +5,7 @@ import {
   resolveSiteApplicationsPanelOrganizationScope,
   resolvePanelOrganizationIdForWrite,
   getServiceSupabase,
+  getAccessSupabase,
 } from '@/app/api/site-applications/access/_helpers';
 import { internshipDb } from '@/app/lib/internship/config';
 import { siteApplicationsDb, slugifyFormValue } from '@/app/lib/siteApplications/config';
@@ -49,7 +50,7 @@ async function getAllowedCreatorIds(
   supabase: ReturnType<typeof getServiceSupabase>,
   panelOrganizationIds: string[]
 ): Promise<Set<string>> {
-  const { data } = await supabase
+  const { data } = await getAccessSupabase()
     .from('user_module_access')
     .select('clerk_user_id')
     .eq('is_enabled', true)

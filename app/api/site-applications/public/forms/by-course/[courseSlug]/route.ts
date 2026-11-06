@@ -5,12 +5,21 @@ import { toPublicForm } from '@/app/lib/siteApplications/forms';
 import { buildCourseFormSlugs, getAbsoluteCourseApplicationPath } from '@/app/lib/siteApplications/formTypes';
 import type { SiteApplicationForm, SiteApplicationFormField } from '@/app/types/siteApplicationForms';
 
-function getSupabase() {
+function getLearningSupabase() {
   const url =
     process.env.SUPABASE_LEARNING_URL ||
     process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL;
   const key = process.env.SUPABASE_LEARNING_SECRET_KEY;
   if (!url || !key) throw new Error('Supabase configuration missing');
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
+function getFormSupabase() {
+  const url = process.env.SUPABASE_FORM_URL || process.env.NEXT_PUBLIC_SUPABASE_FORM_URL;
+  const key = process.env.SUPABASE_FORM_SECRET_KEY;
+  if (!url || !key) throw new Error('Form database configuration missing');
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
@@ -24,10 +33,11 @@ export async function GET(
   try {
     const { courseSlug } = await context.params;
     const locale = request.nextUrl.searchParams.get('locale') === 'en' ? 'en' : 'tr';
-    const supabase = getSupabase();
+    const learningSupabase = getLearningSupabase();
+    const formSupabase = getFormSupabase();
     const slugs = buildCourseFormSlugs(courseSlug);
 
-    const { data: course, error: courseError } = await supabase
+    const { data: course, error: courseError } = await learningSupabase
       .from('myuni_courses')
       .select('id, slug, title, is_active')
       .eq('slug', courseSlug)
@@ -42,7 +52,7 @@ export async function GET(
 
     let form: Record<string, unknown> | null = null;
 
-    const byCourse = await supabase
+    const byCourse = await formSupabase
       .from(siteApplicationsDb.forms)
       .select('*')
       .eq('course_id', course.id)
@@ -55,7 +65,7 @@ export async function GET(
       form = byCourse.data[0];
     } else {
       // Fallback: slug match (works before course_id migration)
-      const bySlug = await supabase
+      const bySlug = await formSupabase
         .from(siteApplicationsDb.forms)
         .select('*')
         .or(`slug_tr.eq.${slugs.slug_tr},slug_en.eq.${slugs.slug_en}`)
@@ -75,7 +85,7 @@ export async function GET(
       );
     }
 
-    const { data: fields, error: fieldsError } = await supabase
+    const { data: fields, error: fieldsError } = await formSupabase
       .from(siteApplicationsDb.formFields)
       .select('*')
       .eq('form_id', form.id)

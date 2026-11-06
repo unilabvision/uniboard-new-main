@@ -3,12 +3,12 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 let client: SupabaseClient | null = null;
 
 function createCertificatesSupabaseClient(): SupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_LEARNING_PUBLISHABLE_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_PUBLISHABLE_KEY;
 
   if (!url || !anonKey) {
     throw new Error(
-      'Sertifika Supabase yapılandırması eksik. .env.local dosyasında NEXT_PUBLIC_SUPABASE_LEARNING_URL ve NEXT_PUBLIC_SUPABASE_LEARNING_PUBLISHABLE_KEY tanımlayın.'
+      'Sertifika Supabase yapılandırması eksik. .env.local dosyasında NEXT_PUBLIC_SUPABASE_IDENTITY_URL ve NEXT_PUBLIC_SUPABASE_IDENTITY_PUBLISHABLE_KEY tanımlayın.'
     );
   }
 

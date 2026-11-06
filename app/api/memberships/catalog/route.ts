@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireMembershipsCapability } from '@/app/api/memberships/_helpers';
+import { getLmsServiceSupabase } from '@/app/api/lms/_helpers';
 import type { MembershipCatalogItem } from '@/app/lib/memberships/types';
 
 export async function GET() {
@@ -7,9 +8,10 @@ export async function GET() {
   if (access.error || !access.supabase) {
     return NextResponse.json({ error: access.error }, { status: access.status });
   }
+  const learningSupabase = getLmsServiceSupabase();
 
   const [courses, products, events] = await Promise.all([
-    access.supabase
+    learningSupabase
       .from('myuni_courses')
       .select('id, title, slug, course_type, is_active')
       .order('title')
@@ -19,7 +21,7 @@ export async function GET() {
       .select('id, title, slug, product_type, is_active')
       .order('title')
       .limit(1000),
-    access.supabase
+    learningSupabase
       .from('myuni_events')
       .select('id, title, slug, status, is_active')
       .order('title')

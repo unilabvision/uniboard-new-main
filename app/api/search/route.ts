@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-function getSupabaseClient() {
+function getLearningSupabaseClient() {
   const supabaseUrl =
     process.env.SUPABASE_LEARNING_URL ||
     process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL;
@@ -11,6 +11,23 @@ function getSupabaseClient() {
   if (!supabaseUrl || !supabaseKey) {
     throw new Error(
       'Learning database configuration is missing. Set SUPABASE_LEARNING_URL and SUPABASE_LEARNING_SECRET_KEY.'
+    );
+  }
+
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
+function getFormSupabaseClient() {
+  const supabaseUrl =
+    process.env.SUPABASE_FORM_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_FORM_URL;
+  const supabaseKey = process.env.SUPABASE_FORM_SECRET_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error(
+      'Form database configuration is missing. Set SUPABASE_FORM_URL and SUPABASE_FORM_SECRET_KEY.'
     );
   }
 
@@ -146,11 +163,12 @@ export async function GET(request: NextRequest) {
     
     // Check if we have a valid supabase instance
     try {
-      const supabaseClient = getSupabaseClient();
+      const learningSupabase = getLearningSupabaseClient();
+      const formSupabase = getFormSupabaseClient();
 
       // Search blog posts - Try catch this entire block
       try {
-        const { data: blogPosts, error: blogError } = await supabaseClient
+        const { data: blogPosts, error: blogError } = await formSupabase
           .from('unilab_vision_blog_posts')
           .select(`
             id,
@@ -202,7 +220,7 @@ export async function GET(request: NextRequest) {
 
       // Search courses - NEW ADDITION
       try {
-        const { data: courses, error: coursesError } = await supabaseClient
+        const { data: courses, error: coursesError } = await learningSupabase
           .from('myuni_courses')
           .select(`
             id,

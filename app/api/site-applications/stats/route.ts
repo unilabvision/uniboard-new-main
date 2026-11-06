@@ -8,6 +8,7 @@ import {
   resolveSiteApplicationsTenantScope,
   resolveSiteApplicationsPanelOrganizationScope,
   applySiteApplicationsTenantScope,
+  getAccessSupabase,
 } from '@/app/api/site-applications/access/_helpers';
 
 /** Site Başvuruları dashboard — yalnızca ekip başvuruları */
@@ -92,7 +93,7 @@ export async function GET() {
       ),
     ];
     if (creatorIds.length > 0) {
-      const { data: accessRows } = await supabase
+      const { data: accessRows } = await getAccessSupabase()
         .from('user_module_access')
         .select('clerk_user_id')
         .eq('is_enabled', true)

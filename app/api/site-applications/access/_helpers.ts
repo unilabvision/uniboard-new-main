@@ -19,7 +19,7 @@ import {
 
 export const SITE_APPS_MODULE_KEYS = [SITE_APPLICATIONS_MODULE_KEY];
 
-function getAccessSupabase() {
+export function getAccessSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL;
   const key = process.env.SUPABASE_IDENTITY_SECRET_KEY;
   if (!url || !key) throw new Error('Database configuration missing');
@@ -188,7 +188,8 @@ export async function resolveSiteApplicationsTenantScope(
   supabase: ReturnType<typeof getServiceSupabase>,
   userId: string
 ): Promise<SiteAppsTenantScope> {
-  const rows = await loadUserAccessRows(supabase, userId);
+  const accessSupabase = getAccessSupabase();
+  const rows = await loadUserAccessRows(accessSupabase, userId);
   const resolved = resolveMembershipFromRows(rows, SITE_APPLICATIONS_MODULE_KEY);
 
   if (resolved.isSuperAdmin) return { mode: 'all' };
@@ -209,7 +210,7 @@ export async function resolveSiteApplicationsTenantScope(
 
   if (orgIds.length === 0) return { mode: 'none' };
 
-  const { data: accessRows, error: accessError } = await supabase
+  const { data: accessRows, error: accessError } = await accessSupabase
     .from('user_module_access')
     .select('clerk_user_id')
     .eq('is_enabled', true)
@@ -287,10 +288,11 @@ type SiteAppsPanelOrganizationScope =
  * - Form, ancak `created_by` olan kullanıcının da aynı panel_organization_id içinde olması durumunda görünür/düzenlenir.
  */
 export async function resolveSiteApplicationsPanelOrganizationScope(
-  supabase: ReturnType<typeof getServiceSupabase>,
+  _supabase: ReturnType<typeof getServiceSupabase>,
   userId: string
 ): Promise<SiteAppsPanelOrganizationScope> {
-  const rows = await loadUserAccessRows(supabase, userId);
+  void _supabase;
+  const rows = await loadUserAccessRows(getAccessSupabase(), userId);
   const siteResolved = resolveMembershipFromRows(rows, SITE_APPLICATIONS_MODULE_KEY);
   const eventsResolved = resolveMembershipFromRows(rows, EVENTS_MODULE_KEY);
 
@@ -325,7 +327,7 @@ export async function resolvePanelOrganizationIdForWrite(
   if (scope.mode === 'none') return null;
   if (scope.mode === 'scoped') return scope.panelOrganizationIds[0] ?? null;
 
-  const { data: row } = await supabase
+  const { data: row } = await getAccessSupabase()
     .from('user_module_access')
     .select('panel_organization_id')
     .eq('clerk_user_id', userId)
@@ -426,8 +428,8 @@ export async function requireSiteApplicationsAccessManager() {
     return { error: 'Unauthorized', status: 401 as const, userId: null, supabase: null };
   }
 
-  const supabase = getServiceSupabase();
-  const rows = await loadUserAccessRows(getAccessSupabase(), userId);
+  const supabase = getAccessSupabase();
+  const rows = await loadUserAccessRows(supabase, userId);
   const resolved = resolveMembershipFromRows(rows, SITE_APPLICATIONS_MODULE_KEY);
   const canManage =
     resolved.isSuperAdmin ||

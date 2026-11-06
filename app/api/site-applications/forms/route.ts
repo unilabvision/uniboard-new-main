@@ -10,6 +10,7 @@ import {
 import { normalizeFieldOptions } from '@/app/lib/siteApplications/forms';
 import {
   requireEventFormsWriteUser,
+  getAccessSupabase,
   requireSiteApplicationsOrEventsUser,
   requireSiteApplicationsCapability,
   resolveSiteApplicationsPanelOrganizationScope,
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ forms: [] });
     }
 
-    const { data: accessRows } = await authResult.supabase!
+    const { data: accessRows } = await getAccessSupabase()
       .from('user_module_access')
       .select('clerk_user_id')
       .eq('is_enabled', true)

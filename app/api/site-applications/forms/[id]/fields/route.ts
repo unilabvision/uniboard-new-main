@@ -4,7 +4,10 @@ import { requireEventFormsWriteUser } from '@/app/api/site-applications/access/_
 import type { SiteApplicationFormFieldInput } from '@/app/types/siteApplicationForms';
 import { normalizeFieldOptions } from '@/app/lib/siteApplications/forms';
 import { normalizeResourceOptions } from '@/app/lib/siteApplications/files';
-import { resolveSiteApplicationsPanelOrganizationScope } from '@/app/api/site-applications/access/_helpers';
+import {
+  getAccessSupabase,
+  resolveSiteApplicationsPanelOrganizationScope,
+} from '@/app/api/site-applications/access/_helpers';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -171,7 +174,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: 'Form not found' }, { status: 404 });
     }
 
-    const { data: ownerRows } = await supabase
+    const { data: ownerRows } = await getAccessSupabase()
       .from('user_module_access')
       .select('clerk_user_id')
       .eq('is_enabled', true)

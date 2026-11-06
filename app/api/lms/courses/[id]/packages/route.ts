@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import { requireLmsContentAdmin } from '@/app/api/lms/_helpers';
 import { generatePackageSlug } from '@/app/lib/lms/courseUtils';
 import { parsePrice } from '@/app/lib/lms/parsePrice';
@@ -12,6 +13,15 @@ type DatabaseError = {
 };
 
 const PACKAGE_SLUG_CONSTRAINT = 'myuni_course_tiers_course_id_slug_key';
+
+function getIdentitySupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL;
+  const key = process.env.SUPABASE_IDENTITY_SECRET_KEY;
+  if (!url || !key) throw new Error('Identity database configuration missing');
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
 
 function isPackageSlugConflict(error: DatabaseError | null): boolean {
   if (!error || error.code !== '23505') return false;
@@ -490,7 +500,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
   }
 
   // Unlink enrollments so FK does not block delete
-  const { error: enrollError } = await authResult.supabase
+  const { error: enrollError } = await getIdentitySupabase()
     .from('myuni_enrollments')
     .update({ tier_id: null })
     .eq('tier_id', tierId);

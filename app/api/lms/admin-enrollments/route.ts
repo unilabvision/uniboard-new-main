@@ -13,9 +13,18 @@ import { getMyuniPublicOrigin } from '@/app/lib/siteApplications/publicUrls';
 import { loadUserAccessRows } from '@/app/lib/moduleAccess/rbac';
 
 function getServiceSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL;
+  const key = process.env.SUPABASE_IDENTITY_SECRET_KEY;
+  if (!url || !key) throw new Error('Database configuration missing');
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
+function getLearningSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL;
   const key = process.env.SUPABASE_LEARNING_SECRET_KEY;
-  if (!url || !key) throw new Error('Database configuration missing');
+  if (!url || !key) throw new Error('Learning database configuration missing');
   return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
@@ -69,6 +78,7 @@ async function requireLmsOrStudentsAdmin() {
   }
 
   const supabase = getServiceSupabase();
+  const learningSupabase = getLearningSupabase();
   let rows: Awaited<ReturnType<typeof loadUserAccessRows>>;
   try {
     rows = await loadUserAccessRows(supabase, userId);
@@ -90,7 +100,7 @@ async function requireLmsOrStudentsAdmin() {
     return { error: 'Forbidden' as const, status: 403 as const, supabase: null };
   }
 
-  return { error: null, status: 200 as const, supabase };
+  return { error: null, status: 200 as const, supabase, learningSupabase };
 }
 
 /**
@@ -182,7 +192,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Valid email required' }, { status: 400 });
   }
 
-  const { data: course, error: courseError } = await authResult.supabase
+  const { data: course, error: courseError } = await authResult.learningSupabase
     .from('myuni_courses')
     .select('id, title, slug, current_participants')
     .eq('id', courseId)
@@ -196,7 +206,7 @@ export async function PUT(request: NextRequest) {
   }
 
   const tierResult = await resolveEnrollmentTierId(
-    authResult.supabase,
+    authResult.learningSupabase,
     courseId,
     requestedTierId
   );
@@ -435,7 +445,7 @@ export async function PUT(request: NextRequest) {
     });
   }
 
-  await authResult.supabase
+  await authResult.learningSupabase
     .from('myuni_courses')
     .update({
       current_participants: (course.current_participants || 0) + 1,
@@ -529,13 +539,13 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: removeError.message }, { status: 500 });
   }
 
-  const { data: course } = await authResult.supabase
+  const { data: course } = await authResult.learningSupabase
     .from('myuni_courses')
     .select('current_participants')
     .eq('id', courseId)
     .maybeSingle();
   if (course) {
-    await authResult.supabase
+    await authResult.learningSupabase
       .from('myuni_courses')
       .update({
         current_participants: Math.max(

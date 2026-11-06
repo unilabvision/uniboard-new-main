@@ -14,8 +14,8 @@ import Link from 'next/link';
 
 // Supabase clients
 const supabaseMain = createClientComponentClient({
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL || 'https://emfvwpztyuykqtepnsfp.supabase.co',
-  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_LEARNING_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtZnZ3cHp0eXV5a3F0ZXBuc2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzg0OTM5MDksImV4cCI6MjA1NDA2OTkwOX0.EbGPYHtXMO2RYGavv-FQa3mgI3RECiFnwAVqpUgghxg'
+  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL,
+  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_PUBLISHABLE_KEY,
 });
 
 const supabaseProfiles = createClientComponentClient({
@@ -692,9 +692,9 @@ export default function CampaignsPage() {
         console.log('Clerk user found:', clerkUser.id);
         
         const { data: profile, error: profileError } = await supabaseProfiles
-          .from('myuni_profiles')
+          .from('user_profiles')
           .select('*')
-          .eq('clerk_user_id', clerkUser.id)
+          .eq('clerk_id', clerkUser.id)
           .single();
         
         console.log('Profile data:', profile, 'Error:', profileError);

@@ -3,6 +3,7 @@ import nodemailer from 'nodemailer';
 import {
   requireSiteApplicationsCapability,
   resolveSiteApplicationsPanelOrganizationScope,
+  getAccessSupabase,
 } from '@/app/api/site-applications/access/_helpers';
 import {
   decryptSmtpPassword,
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
       if (scope.mode === 'scoped' && scope.panelOrganizationIds.length > 0) {
         panelOrgId = scope.panelOrganizationIds[0];
       } else if (scope.mode === 'all') {
-        const { data: row } = await authResult.supabase
+        const { data: row } = await getAccessSupabase()
           .from('user_module_access')
           .select('panel_organization_id')
           .eq('clerk_user_id', authResult.userId)
