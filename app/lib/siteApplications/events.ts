@@ -1,5 +1,15 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 import { eventsDb } from '@/app/lib/events/config';
+
+function getEventsLookupClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL;
+  const key = process.env.SUPABASE_LEARNING_SECRET_KEY;
+  if (!url || !key) throw new Error('Learning database configuration missing');
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
 
 export type LinkedEventSummary = {
   id: string;
@@ -25,9 +35,9 @@ export function normalizeEventRow(row: EventRow): LinkedEventSummary {
 }
 
 export async function fetchActiveEvents(
-  supabase: SupabaseClient
+  _supabase: SupabaseClient
 ): Promise<{ events: LinkedEventSummary[]; error: string | null }> {
-  const { data, error } = await supabase
+  const { data, error } = await getEventsLookupClient()
     .from(eventsDb.events)
     .select('id, slug, title, start_date, status, is_active')
     .eq('is_active', true)
@@ -45,7 +55,7 @@ export async function fetchActiveEvents(
 
 export async function attachLinkedEventsToForms<
   T extends { event_id?: string | null },
->(supabase: SupabaseClient, forms: T[]) {
+>(_supabase: SupabaseClient, forms: T[]) {
   const eventIds = [
     ...new Set(forms.map((f) => f.event_id).filter((id): id is string => !!id)),
   ];
@@ -54,7 +64,7 @@ export async function attachLinkedEventsToForms<
     return forms.map((form) => ({ ...form, myuni_events: null }));
   }
 
-  const { data: events, error } = await supabase
+  const { data: events, error } = await getEventsLookupClient()
     .from(eventsDb.events)
     .select('id, slug, title, is_active')
     .in('id', eventIds)
@@ -76,10 +86,10 @@ export async function attachLinkedEventsToForms<
 }
 
 export async function fetchEventBySlug(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
   eventSlug: string
 ): Promise<{ event: LinkedEventSummary | null; error: string | null }> {
-  const { data, error } = await supabase
+  const { data, error } = await getEventsLookupClient()
     .from(eventsDb.events)
     .select('id, slug, title, is_active')
     .eq('slug', eventSlug)

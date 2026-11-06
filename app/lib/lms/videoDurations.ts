@@ -63,12 +63,12 @@ const VIDEO_SELECT =
   'id, lesson_id, title, vimeo_id, vimeo_hash, vimeo_embed_url, duration_seconds';
 
 function createServiceClient(): SupabaseClient {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL2;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY2;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL;
+  const serviceKey = process.env.SUPABASE_LEARNING_SECRET_KEY;
 
   if (!url || !serviceKey) {
     throw new Error(
-      'Supabase yapılandırması eksik: NEXT_PUBLIC_SUPABASE_URL2 ve SUPABASE_SERVICE_ROLE_KEY2 gerekli'
+      'Supabase yapılandırması eksik: NEXT_PUBLIC_SUPABASE_LEARNING_URL ve SUPABASE_LEARNING_SECRET_KEY gerekli'
     );
   }
 

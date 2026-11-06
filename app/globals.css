@@ -7,6 +7,9 @@
   --foreground: #141414;
   --primary: #a90013; /* Main accent color - dark red */
   --secondary: #ffdee2; /* Secondary color - light pink */
+  --font-arimo: Arial, Helvetica, sans-serif;
+  --font-syne: Arial, Helvetica, sans-serif;
+  --font-geist-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 @media (prefers-color-scheme: dark) {

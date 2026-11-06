@@ -22,8 +22,8 @@ import { getCvDownloadUrl } from './utils/cvDownload';
 
 // Supabase client
 const supabase = createClientComponentClient({
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL2 || '',
-  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY2 || ''
+  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL || '',
+  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_LEARNING_PUBLISHABLE_KEY || ''
 });
 
 // Types

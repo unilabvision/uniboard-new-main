@@ -23,6 +23,24 @@ const nextConfig = {
       },
       {
         protocol: 'https',
+        hostname: 'qdhecdfowszvcllqnnui.supabase.co',
+        port: '',
+        pathname: '/storage/v1/object/public/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'petqvkaqfjluaklyyrdo.supabase.co',
+        port: '',
+        pathname: '/storage/v1/object/public/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'ncbmscykhckoehasnayq.supabase.co',
+        port: '',
+        pathname: '/storage/v1/object/public/**',
+      },
+      {
+        protocol: 'https',
         hostname: 'images.unsplash.com',
         port: '',
         pathname: '/**',
@@ -38,6 +56,37 @@ const nextConfig = {
       {
         source: '/course-preview/cmcaldohq3boy08mp05g80e0j',
         destination: '/tr/kurs/crispr-cas9-teknolojisi-genomik-duzenleme-egitimi',
+      },
+    ];
+  },
+  async headers() {
+    return [
+      {
+        source: '/api/public/events',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, s-maxage=60, stale-while-revalidate=300',
+          },
+        ],
+      },
+      {
+        source: '/api/site-applications/public/forms',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, s-maxage=60, stale-while-revalidate=300',
+          },
+        ],
+      },
+      {
+        source: '/api/site-applications/public/forms/by-event/:eventSlug',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, s-maxage=60, stale-while-revalidate=300',
+          },
+        ],
       },
     ];
   },

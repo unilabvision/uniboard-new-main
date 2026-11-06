@@ -1,33 +1,9 @@
 import type { Metadata } from "next";
-import { Arimo, Syne } from "next/font/google";
-import { Geist_Mono } from "next/font/google";
 import { ClerkProvider } from '@clerk/nextjs';
 import ConditionalLayout from "../components/ConditionalLayout";
 import "../globals.css";
 import "katex/dist/katex.min.css";
 import Script from "next/script";
-
-// Font definitions
-const arimo = Arimo({
-  variable: "--font-arimo",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  display: "swap",
-});
-
-const syne = Syne({
-  variable: "--font-syne",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-  display: "swap",
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-  weight: ["400"],
-  display: "swap",
-});
 
 // Helper function to get page type from URL
 function getPageTypeFromUrl(url: string, locale: string): {
@@ -323,10 +299,8 @@ export default async function LocaleLayout({
   const locale = resolvedParams.locale || 'tr';
   
   return (
-    <html lang={locale} dir="ltr" className={`${arimo.variable} ${syne.variable} ${geistMono.variable}`}>
+    <html lang={locale} dir="ltr">
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://clerk.com" />
         
         {/* Google Tag Manager */}

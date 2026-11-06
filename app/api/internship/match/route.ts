@@ -78,8 +78,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL2;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY2;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL;
+    const serviceKey = process.env.SUPABASE_LEARNING_SECRET_KEY;
 
     if (!supabaseUrl || !serviceKey) {
       return NextResponse.json({ error: 'Database configuration missing' }, { status: 500 });

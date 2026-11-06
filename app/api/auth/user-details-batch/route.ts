@@ -177,11 +177,11 @@ function clerkUserToDetails(
 
 function getProfilesSupabase(): SupabaseClient | null {
   const url =
-    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL ||
     'https://mzlvfmyrzytwvwndqgnz.supabase.co';
   const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    process.env.SUPABASE_IDENTITY_SECRET_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_PUBLISHABLE_KEY;
   if (!url || !key) return null;
   return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
@@ -189,8 +189,8 @@ function getProfilesSupabase(): SupabaseClient | null {
 }
 
 function getLmsSupabase(): SupabaseClient | null {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL2;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY2;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL;
+  const key = process.env.SUPABASE_LEARNING_SECRET_KEY;
   if (!url || !key) return null;
   return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },

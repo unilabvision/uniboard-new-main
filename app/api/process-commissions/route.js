@@ -2,11 +2,18 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// Supabase clients
-const supabaseMain = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL2 || 'https://emfvwpztyuykqtepnsfp.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY2 // Service role key gerekli (admin yetkisi için)
-);
+function getSupabaseMain() {
+  const supabaseUrl = process.env.SUPABASE_LEARNING_URL || process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL;
+  const supabaseKey = process.env.SUPABASE_LEARNING_SECRET_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Learning database configuration is missing. Set SUPABASE_LEARNING_URL and SUPABASE_LEARNING_SECRET_KEY.');
+  }
+
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
 
 // Commission hesaplama fonksiyonu
 function calculateCommission(saleAmount, discountAmount = 0, commissionRate = 15) {
@@ -16,6 +23,7 @@ function calculateCommission(saleAmount, discountAmount = 0, commissionRate = 15
 
 export async function POST(request) {
   try {
+    const supabaseMain = getSupabaseMain();
     const body = await request.json();
     const { orderId, forceReprocess = false } = body;
 

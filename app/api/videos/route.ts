@@ -9,8 +9,8 @@ import {
 
 // Initialize Supabase client with service role key for server-side operations
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL2!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY2!
+  process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL!,
+  process.env.SUPABASE_LEARNING_SECRET_KEY!
 );
 
 // Vimeo API configuration

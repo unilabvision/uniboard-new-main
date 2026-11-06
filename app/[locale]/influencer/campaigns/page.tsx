@@ -14,13 +14,13 @@ import Link from 'next/link';
 
 // Supabase clients
 const supabaseMain = createClientComponentClient({
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL2 || 'https://emfvwpztyuykqtepnsfp.supabase.co',
-  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY2 || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtZnZ3cHp0eXV5a3F0ZXBuc2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzg0OTM5MDksImV4cCI6MjA1NDA2OTkwOX0.EbGPYHtXMO2RYGavv-FQa3mgI3RECiFnwAVqpUgghxg'
+  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL || 'https://emfvwpztyuykqtepnsfp.supabase.co',
+  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_LEARNING_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtZnZ3cHp0eXV5a3F0ZXBuc2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzg0OTM5MDksImV4cCI6MjA1NDA2OTkwOX0.EbGPYHtXMO2RYGavv-FQa3mgI3RECiFnwAVqpUgghxg'
 });
 
 const supabaseProfiles = createClientComponentClient({
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://mzlvfmyrzytwvwndqgnz.supabase.co',
-  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16bHZmbXlyenl0d3Z3bmRxZ256Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDIyMzA3NTgsImV4cCI6MjA1NzgwNjc1OH0.GC7zAi1mUb9rOYiDhRJ8420bXgmjaR0YfwYNG0xM0sY'
+  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL || 'https://mzlvfmyrzytwvwndqgnz.supabase.co',
+  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16bHZmbXlyenl0d3Z3bmRxZ256Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDIyMzA3NTgsImV4cCI6MjA1NzgwNjc1OH0.GC7zAi1mUb9rOYiDhRJ8420bXgmjaR0YfwYNG0xM0sY'
 });
 
 // Types

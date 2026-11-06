@@ -8,8 +8,8 @@ import { internshipDb } from '@/app/lib/internship/config';
 import type { InternshipApplication } from '@/app/types/internship';
 
 const supabase = createClientComponentClient({
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL2 || '',
-  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY2 || '',
+  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL || '',
+  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_LEARNING_PUBLISHABLE_KEY || '',
 });
 
 export default function InternshipMatchingPage({

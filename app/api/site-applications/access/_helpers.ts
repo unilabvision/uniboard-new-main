@@ -19,10 +19,19 @@ import {
 
 export const SITE_APPS_MODULE_KEYS = [SITE_APPLICATIONS_MODULE_KEY];
 
-export function getServiceSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL2;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY2;
+function getAccessSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL;
+  const key = process.env.SUPABASE_LEARNING_SECRET_KEY;
   if (!url || !key) throw new Error('Database configuration missing');
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
+export function getServiceSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_FORM_URL;
+  const key = process.env.SUPABASE_FORM_SECRET_KEY;
+  if (!url || !key) throw new Error('Form database configuration missing');
   return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
@@ -42,9 +51,10 @@ export async function requireSiteApplicationsModuleUser() {
   }
 
   const supabase = getServiceSupabase();
+  const accessSupabase = getAccessSupabase();
   let rows: Awaited<ReturnType<typeof loadUserAccessRows>>;
   try {
-    rows = await loadUserAccessRows(supabase, userId);
+    rows = await loadUserAccessRows(accessSupabase, userId);
   } catch (e) {
     return {
       error: e instanceof Error ? e.message : 'Error',
@@ -114,9 +124,10 @@ export async function requireSiteApplicationsOrEventsUser(
   }
 
   const supabase = getServiceSupabase();
+  const accessSupabase = getAccessSupabase();
   let rows: Awaited<ReturnType<typeof loadUserAccessRows>>;
   try {
-    rows = await loadUserAccessRows(supabase, userId);
+    rows = await loadUserAccessRows(accessSupabase, userId);
   } catch {
     return {
       error: 'Forbidden',
@@ -339,9 +350,10 @@ export async function requireEventFormsWriteUser() {
   }
 
   const supabase = getServiceSupabase();
+  const accessSupabase = getAccessSupabase();
   let rows: Awaited<ReturnType<typeof loadUserAccessRows>>;
   try {
-    rows = await loadUserAccessRows(supabase, userId);
+    rows = await loadUserAccessRows(accessSupabase, userId);
   } catch {
     return {
       error: 'Forbidden',
@@ -415,7 +427,7 @@ export async function requireSiteApplicationsAccessManager() {
   }
 
   const supabase = getServiceSupabase();
-  const rows = await loadUserAccessRows(supabase, userId);
+  const rows = await loadUserAccessRows(getAccessSupabase(), userId);
   const resolved = resolveMembershipFromRows(rows, SITE_APPLICATIONS_MODULE_KEY);
   const canManage =
     resolved.isSuperAdmin ||
