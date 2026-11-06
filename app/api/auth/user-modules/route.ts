@@ -3,6 +3,8 @@ import { auth, clerkClient } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { claimPendingModuleFromClerkMetadata } from '@/app/lib/moduleAccess/grantToken';
 
+const isDev = process.env.NODE_ENV === 'development';
+
 const DUPLICATE_EVENT_MODULE_KEYS = new Set([
   'event',
   'etkinlik',

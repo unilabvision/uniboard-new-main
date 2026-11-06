@@ -37,6 +37,7 @@ export function normalizeEventRow(row: EventRow): LinkedEventSummary {
 export async function fetchActiveEvents(
   _supabase: SupabaseClient
 ): Promise<{ events: LinkedEventSummary[]; error: string | null }> {
+  void _supabase;
   const { data, error } = await getEventsLookupClient()
     .from(eventsDb.events)
     .select('id, slug, title, start_date, status, is_active')
@@ -56,6 +57,7 @@ export async function fetchActiveEvents(
 export async function attachLinkedEventsToForms<
   T extends { event_id?: string | null },
 >(_supabase: SupabaseClient, forms: T[]) {
+  void _supabase;
   const eventIds = [
     ...new Set(forms.map((f) => f.event_id).filter((id): id is string => !!id)),
   ];
@@ -89,6 +91,7 @@ export async function fetchEventBySlug(
   _supabase: SupabaseClient,
   eventSlug: string
 ): Promise<{ event: LinkedEventSummary | null; error: string | null }> {
+  void _supabase;
   const { data, error } = await getEventsLookupClient()
     .from(eventsDb.events)
     .select('id, slug, title, is_active')

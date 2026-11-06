@@ -7,11 +7,22 @@ import {
   toVimeoApiIdentifier,
 } from '@/app/lib/lms/vimeoUrl';
 
-// Initialize Supabase client with service role key for server-side operations
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL!,
-  process.env.SUPABASE_LEARNING_SECRET_KEY!
-);
+function getSupabaseClient() {
+  const supabaseUrl =
+    process.env.SUPABASE_LEARNING_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL;
+  const supabaseKey = process.env.SUPABASE_LEARNING_SECRET_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error(
+      'Learning database configuration is missing. Set SUPABASE_LEARNING_URL and SUPABASE_LEARNING_SECRET_KEY.'
+    );
+  }
+
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
 
 // Vimeo API configuration
 const VIMEO_ACCESS_TOKEN = process.env.VIMEO_ACCESS_TOKEN;
@@ -167,6 +178,7 @@ export async function POST(request: NextRequest) {
       extractVimeoHashFromEmbedUrl(vimeoData.player_embed_url, String(vimeoId));
 
     console.log('Creating video record in database...');
+    const supabase = getSupabaseClient();
     // Create video record in database
     const videoRecord = {
       lesson_id: lessonId,
@@ -257,6 +269,8 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    const supabase = getSupabaseClient();
+
     // Update in database
     const updateData: Record<string, string | undefined> = {};
     if (title) updateData.title = title;
@@ -321,6 +335,7 @@ export async function DELETE(request: NextRequest) {
         { status: 400 }
       );
     }
+    const supabase = getSupabaseClient();
 
     // Silmeden önce dersi öğren, süre toplamı sonrasında yeniden hesaplanacak.
     const { data: existingVideo } = await supabase

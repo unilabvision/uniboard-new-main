@@ -1,8 +1,23 @@
 // app/api/search/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
-// Import Supabase with proper ES modules syntax
-import supabaseClient from '@/lib/supabase';
+function getSupabaseClient() {
+  const supabaseUrl =
+    process.env.SUPABASE_LEARNING_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL;
+  const supabaseKey = process.env.SUPABASE_LEARNING_SECRET_KEY;
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error(
+      'Learning database configuration is missing. Set SUPABASE_LEARNING_URL and SUPABASE_LEARNING_SECRET_KEY.'
+    );
+  }
+
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
 
 // Define proper types for database entities
 interface BlogPostDb {
@@ -131,6 +146,8 @@ export async function GET(request: NextRequest) {
     
     // Check if we have a valid supabase instance
     try {
+      const supabaseClient = getSupabaseClient();
+
       // Search blog posts - Try catch this entire block
       try {
         const { data: blogPosts, error: blogError } = await supabaseClient

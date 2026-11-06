@@ -8,7 +8,7 @@ function getRevalidationSecret(): string | null {
     process.env.MYUNI_CACHE_REVALIDATION_SECRET || process.env.CACHE_REVALIDATION_SECRET;
   if (configuredSecret) return configuredSecret;
 
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY2;
+  const serviceRoleKey = process.env.SUPABASE_LEARNING_SECRET_KEY;
   if (!serviceRoleKey) return null;
 
   return createHash('sha256')

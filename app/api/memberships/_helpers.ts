@@ -16,8 +16,10 @@ const MAX_MEMBERSHIP_BENEFITS = 500;
 const MAX_MEMBERSHIP_PAYLOAD_BYTES = 512 * 1024;
 
 function getMembershipsSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL2;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY2;
+  const url =
+    process.env.SUPABASE_LEARNING_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL;
+  const key = process.env.SUPABASE_LEARNING_SECRET_KEY;
   if (!url || !key) throw new Error('Database configuration missing');
   return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },
