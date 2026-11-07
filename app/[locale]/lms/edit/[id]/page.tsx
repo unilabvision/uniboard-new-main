@@ -7,7 +7,7 @@ import {
   ChevronDown, ChevronRight,
   Video, FileText, Edit2, Check, X,
   ArrowUp, ArrowDown, HelpCircle, Users, Clock, RefreshCw,
-  ClipboardList
+  ClipboardList, ExternalLink
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
@@ -124,32 +124,12 @@ export default function EditCoursePage() {
       try {
         setLoading(true);
         
-        // Fetch course with sections and lessons
-        const { data: courseData, error: courseError } = await supabase
-          .from('myuni_courses')
-          .select(`
-            *,
-            myuni_course_sections(
-              *,
-              myuni_course_lessons(
-                *,
-                myuni_videos(*),
-                myuni_notes(*),
-                myuni_quicks(*)
-              )
-            )
-          `)
-          .eq('id', courseId)
-          .single();
-        
-        if (courseError) {
-          if (courseError.code === 'PGRST116') {
-            setError('Course not found');
-          } else {
-            throw courseError;
-          }
-          return;
+        const response = await fetch(`/api/lms/courses/${encodeURIComponent(courseId)}`);
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.course) {
+          throw new Error(payload.error || 'Course not found');
         }
+        const courseData = payload.course;
         
         // Process the data
         const processedSections: CourseSection[] = (courseData.myuni_course_sections || [])
@@ -1930,6 +1910,18 @@ const CourseContentManager = ({
                                         <span className="text-xs bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200 px-2 py-1 rounded">
                                           {note.content_type.toUpperCase()}
                                         </span>
+                                        {note.file_url && (
+                                          <a
+                                            href={note.file_url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                                            onClick={(event) => event.stopPropagation()}
+                                          >
+                                            PDF / Kaynağı aç
+                                            <ExternalLink className="w-3 h-3" />
+                                          </a>
+                                        )}
                                       </div>
                                       <div className="flex items-center space-x-1">
                                         <button

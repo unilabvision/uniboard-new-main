@@ -15,7 +15,11 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { enrollUser, getUserEnrollment } from '@/app/lib/lms/enrollmentService';
 import HtmlContent from '@/app/components/lms/HtmlContent';
-import { processCourseSectionsForDisplay, type DisplaySection } from '@/app/lib/lms/courseContent';
+import {
+  processCourseSectionsForDisplay,
+  type DisplayNote,
+  type DisplaySection,
+} from '@/app/lib/lms/courseContent';
 
 // Supabase client
 const supabase = createClientComponentClient({
@@ -317,6 +321,11 @@ const SectionComponent = ({
                       {lesson.videos.map((video) => video.title).join(' · ')}
                     </p>
                   )}
+                  {lesson.notes.length > 0 && (
+                    <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
+                      {lesson.notes.map((note) => note.title).join(' · ')}
+                    </p>
+                  )}
                   {lesson.description && (
                     <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1 line-clamp-1">
                       {lesson.description}
@@ -335,18 +344,24 @@ const SectionComponent = ({
                     {lesson.videos.length}
                   </span>
                 )}
-                {isEnrolled && lesson.videos.length > 0 ? (
+                {lesson.notes.length > 0 && (
+                  <span className="flex items-center">
+                    <FileText className="w-4 h-4 mr-1" />
+                    {lesson.notes.length}
+                  </span>
+                )}
+                {isEnrolled && (lesson.videos.length > 0 || lesson.notes.length > 0) ? (
                   <Link
                     href={`/${locale}/watch/${courseSlug}?lesson=${lesson.id}`}
                     className="p-1 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded text-blue-600"
-                    title="Videoyu İzle"
+                    title={lesson.videos.length > 0 ? 'Videoyu İzle' : 'PDF / Kaynağı Görüntüle'}
                   >
                     <Eye className="w-4 h-4" />
                   </Link>
                 ) : (
                   <button 
                     className="p-1 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded opacity-40 cursor-default"
-                    title="Video yok"
+                    title="İçerik yok"
                     disabled
                   >
                     <Eye className="w-4 h-4" />
@@ -404,7 +419,8 @@ export default function CourseDetailPage({ params }: { params: Promise<{ locale:
               *,
               myuni_course_lessons(
                 *,
-                myuni_videos(*)
+                myuni_videos(*),
+                myuni_notes(*)
               )
             )
           `)
@@ -420,7 +436,7 @@ export default function CourseDetailPage({ params }: { params: Promise<{ locale:
           return;
         }
         
-        const processedSections = processCourseSectionsForDisplay(
+        let processedSections = processCourseSectionsForDisplay(
           courseData.myuni_course_sections,
           { publicView: false }
         ) as CourseSection[];
@@ -431,13 +447,34 @@ export default function CourseDetailPage({ params }: { params: Promise<{ locale:
           myuni_course_sections: undefined
         };
         
-        setCourse(cleanCourse);
-        setSections(processedSections);
-        
         if (user) {
           const enrollment = await getUserEnrollment(user.id, cleanCourse.id);
           setIsEnrolled(!!enrollment);
+
+          const resourceResponse = await fetch(
+            `/api/lms/courses/${encodeURIComponent(cleanCourse.id)}/resources`
+          );
+          if (resourceResponse.ok) {
+            const resourcePayload = await resourceResponse.json();
+            const notesByLesson = new Map<string, DisplayNote[]>();
+            for (const note of (resourcePayload.notes || []) as DisplayNote[]) {
+              notesByLesson.set(note.lesson_id, [
+                ...(notesByLesson.get(note.lesson_id) || []),
+                note,
+              ]);
+            }
+            processedSections = processedSections.map((section) => ({
+              ...section,
+              lessons: section.lessons.map((lesson) => ({
+                ...lesson,
+                notes: notesByLesson.get(lesson.id) || [],
+              })),
+            }));
+          }
         }
+
+        setCourse(cleanCourse);
+        setSections(processedSections);
         
         // Expand first section by default
         if (processedSections.length > 0) {

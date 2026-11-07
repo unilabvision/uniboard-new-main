@@ -149,8 +149,7 @@ export default function WatchCoursePage() {
               id, title, order_index, is_active,
               myuni_course_lessons (
                 id, section_id, title, order_index, is_locked, is_active, duration_minutes,
-                myuni_videos ( id, lesson_id, title, vimeo_id, vimeo_hash, vimeo_embed_url, duration_seconds, order_index ),
-                myuni_notes ( id, lesson_id, title, content, content_type, file_url, order_index )
+                myuni_videos ( id, lesson_id, title, vimeo_id, vimeo_hash, vimeo_embed_url, duration_seconds, order_index )
               )
             )
           `)
@@ -169,13 +168,34 @@ export default function WatchCoursePage() {
         }
         setIsEnrolled(true);
 
-        const processedSections = processCourseSectionsForDisplay(
+        let processedSections = processCourseSectionsForDisplay(
           courseData.myuni_course_sections,
           { publicView: true }
+        ) as CourseSection[];
+
+        const resourceResponse = await fetch(
+          `/api/lms/courses/${encodeURIComponent(courseData.id)}/resources`
         );
+        if (resourceResponse.ok) {
+          const resourcePayload = await resourceResponse.json();
+          const notesByLesson = new Map<string, CourseNote[]>();
+          for (const note of (resourcePayload.notes || []) as CourseNote[]) {
+            notesByLesson.set(note.lesson_id, [
+              ...(notesByLesson.get(note.lesson_id) || []),
+              note,
+            ]);
+          }
+          processedSections = processedSections.map((section) => ({
+            ...section,
+            lessons: section.lessons.map((lesson) => ({
+              ...lesson,
+              notes: notesByLesson.get(lesson.id) || [],
+            })),
+          }));
+        }
 
         setCourse({ id: courseData.id, slug: courseData.slug, title: courseData.title, description: courseData.description, instructor_name: courseData.instructor_name });
-        setSections(processedSections as CourseSection[]);
+        setSections(processedSections);
 
         const lessonIds = processedSections.flatMap((s) => s.lessons.map((l) => l.id));
         if (lessonIds.length > 0) {
@@ -192,14 +212,14 @@ export default function WatchCoursePage() {
         }
 
         const lessonParam = searchParams.get('lesson');
-        const firstLessonWithVideo = processedSections
+        const firstLessonWithContent = processedSections
           .flatMap((s) => s.lessons)
-          .find((l) => l.videos.length > 0);
+          .find((l) => l.videos.length > 0 || l.notes.length > 0);
 
         if (lessonParam && lessonIds.includes(lessonParam)) {
           setActiveLessonId(lessonParam);
-        } else if (firstLessonWithVideo) {
-          setActiveLessonId(firstLessonWithVideo.id);
+        } else if (firstLessonWithContent) {
+          setActiveLessonId(firstLessonWithContent.id);
         }
       } catch (err) {
         console.error('Error loading course:', err);

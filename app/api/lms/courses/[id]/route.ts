@@ -17,6 +17,41 @@ const COURSE_UPDATE_RESPONSE_COLUMNS = `
   is_registration_open
 `;
 
+export async function GET(_request: NextRequest, context: RouteContext) {
+  const authResult = await requireLmsContentAdmin();
+  if (authResult.error || !authResult.supabase) {
+    return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+  }
+
+  const { id } = await context.params;
+  const { data, error } = await authResult.supabase
+    .from('myuni_courses')
+    .select(`
+      *,
+      myuni_course_sections(
+        *,
+        myuni_course_lessons(
+          *,
+          myuni_videos(*),
+          myuni_notes(*),
+          myuni_quicks(*)
+        )
+      )
+    `)
+    .eq('id', id)
+    .maybeSingle();
+
+  if (error) {
+    console.error('LMS course GET error:', error.message);
+    return NextResponse.json({ error: 'Kurs içeriği yüklenemedi' }, { status: 500 });
+  }
+  if (!data) {
+    return NextResponse.json({ error: 'Kurs bulunamadı' }, { status: 404 });
+  }
+
+  return NextResponse.json({ course: data });
+}
+
 /**
  * PATCH – Update course fields via service role (bypasses anon RLS).
  * Publishes to myunilab.net by setting is_active=true on the shared DB.
