@@ -16,6 +16,7 @@ import VideoUploadModal from '../../../../components/lms/VideoUploadModal';
 import NoteUploadModal from '../../../../components/lms/NoteUploadModal';
 import QuizUploadModal from '../../../../components/lms/QuizUploadModal';
 import ModuleSelectionModal from '../../../../components/lms/ModuleSelectionModal';
+import ResourceLinkModal from '../../../../components/lms/ResourceLinkModal';
 import { Course, CourseSection, CourseLesson, CourseVideo, CourseNote, CourseQuiz, ModuleType } from '../../../../types/course';
 
 // Supabase client
@@ -632,6 +633,8 @@ const CourseContentManager = ({
   const [showVideoUpload, setShowVideoUpload] = useState(false);
   const [showNoteUpload, setShowNoteUpload] = useState(false);
   const [showQuizUpload, setShowQuizUpload] = useState(false);
+  const [showResourceLink, setShowResourceLink] = useState(false);
+  const [resourceLinkMode, setResourceLinkMode] = useState<'url' | 'resource'>('url');
   
   // Lesson editing
   const [editingLesson, setEditingLesson] = useState<string | null>(null);
@@ -1077,7 +1080,12 @@ const CourseContentManager = ({
           await supabase.from('myuni_videos').delete().eq('lesson_id', selectedLessonForModule);
         }
         if (moduleInfo.hasNotes) {
-          await supabase.from('myuni_notes').delete().eq('lesson_id', selectedLessonForModule);
+          const response = await fetch('/api/lms/notes', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lesson_id: selectedLessonForModule }),
+          });
+          if (!response.ok) throw new Error('Not veya kaynak silinemedi');
         }
         if (moduleInfo.hasQuiz) {
           await supabase.from('myuni_quicks').delete().eq('lesson_id', selectedLessonForModule);
@@ -1110,6 +1118,9 @@ const CourseContentManager = ({
       setShowNoteUpload(true);
     } else if (moduleType === 'quiz') {
       setShowQuizUpload(true);
+    } else if (moduleType === 'url' || moduleType === 'resource') {
+      setResourceLinkMode(moduleType);
+      setShowResourceLink(true);
     }
   };
 
@@ -1134,12 +1145,13 @@ const CourseContentManager = ({
       ...s,
       lessons: s.lessons.map(l => 
         l.id === selectedLessonForModule 
-          ? { ...l, notes: [...(l.notes || []), uploadedNote] }
+          ? { ...l, lesson_type: 'notes', notes: [uploadedNote] }
           : l
       )
     })));
     
     setShowNoteUpload(false);
+    setShowResourceLink(false);
     setSelectedLessonForModule(null);
   };
 
@@ -1164,6 +1176,7 @@ const CourseContentManager = ({
     setShowVideoUpload(false);
     setShowNoteUpload(false);
     setShowQuizUpload(false);
+    setShowResourceLink(false);
     setSelectedLessonForModule(null);
     setSelectedLessonTitle('');
   };
@@ -1173,17 +1186,18 @@ const CourseContentManager = ({
     if (!confirm(`Bu ${moduleType === 'video' ? 'videoyu' : moduleType === 'notes' ? 'notu' : 'quiz\'i'} silmek istediğinizden emin misiniz?`)) return;
 
     try {
-      let tableName = '';
-      if (moduleType === 'video') tableName = 'myuni_videos';
-      else if (moduleType === 'notes') tableName = 'myuni_notes';
-      else if (moduleType === 'quiz') tableName = 'myuni_quicks';
-
-      const { error } = await supabase
-        .from(tableName)
-        .delete()
-        .eq('id', itemId);
-
-      if (error) throw error;
+      if (moduleType === 'notes') {
+        const response = await fetch('/api/lms/notes', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lesson_id: lessonId }),
+        });
+        if (!response.ok) throw new Error('Not veya kaynak silinemedi');
+      } else {
+        const tableName = moduleType === 'video' ? 'myuni_videos' : 'myuni_quicks';
+        const { error } = await supabase.from(tableName).delete().eq('id', itemId);
+        if (error) throw error;
+      }
 
       setSections(sections.map(s => ({
         ...s,
@@ -1747,6 +1761,21 @@ const CourseContentManager = ({
             sections
               .flatMap(s => s.lessons)
               .find(l => l.id === selectedLessonForModule)?.notes?.length || 0
+          }
+        />
+      )}
+
+      {/* URL / Resource Modal */}
+      {showResourceLink && selectedLessonForModule && (
+        <ResourceLinkModal
+          lessonId={selectedLessonForModule}
+          mode={resourceLinkMode}
+          onSaved={handleNoteUploaded}
+          onClose={closeModals}
+          orderIndex={
+            sections
+              .flatMap((s) => s.lessons)
+              .find((l) => l.id === selectedLessonForModule)?.notes?.length || 0
           }
         />
       )}

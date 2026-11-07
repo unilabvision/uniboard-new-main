@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireLmsContentAdmin } from '@/app/api/lms/_helpers';
+import {
+  getLmsFormSupabase,
+  requireLmsContentAdmin,
+} from '@/app/api/lms/_helpers';
 import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
 import { isCourseApplicationForm } from '@/app/lib/siteApplications/formTypes';
 
@@ -15,9 +18,10 @@ export async function GET(request: NextRequest) {
 
   const courseId = request.nextUrl.searchParams.get('courseId')?.trim() || null;
   const status = request.nextUrl.searchParams.get('status')?.trim() || null;
+  const formSupabase = getLmsFormSupabase();
 
   // Load course forms
-  const { data: forms, error: formsError } = await authResult.supabase
+  const { data: forms, error: formsError } = await formSupabase
     .from(siteApplicationsDb.forms)
     .select('id, title_tr, title_en, slug_tr, slug_en, form_type, course_id, event_id, is_active')
     .order('updated_at', { ascending: false });
@@ -41,7 +45,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: true, applications: [], forms: courseForms });
   }
 
-  let query = authResult.supabase
+  let query = formSupabase
     .from(siteApplicationsDb.applications)
     .select(
       'id, form_id, course_id, first_name, last_name, email, phone, status, locale, created_at, submission_data, source'

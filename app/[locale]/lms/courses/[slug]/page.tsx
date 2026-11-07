@@ -91,6 +91,7 @@ const texts = {
     error: "Bir hata oluştu",
     notFound: "Kurs bulunamadı",
     editCourse: "Kursu Düzenle",
+    applications: "Başvurular",
     draftNotice: "Bu kurs taslak modunda — öğrenciler göremez. Yayınlamak için düzenleme sayfasından aktifleştirin.",
     courseTypes: {
       online: "Online",
@@ -133,6 +134,7 @@ const texts = {
     error: "An error occurred",
     notFound: "Course not found",
     editCourse: "Edit Course",
+    applications: "Applications",
     draftNotice: "This course is in draft mode — students cannot see it. Activate it from the edit page to publish.",
     courseTypes: {
       online: "Online",
@@ -570,13 +572,22 @@ export default function CourseDetailPage({ params }: { params: Promise<{ locale:
             <ArrowLeft className="w-4 h-4 mr-2" />
             {t.backToCourses}
           </Link>
-          <Link
-            href={`/${locale}/lms/edit/${course.id}`}
-            className="inline-flex items-center px-4 py-2 bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 rounded-lg hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors text-sm"
-          >
-            <Edit2 className="w-4 h-4 mr-2" />
-            {t.editCourse}
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/${locale}/lms/edit/${course.id}?tab=applications`}
+              className="inline-flex items-center px-4 py-2 bg-[#990000] text-white rounded-lg hover:bg-[#880000] transition-colors text-sm"
+            >
+              <FileText className="w-4 h-4 mr-2" />
+              {t.applications}
+            </Link>
+            <Link
+              href={`/${locale}/lms/edit/${course.id}`}
+              className="inline-flex items-center px-4 py-2 bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 rounded-lg hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-colors text-sm"
+            >
+              <Edit2 className="w-4 h-4 mr-2" />
+              {t.editCourse}
+            </Link>
+          </div>
         </div>
 
         {!course.is_active && (

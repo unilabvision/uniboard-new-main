@@ -7,7 +7,7 @@ import { useUser } from '@clerk/nextjs';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import {
   ArrowLeft, ChevronRight, PlayCircle, CheckCircle,
-  Lock, BookOpen, Video,
+  Lock, BookOpen, Video, FileText, ExternalLink,
 } from 'lucide-react';
 import { VimeoPlayer } from '@/app/components/lms/VimeoPlayer';
 import { ProgressService } from '@/app/[locale]/lms/progress/progressService';
@@ -42,6 +42,17 @@ interface CourseLesson {
   is_locked: boolean;
   duration_minutes?: number;
   videos: CourseVideo[];
+  notes: CourseNote[];
+}
+
+interface CourseNote {
+  id: string;
+  lesson_id: string;
+  title: string;
+  content: string;
+  content_type: 'markdown' | 'html' | 'text';
+  file_url?: string;
+  order_index: number;
 }
 
 interface CourseSection {
@@ -71,6 +82,7 @@ const texts = {
     notFound: 'Kurs bulunamadı',
     selectLesson: 'Başlamak için soldan bir ders seçin',
     completed: 'Tamamlandı',
+    openResource: 'PDF / Kaynağı Aç',
   },
   en: {
     backToCourses: 'Back to My Courses',
@@ -83,6 +95,7 @@ const texts = {
     notFound: 'Course not found',
     selectLesson: 'Select a lesson from the sidebar to start',
     completed: 'Completed',
+    openResource: 'Open PDF / Resource',
   },
 };
 
@@ -109,6 +122,16 @@ export default function WatchCoursePage() {
 
   const activeLesson = allLessons.find((l) => l.id === activeLessonId) || null;
   const activeVideo = activeLesson?.videos?.[0] || null;
+  const activeNote = activeLesson?.notes?.[0] || null;
+  const activeResourceUrl = (() => {
+    if (!activeNote?.file_url) return null;
+    try {
+      const parsed = new URL(activeNote.file_url);
+      return ['http:', 'https:'].includes(parsed.protocol) ? parsed.toString() : null;
+    } catch {
+      return null;
+    }
+  })();
 
   useEffect(() => {
     const fetchCourse = async () => {
@@ -126,7 +149,8 @@ export default function WatchCoursePage() {
               id, title, order_index, is_active,
               myuni_course_lessons (
                 id, section_id, title, order_index, is_locked, is_active, duration_minutes,
-                myuni_videos ( id, lesson_id, title, vimeo_id, vimeo_hash, vimeo_embed_url, duration_seconds, order_index )
+                myuni_videos ( id, lesson_id, title, vimeo_id, vimeo_hash, vimeo_embed_url, duration_seconds, order_index ),
+                myuni_notes ( id, lesson_id, title, content, content_type, file_url, order_index )
               )
             )
           `)
@@ -296,6 +320,20 @@ export default function WatchCoursePage() {
                   className="w-full"
                 />
               </div>
+            ) : activeLesson && activeResourceUrl ? (
+              <div className="flex min-h-72 flex-col items-center justify-center p-8 text-center">
+                <FileText className="mb-4 h-16 w-16 text-amber-400" />
+                <h3 className="mb-4 text-lg font-semibold text-white">{activeNote?.title}</h3>
+                <a
+                  href={activeResourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-lg bg-[#990000] px-5 py-3 font-medium text-white hover:bg-[#7a0000]"
+                >
+                  {t.openResource}
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              </div>
             ) : activeLesson ? (
               <div className="text-center text-neutral-400 p-8">
                 <Video className="w-16 h-16 mx-auto mb-4 opacity-50" />
@@ -314,6 +352,9 @@ export default function WatchCoursePage() {
               <h2 className="font-semibold text-lg">{activeLesson.title}</h2>
               {activeVideo && (
                 <p className="text-neutral-400 text-sm mt-1">{activeVideo.title}</p>
+              )}
+              {!activeVideo && activeNote && (
+                <p className="text-neutral-400 text-sm mt-1">{activeNote.title}</p>
               )}
             </div>
           )}

@@ -9,6 +9,16 @@ export interface DisplayVideo {
   order_index: number;
 }
 
+export interface DisplayNote {
+  id: string;
+  lesson_id: string;
+  title: string;
+  content: string;
+  content_type: 'markdown' | 'html' | 'text';
+  file_url?: string;
+  order_index: number;
+}
+
 export interface DisplayLesson {
   id: string;
   section_id: string;
@@ -21,6 +31,7 @@ export interface DisplayLesson {
   is_locked: boolean;
   is_completed: boolean;
   videos: DisplayVideo[];
+  notes: DisplayNote[];
 }
 
 export interface DisplaySection {
@@ -46,6 +57,8 @@ type RawLesson = {
   is_completed?: boolean;
   myuni_videos?: DisplayVideo[];
   videos?: DisplayVideo[];
+  myuni_notes?: DisplayNote[];
+  notes?: DisplayNote[];
 };
 
 type RawSection = {
@@ -84,6 +97,9 @@ export function processCourseSectionsForDisplay(
           is_locked: lesson.is_locked ?? false,
           is_completed: lesson.is_completed ?? false,
           videos: (lesson.myuni_videos || lesson.videos || []).sort(
+            (a, b) => a.order_index - b.order_index
+          ),
+          notes: (lesson.myuni_notes || lesson.notes || []).sort(
             (a, b) => a.order_index - b.order_index
           ),
         }))

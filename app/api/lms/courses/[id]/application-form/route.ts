@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { requireLmsContentAdmin } from '@/app/api/lms/_helpers';
+import {
+  getLmsFormSupabase,
+  requireLmsContentAdmin,
+} from '@/app/api/lms/_helpers';
 import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
 import {
   buildCourseFormSlugs,
@@ -80,9 +83,11 @@ export async function GET(_request: NextRequest, context: RouteContext) {
   if (authResult.error || !authResult.supabase) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
+  const learningSupabase = authResult.supabase;
+  const formSupabase = getLmsFormSupabase();
 
   const { id: courseId } = await context.params;
-  const { data: course, error: courseError } = await authResult.supabase
+  const { data: course, error: courseError } = await learningSupabase
     .from('myuni_courses')
     .select('id, title, slug')
     .eq('id', courseId)
@@ -95,7 +100,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: 'Kurs bulunamadı' }, { status: 404 });
   }
 
-  const found = await findCourseForm(authResult.supabase, courseId, course.slug);
+  const found = await findCourseForm(formSupabase, courseId, course.slug);
   let form = found.form;
   let missingCourseId = found.missingCourseId;
 
@@ -119,7 +124,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     };
 
     const insertRow: Record<string, unknown> = { ...insertBase, course_id: courseId };
-    let { data: created, error: createError } = await authResult.supabase
+    let { data: created, error: createError } = await formSupabase
       .from(siteApplicationsDb.forms)
       .insert([insertRow])
       .select('*')
@@ -129,7 +134,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     if (createError && isFormTypeCheckViolation(createError)) {
       const withoutType = { ...insertRow };
       delete withoutType.form_type;
-      const retry = await authResult.supabase
+      const retry = await formSupabase
         .from(siteApplicationsDb.forms)
         .insert([withoutType])
         .select('*')
@@ -142,7 +147,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       const lean = { ...(insertBase as Record<string, unknown>) };
       delete lean.course_id;
       delete lean.form_type;
-      const retry = await authResult.supabase
+      const retry = await formSupabase
         .from(siteApplicationsDb.forms)
         .insert([lean])
         .select('*')
@@ -160,7 +165,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
         course_id: missingCourseId ? undefined : courseId,
       };
       if (missingCourseId) delete (fallback as { course_id?: string }).course_id;
-      const retry = await authResult.supabase
+      const retry = await formSupabase
         .from(siteApplicationsDb.forms)
         .insert([fallback])
         .select('*')
@@ -195,7 +200,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       is_contact: Boolean(field.is_contact),
     }));
 
-    const { error: fieldsError } = await authResult.supabase
+    const { error: fieldsError } = await formSupabase
       .from(siteApplicationsDb.formFields)
       .insert(fieldRows);
     if (fieldsError) {
@@ -203,7 +208,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     }
   }
 
-  const { data: fields, error: fieldsError } = await authResult.supabase
+  const { data: fields, error: fieldsError } = await formSupabase
     .from(siteApplicationsDb.formFields)
     .select('*')
     .eq('form_id', String(form.id))
@@ -236,6 +241,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (authResult.error || !authResult.supabase) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
+  const learningSupabase = authResult.supabase;
+  const formSupabase = getLmsFormSupabase();
 
   const { id: courseId } = await context.params;
   let body: Record<string, unknown>;
@@ -245,7 +252,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { data: course, error: courseError } = await authResult.supabase
+  const { data: course, error: courseError } = await learningSupabase
     .from('myuni_courses')
     .select('id, title, slug')
     .eq('id', courseId)
@@ -255,7 +262,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: courseError?.message || 'Kurs bulunamadı' }, { status: 404 });
   }
 
-  const found = await findCourseForm(authResult.supabase, courseId, course.slug);
+  const found = await findCourseForm(formSupabase, courseId, course.slug);
   if (!found.form) {
     return NextResponse.json({ error: 'Başvuru formu bulunamadı — önce GET ile oluşturun' }, { status: 404 });
   }
@@ -296,7 +303,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   updates.slug_tr = slugs.slug_tr;
   updates.slug_en = slugs.slug_en;
 
-  let { data, error } = await authResult.supabase
+  let { data, error } = await formSupabase
     .from(siteApplicationsDb.forms)
     .update(updates)
     .eq('id', String(found.form.id))
@@ -306,7 +313,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (error && isFormTypeCheckViolation(error)) {
     const lean = { ...updates };
     delete lean.form_type;
-    const retry = await authResult.supabase
+    const retry = await formSupabase
       .from(siteApplicationsDb.forms)
       .update(lean)
       .eq('id', String(found.form.id))
@@ -320,7 +327,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const lean = { ...updates };
     delete lean.course_id;
     delete lean.form_type;
-    const retry = await authResult.supabase
+    const retry = await formSupabase
       .from(siteApplicationsDb.forms)
       .update(lean)
       .eq('id', String(found.form.id))
@@ -353,6 +360,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   if (authResult.error || !authResult.supabase) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
+  const learningSupabase = authResult.supabase;
+  const formSupabase = getLmsFormSupabase();
 
   const { id: courseId } = await context.params;
   let body: { fields?: SiteApplicationFormFieldInput[] };
@@ -367,7 +376,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: 'En az bir soru gerekli' }, { status: 400 });
   }
 
-  const { data: course } = await authResult.supabase
+  const { data: course } = await learningSupabase
     .from('myuni_courses')
     .select('id, slug')
     .eq('id', courseId)
@@ -376,7 +385,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: 'Kurs bulunamadı' }, { status: 404 });
   }
 
-  const found = await findCourseForm(authResult.supabase, courseId, course.slug);
+  const found = await findCourseForm(formSupabase, courseId, course.slug);
   if (!found.form) {
     return NextResponse.json({ error: 'Başvuru formu bulunamadı' }, { status: 404 });
   }
@@ -384,12 +393,12 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   const formId = String(found.form.id);
 
   // Backup then replace (same pattern as site-applications fields route)
-  const { data: existing } = await authResult.supabase
+  const { data: existing } = await formSupabase
     .from(siteApplicationsDb.formFields)
     .select('*')
     .eq('form_id', formId);
 
-  const { error: deleteError } = await authResult.supabase
+  const { error: deleteError } = await formSupabase
     .from(siteApplicationsDb.formFields)
     .delete()
     .eq('form_id', formId);
@@ -416,7 +425,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
   if (missingLabel) {
     // Restore backup
     if (existing?.length) {
-      await authResult.supabase.from(siteApplicationsDb.formFields).insert(
+      await formSupabase.from(siteApplicationsDb.formFields).insert(
         existing.map((row) => ({
           form_id: row.form_id,
           field_key: row.field_key,
@@ -435,14 +444,14 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: 'Her sorunun TR metni dolu olmalı' }, { status: 400 });
   }
 
-  const { data: inserted, error: insertError } = await authResult.supabase
+  const { data: inserted, error: insertError } = await formSupabase
     .from(siteApplicationsDb.formFields)
     .insert(rows)
     .select('*');
 
   if (insertError) {
     if (existing?.length) {
-      await authResult.supabase.from(siteApplicationsDb.formFields).insert(
+      await formSupabase.from(siteApplicationsDb.formFields).insert(
         existing.map((row) => ({
           form_id: row.form_id,
           field_key: row.field_key,

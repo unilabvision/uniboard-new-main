@@ -69,7 +69,7 @@ const moduleOptions: Array<{
     type: 'resource',
     label: 'Kaynak / Dosya',
     icon: FolderOpen,
-    description: 'PDF, slayt veya ek eğitim kaynağı (URL ile)',
+    description: '5 MB\'a kadar PDF yükle veya mevcut kaynak URL\'sini ekle',
     bgColor: 'bg-amber-50 dark:bg-amber-900/10',
     borderColor: 'border-amber-200 dark:border-amber-800/30',
     iconBg: 'bg-amber-600',

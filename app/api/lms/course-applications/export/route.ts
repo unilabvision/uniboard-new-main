@@ -1,5 +1,8 @@
 import { NextRequest } from 'next/server';
-import { requireLmsContentAdmin } from '@/app/api/lms/_helpers';
+import {
+  getLmsFormSupabase,
+  requireLmsContentAdmin,
+} from '@/app/api/lms/_helpers';
 import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
 import { isCourseApplicationForm } from '@/app/lib/siteApplications/formTypes';
 import { normalizeFieldOptions } from '@/app/lib/siteApplications/forms';
@@ -40,13 +43,14 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  const supabase = authResult.supabase;
+  const learningSupabase = authResult.supabase;
+  const formSupabase = getLmsFormSupabase();
   const { searchParams } = request.nextUrl;
   const courseId = searchParams.get('courseId')?.trim() || '';
   const status = searchParams.get('status')?.trim() || '';
   const locale = searchParams.get('locale') === 'en' ? 'en' : 'tr';
 
-  const { data: forms, error: formsError } = await supabase
+  const { data: forms, error: formsError } = await formSupabase
     .from(siteApplicationsDb.forms)
     .select('id, title_tr, title_en, slug_tr, slug_en, form_type, course_id, event_id')
     .order('updated_at', { ascending: false });
@@ -68,7 +72,7 @@ export async function GET(request: NextRequest) {
     return new Response('', { status: 204 });
   }
 
-  let query = supabase
+  let query = formSupabase
     .from(siteApplicationsDb.applications)
     .select('*')
     .in('form_id', formIds)
@@ -141,7 +145,7 @@ export async function GET(request: NextRequest) {
 
   const courseTitleById = new Map<string, string>();
   if (courseIds.length > 0) {
-    const { data: courses } = await supabase
+    const { data: courses } = await learningSupabase
       .from('myuni_courses')
       .select('id, title')
       .in('id', courseIds);
@@ -153,7 +157,7 @@ export async function GET(request: NextRequest) {
   const fieldLabelMap = new Map<string, string>();
   const fieldOptionsMap = new Map<string, Array<{ value: string; label_tr: string; label_en: string }>>();
   
-  const { data: fields } = await supabase
+  const { data: fields } = await formSupabase
     .from(siteApplicationsDb.formFields)
     .select('field_key, label_tr, label_en, form_id, options')
     .in('form_id', formIds);

@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireLmsContentAdmin } from '@/app/api/lms/_helpers';
+import {
+  getLmsFormSupabase,
+  requireLmsContentAdmin,
+} from '@/app/api/lms/_helpers';
 import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
 import { deleteSiteApplication } from '@/app/lib/siteApplications/deleteApplication';
 
@@ -11,9 +14,10 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
   if (authResult.error || !authResult.supabase) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
+  const formSupabase = getLmsFormSupabase();
 
   // Sadece ilgili başvurunun var olup olmadığını kontrol et
-  const { data: existing, error: loadError } = await authResult.supabase
+  const { data: existing, error: loadError } = await formSupabase
     .from(siteApplicationsDb.applications)
     .select('id, form_id')
     .eq('id', id)
@@ -25,7 +29,7 @@ export async function DELETE(_request: NextRequest, context: RouteContext) {
 
   // İsteğe bağlı: form'un gerçekten bir LMS kurs formu olup olmadığını doğrulayabiliriz
   // Ancak admin yetkisi olduğu için ve siteApplications genel delete foksiyonu kullanıldığı için doğrudan silelim
-  const result = await deleteSiteApplication(authResult.supabase, id);
+  const result = await deleteSiteApplication(formSupabase, id);
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }

@@ -1200,7 +1200,12 @@ const CourseContentManager = ({
           await supabase.from('myuni_videos').delete().eq('lesson_id', selectedLessonForModule);
         }
         if (moduleInfo.hasNotes) {
-          await supabase.from('myuni_notes').delete().eq('lesson_id', selectedLessonForModule);
+          const response = await fetch('/api/lms/notes', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lesson_id: selectedLessonForModule }),
+          });
+          if (!response.ok) throw new Error('Not veya kaynak silinemedi');
         }
         if (moduleInfo.hasQuiz) {
           await supabase.from('myuni_quicks').delete().eq('lesson_id', selectedLessonForModule);
@@ -1391,17 +1396,18 @@ const CourseContentManager = ({
     if (!confirm(`Bu ${moduleType === 'video' ? 'videoyu' : moduleType === 'notes' ? 'notu' : 'quiz\'i'} silmek istediğinizden emin misiniz?`)) return;
 
     try {
-      let tableName = '';
-      if (moduleType === 'video') tableName = 'myuni_videos';
-      else if (moduleType === 'notes') tableName = 'myuni_notes';
-      else if (moduleType === 'quiz') tableName = 'myuni_quicks';
-
-      const { error } = await supabase
-        .from(tableName)
-        .delete()
-        .eq('id', itemId);
-
-      if (error) throw error;
+      if (moduleType === 'notes') {
+        const response = await fetch('/api/lms/notes', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lesson_id: lessonId }),
+        });
+        if (!response.ok) throw new Error('Not veya kaynak silinemedi');
+      } else {
+        const tableName = moduleType === 'video' ? 'myuni_videos' : 'myuni_quicks';
+        const { error } = await supabase.from(tableName).delete().eq('id', itemId);
+        if (error) throw error;
+      }
 
       setSections(sections.map(s => ({
         ...s,

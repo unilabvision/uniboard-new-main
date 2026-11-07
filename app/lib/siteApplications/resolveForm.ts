@@ -1,4 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { siteApplicationsDb } from './config';
 import { fetchEventBySlug } from './events';
 import { buildCourseFormSlugs } from './formTypes';
@@ -10,6 +10,17 @@ export type ResolvedPublicForm = {
   event?: { id: string; slug: string; title: string };
   course?: { id: string; slug: string; title: string };
 };
+
+function getCourseLookupClient() {
+  const url =
+    process.env.SUPABASE_LEARNING_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL;
+  const key = process.env.SUPABASE_LEARNING_SECRET_KEY;
+  if (!url || !key) throw new Error('Learning database configuration missing');
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
 
 export async function resolveActiveForm(
   supabase: SupabaseClient,
@@ -24,7 +35,7 @@ export async function resolveActiveForm(
 
   if (courseSlug?.trim()) {
     const slug = courseSlug.trim();
-    const { data: course, error: courseError } = await supabase
+    const { data: course, error: courseError } = await getCourseLookupClient()
       .from('myuni_courses')
       .select('id, slug, title')
       .eq('slug', slug)

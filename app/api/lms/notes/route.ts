@@ -3,6 +3,7 @@ import { gunzipSync } from 'node:zlib';
 import { requireLmsContentAdmin } from '@/app/api/lms/_helpers';
 import { sanitizeHtml } from '@/app/lib/lms/htmlContent';
 import { parseNoteStorageRef } from '@/app/lib/lms/noteStorage';
+import { parseResourcePublicUrl } from '@/app/lib/lms/resourceStorage';
 
 const CONTENT_TYPES = ['markdown', 'html', 'text'] as const;
 const GZIP_CONTENT_TYPE = 'application/vnd.myuni.note+gzip';
@@ -15,6 +16,11 @@ const NOTE_RESPONSE_COLUMNS =
 export const maxDuration = 10;
 
 type ContentType = (typeof CONTENT_TYPES)[number];
+
+function parseManagedStorageFile(value?: string | null) {
+  if (!value) return null;
+  return parseNoteStorageRef(value) || parseResourcePublicUrl(value);
+}
 
 function isContentType(value: unknown): value is ContentType {
   return typeof value === 'string' && CONTENT_TYPES.includes(value as ContentType);
@@ -118,7 +124,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const previousStorage = parseNoteStorageRef(existingNote?.file_url || '');
+  const previousStorage = parseManagedStorageFile(existingNote?.file_url);
   if (previousStorage && existingNote?.file_url !== fileUrl) {
     const { error: removeError } = await authResult.supabase.storage
       .from(previousStorage.bucket)
@@ -165,7 +171,7 @@ export async function DELETE(request: NextRequest) {
   }
 
   const storageObjects = (notes || [])
-    .map((note) => parseNoteStorageRef(note.file_url || ''))
+    .map((note) => parseManagedStorageFile(note.file_url))
     .filter((storage): storage is NonNullable<typeof storage> => Boolean(storage));
   await Promise.all(
     storageObjects.map(async ({ bucket, objectPath }) => {
