@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
-import { requireEventsRegistrantToolsUser } from '@/app/api/events/_helpers';
+import {
+  getEventsFormSupabase,
+  requireEventsRegistrantToolsUser,
+} from '@/app/api/events/_helpers';
 import { eventsDb } from '@/app/lib/events/config';
 import { fetchEventRegistrants } from '@/app/lib/events/registrants';
 
@@ -29,7 +32,7 @@ export async function GET(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'Event not found' }, { status: 404 });
   }
 
-  const registrants = await fetchEventRegistrants(supabase, id);
+  const registrants = await fetchEventRegistrants(getEventsFormSupabase(), id);
 
   const sheetRows = registrants.map((r, index) => ({
     '#': index + 1,

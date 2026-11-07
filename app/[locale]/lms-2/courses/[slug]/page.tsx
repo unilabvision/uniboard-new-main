@@ -406,7 +406,7 @@ export default function CourseDetailPage({ params }: { params: Promise<{ locale:
           .from('myuni_courses')
           .select(`
             *,
-            myuni_course_sections!inner(
+            myuni_course_sections(
               *,
               myuni_course_lessons(
                 *,
@@ -415,7 +415,6 @@ export default function CourseDetailPage({ params }: { params: Promise<{ locale:
             )
           `)
           .eq('slug', slug)
-          .eq('is_active', true)
           .single();
         
         if (courseError) {

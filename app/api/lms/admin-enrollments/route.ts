@@ -93,7 +93,7 @@ async function requireLmsOrStudentsAdmin() {
   const isSuperAdmin = rows.some((r) => r.is_super_admin === true);
   const allowed = isSuperAdmin ||
     rows.some((r) =>
-      ['students', 'student', 'lms', 'courses'].includes(r.module_key)
+      ['students', 'student', 'lms', 'courses', 'lms-2'].includes(r.module_key)
     );
 
   if (!allowed) {
@@ -106,6 +106,7 @@ async function requireLmsOrStudentsAdmin() {
 /**
  * Admin enrollment read (bypasses anon RLS).
  * POST { courseIds?: string[], courseId?: string }
+ * When no course filter is supplied, all active enrollments are returned.
  */
 export async function POST(request: NextRequest) {
   const authResult = await requireLmsOrStudentsAdmin();
@@ -133,11 +134,6 @@ export async function POST(request: NextRequest) {
     query = query.eq('course_id', courseId);
   } else if (courseIds.length > 0) {
     query = query.in('course_id', courseIds);
-  } else {
-    return NextResponse.json(
-      { error: 'courseId or courseIds required' },
-      { status: 400 }
-    );
   }
 
   // Include active + null (legacy rows)

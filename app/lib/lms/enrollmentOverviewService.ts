@@ -456,23 +456,13 @@ export async function getEnrollmentOverview(options?: {
   // Browser anon RLS blocks most enrollment rows → use admin API (service role)
   let enrollments: EnrollmentRow[] = [];
   if (typeof window !== 'undefined') {
-    const courseIdsPayload: string[] = options?.courseId
-      ? []
-      : (
-          await supabase.from('myuni_courses').select('id').eq('is_active', true)
-        ).data?.map((c) => c.id as string) || [];
-
-    if (!options?.courseId && courseIdsPayload.length === 0) {
-      return [];
-    }
-
     const res = await fetch('/api/lms/admin-enrollments', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(
         options?.courseId
           ? { courseId: options.courseId }
-          : { courseIds: courseIdsPayload }
+          : {}
       ),
     });
     const json = await res.json();

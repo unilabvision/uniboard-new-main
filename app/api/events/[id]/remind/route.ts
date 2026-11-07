@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireEventsRegistrantToolsUser } from '@/app/api/events/_helpers';
+import {
+  getEventsFormSupabase,
+  requireEventsRegistrantToolsUser,
+} from '@/app/api/events/_helpers';
 import { eventsDb, getPublicEventUrl } from '@/app/lib/events/config';
 import {
   dedupeRegistrantsForReminder,
@@ -53,7 +56,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: 'Event not found' }, { status: 404 });
   }
 
-  const registrants = await fetchEventRegistrants(supabase, id);
+  const registrants = await fetchEventRegistrants(getEventsFormSupabase(), id);
   const targets = dedupeRegistrantsForReminder(registrants);
 
   const results: Array<{

@@ -23,6 +23,15 @@ export function getEventsSupabase() {
   });
 }
 
+export function getEventsFormSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_FORM_URL;
+  const key = process.env.SUPABASE_FORM_SECRET_KEY;
+  if (!url || !key) throw new Error('Form database configuration missing');
+  return createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
 function getModuleAccessSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL;
   const key = process.env.SUPABASE_IDENTITY_SECRET_KEY;
