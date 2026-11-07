@@ -18,7 +18,7 @@ const supabaseMain = createClientComponentClient({
 
 const supabaseProfiles = createClientComponentClient({
   supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL || 'https://mzlvfmyrzytwvwndqgnz.supabase.co',
-  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16bHZmbXlyenl0d3Z3bmRxZ256Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDIyMzA3NTgsImV4cCI6MjA1NzgwNjc1OH0.GC7zAi1mUb9rOYiDhRJ8420bXgmjaR0YfwYNG0xM0sY'
+  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_PUBLISHABLE_KEY
 });
 
 // Types
