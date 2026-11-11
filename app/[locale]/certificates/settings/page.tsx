@@ -749,14 +749,7 @@ export default function OrganizationSettingsPage() {
           if (uploadedUrl) {
             logoUrl = uploadedUrl;
           } else {
-            // If normal upload fails, try manual URL construction as fallback
-            const fileExt = logoFile.name.split('.').pop()?.toLowerCase() || 'png';
-            const fileName = `${formData.slug}-${Date.now()}.${fileExt}`;
-            
-            // Even if upload failed, we can still save the form with expected URL pattern
-            // This allows admin to manually upload the file later if needed
-            logoUrl = `https://emfvwpztyuykqtepnsfp.supabase.co/storage/v1/object/public/unilab/organization-logos/${formData.slug}/${fileName}`;
-            
+            // Never persist a guessed URL: it creates repeated CDN/storage 404s.
             showToast('Logo yüklenemedi. Organizasyon oluşturulacak ancak logo daha sonra eklenebilir.', 'error');
           }
         } catch (uploadError) {

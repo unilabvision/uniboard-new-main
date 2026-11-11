@@ -8,6 +8,9 @@ const nextConfig = {
   // Server external packages (moved from experimental)
   serverExternalPackages: [],
   images: {
+    // Uploaded media uses immutable, content-addressed URLs. Keeping optimized
+    // variants longer avoids repeatedly pulling the same bytes from Supabase.
+    minimumCacheTTL: 31 * 24 * 60 * 60,
     remotePatterns: [
       {
         protocol: 'https',

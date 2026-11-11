@@ -19,7 +19,7 @@ const supabaseMain = createClientComponentClient({
 });
 
 const supabaseProfiles = createClientComponentClient({
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL || 'https://mzlvfmyrzytwvwndqgnz.supabase.co',
+  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL,
   supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_PUBLISHABLE_KEY
 });
 

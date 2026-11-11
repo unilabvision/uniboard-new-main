@@ -176,9 +176,7 @@ function clerkUserToDetails(
 }
 
 function getProfilesSupabase(): SupabaseClient | null {
-  const url =
-    process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL ||
-    'https://mzlvfmyrzytwvwndqgnz.supabase.co';
+  const url = process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL;
   const key =
     process.env.SUPABASE_IDENTITY_SECRET_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_PUBLISHABLE_KEY;

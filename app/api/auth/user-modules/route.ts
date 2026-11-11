@@ -34,19 +34,14 @@ function dedupeDashboardModules<
 
 export async function GET() {
   try {
-    console.log('🚀 User modules API starting...');
-    
     // 1. Auth kontrolü
     const { userId } = await auth();
-    console.log('👤 User ID:', userId);
     
     if (!userId) {
-      console.log('❌ No user ID');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     if (!process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL || !process.env.SUPABASE_IDENTITY_SECRET_KEY) {
-      console.log('❌ Missing environment variables');
       return NextResponse.json({ 
         error: 'Configuration error',
         details: 'Database configuration missing'
@@ -72,8 +67,6 @@ export async function GET() {
     }
 
     // 4. Kullanıcının modül erişimlerini çek - DÜZELTME: clerk_user_id kullan
-    console.log('🔍 Fetching user modules for clerk_user_id:', userId);
-    
     const { data: userModulesRaw, error: userModulesError } = await supabase
       .from('user_module_access')
       .select(`
@@ -285,9 +278,14 @@ export async function GET() {
       })
     };
 
-    console.log(`✅ API completed. Returning ${modules.length} modules for user ${userId}`);
-    
-    return NextResponse.json(response);
+    return NextResponse.json(response, {
+      headers: {
+        // Personalized authorization data must never be stored in a shared CDN cache.
+        // A short private cache still prevents repeated browser requests on reloads.
+        'Cache-Control': 'private, max-age=60, stale-while-revalidate=240',
+        Vary: 'Cookie',
+      },
+    });
 
   } catch (error: unknown) {
     console.error('💥 API Error:', error);

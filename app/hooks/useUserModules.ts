@@ -41,17 +41,49 @@ type ModulesCache = {
   fetchedAt: number;
 };
 
+type ModulesResponse = {
+  modules?: Module[];
+  isSuperAdmin?: boolean;
+  memberships?: ModuleMembership[];
+  error?: string;
+  details?: string;
+};
+
 const CACHE_TTL_MS = 5 * 60 * 1000;
 let modulesCache: ModulesCache | null = null;
+let modulesRequest: { userId: string; promise: Promise<ModulesResponse> } | null = null;
 
 export function clearModulesCache() {
   modulesCache = null;
+  modulesRequest = null;
 }
 
 function getCachedModules(userId: string): ModulesCache | null {
   if (!modulesCache || modulesCache.userId !== userId) return null;
   if (Date.now() - modulesCache.fetchedAt > CACHE_TTL_MS) return null;
   return modulesCache;
+}
+
+function requestModules(userId: string): Promise<ModulesResponse> {
+  if (modulesRequest?.userId === userId) return modulesRequest.promise;
+
+  const promise = fetch('/api/auth/user-modules', {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+  }).then(async (response) => {
+    const data = (await response.json().catch(() => ({}))) as ModulesResponse;
+    if (!response.ok) {
+      throw new Error(data.details || data.error || `HTTP ${response.status}`);
+    }
+    return data;
+  });
+
+  modulesRequest = { userId, promise };
+  const clearRequest = () => {
+    if (modulesRequest?.promise === promise) modulesRequest = null;
+  };
+  void promise.then(clearRequest, clearRequest);
+  return promise;
 }
 
 export function useUserModules(): UseUserModulesReturn {
@@ -80,19 +112,7 @@ export function useUserModules(): UseUserModulesReturn {
       }
       setError(null);
 
-      const response = await fetch('/api/auth/user-modules', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.details || errorData.error || `HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
+      const data = await requestModules(user.id);
       const nextModules = data.modules || [];
       const nextIsSuperAdmin =
         data.isSuperAdmin ??
@@ -137,7 +157,7 @@ export function useUserModules(): UseUserModulesReturn {
     }
 
     const hasCache = !!getCachedModules(user.id);
-    fetchModules({ silent: hasCache });
+    if (!hasCache) fetchModules();
   }, [user, isLoaded, fetchModules]);
 
   return {

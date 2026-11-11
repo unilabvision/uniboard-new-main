@@ -80,8 +80,8 @@ export async function POST(request: NextRequest) {
 
     const learningUrl = process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL;
     const learningKey = process.env.SUPABASE_LEARNING_SECRET_KEY;
-    const formUrl = process.env.NEXT_PUBLIC_SUPABASE_FORM_URL;
-    const formKey = process.env.SUPABASE_FORM_SECRET_KEY;
+    const formUrl = process.env.NEXT_PUBLIC_SUPABASE_FORMS_URL;
+    const formKey = process.env.SUPABASE_FORMS_SECRET_KEY;
 
     if (!learningUrl || !learningKey || !formUrl || !formKey) {
       return NextResponse.json({ error: 'Database configuration missing' }, { status: 500 });

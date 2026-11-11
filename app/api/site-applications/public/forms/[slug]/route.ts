@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { siteApplicationsDb } from '@/app/lib/siteApplications/config';
 import { toPublicForm } from '@/app/lib/siteApplications/forms';
+import { PUBLIC_CACHE_CONTROL } from '@/app/lib/http/publicCache';
 import type { SiteApplicationForm, SiteApplicationFormField } from '@/app/types/siteApplicationForms';
 
 function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_FORM_URL;
-  const key = process.env.SUPABASE_FORM_SECRET_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_FORMS_URL;
+  const key = process.env.SUPABASE_FORMS_SECRET_KEY;
   if (!url || !key) throw new Error('Supabase configuration missing');
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -50,7 +51,10 @@ export async function GET(
       locale
     );
 
-    return NextResponse.json({ form: publicForm, locale });
+    return NextResponse.json(
+      { form: publicForm, locale },
+      { headers: { 'Cache-Control': PUBLIC_CACHE_CONTROL } }
+    );
   } catch (err) {
     console.error('Public form fetch error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

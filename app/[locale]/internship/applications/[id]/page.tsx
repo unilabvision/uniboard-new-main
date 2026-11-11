@@ -37,8 +37,8 @@ import type { InternshipReviewer } from '@/app/types/internship';
 
 // Supabase client
 const supabase = createClientComponentClient({
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_FORM_URL || '',
-  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_FORM_PUBLISHABLE_KEY || ''
+  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_FORMS_URL || '',
+  supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_FORMS_PUBLISHABLE_KEY || ''
 });
 
 // Types

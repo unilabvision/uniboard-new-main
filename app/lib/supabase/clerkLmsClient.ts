@@ -14,13 +14,13 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 export const CLERK_JWT_TEMPLATE =
   process.env.NEXT_PUBLIC_CLERK_JWT_TEMPLATE || 'supabase';
 
-const LMS_URL_FALLBACK = 'https://emfvwpztyuykqtepnsfp.supabase.co';
-
 export function getLmsSupabaseConfig() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL || LMS_URL_FALLBACK;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_LEARNING_PUBLISHABLE_KEY;
-  if (!anonKey) {
-    throw new Error('NEXT_PUBLIC_SUPABASE_LEARNING_PUBLISHABLE_KEY is not configured');
+  if (!url || !anonKey) {
+    throw new Error(
+      'NEXT_PUBLIC_SUPABASE_LEARNING_URL and NEXT_PUBLIC_SUPABASE_LEARNING_PUBLISHABLE_KEY must be configured'
+    );
   }
   return { url, anonKey };
 }

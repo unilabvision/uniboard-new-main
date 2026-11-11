@@ -4,8 +4,8 @@ import { siteApplicationsDb, isEventSiteApplication } from '@/app/lib/siteApplic
 import { sendSiteApplicationApprovalEmail } from '@/app/_services/siteApplicationApprovalEmail';
 
 function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_FORM_URL;
-  const key = process.env.SUPABASE_FORM_SECRET_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_FORMS_URL;
+  const key = process.env.SUPABASE_FORMS_SECRET_KEY;
   if (!url || !key) {
     throw new Error('Supabase configuration missing');
   }

@@ -21,13 +21,13 @@ function getLearningSupabaseClient() {
 
 function getFormSupabaseClient() {
   const supabaseUrl =
-    process.env.SUPABASE_FORM_URL ||
-    process.env.NEXT_PUBLIC_SUPABASE_FORM_URL;
-  const supabaseKey = process.env.SUPABASE_FORM_SECRET_KEY;
+    process.env.SUPABASE_FORMS_URL ||
+    process.env.NEXT_PUBLIC_SUPABASE_FORMS_URL;
+  const supabaseKey = process.env.SUPABASE_FORMS_SECRET_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
     throw new Error(
-      'Form database configuration is missing. Set SUPABASE_FORM_URL and SUPABASE_FORM_SECRET_KEY.'
+      'Forms database configuration is missing. Set NEXT_PUBLIC_SUPABASE_FORMS_URL and SUPABASE_FORMS_SECRET_KEY.'
     );
   }
 
@@ -489,7 +489,9 @@ function getFullStorageUrl(path: string | null): string {
   
   // Supabase storage URL - you might need to adjust this for course images
   // If you have a separate bucket for course images, update accordingly
-  const baseUrl = "https://ghuellgktqqzpryuyiky.supabase.co/storage/v1/object/public/blog-images";
+  const formDatabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_FORMS_URL;
+  if (!formDatabaseUrl) return '/blog/default-image.webp';
+  const baseUrl = `${formDatabaseUrl.replace(/\/$/, '')}/storage/v1/object/public/blog-images`;
   
   return baseUrl + normalizedPath;
 }

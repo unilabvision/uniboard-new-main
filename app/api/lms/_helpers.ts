@@ -12,8 +12,8 @@ export function getLmsServiceSupabase() {
 }
 
 export function getLmsFormSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_FORM_URL;
-  const key = process.env.SUPABASE_FORM_SECRET_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_FORMS_URL;
+  const key = process.env.SUPABASE_FORMS_SECRET_KEY;
   if (!url || !key) throw new Error('Form database configuration missing');
   return createClient(url, key, {
     auth: { autoRefreshToken: false, persistSession: false },

@@ -13,10 +13,11 @@ import {
   parsePackageSettingsFromForm,
   toPublicPackages,
 } from '@/app/lib/siteApplications/packages';
+import { PUBLIC_CACHE_CONTROL } from '@/app/lib/http/publicCache';
 
 function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_FORM_URL;
-  const key = process.env.SUPABASE_FORM_SECRET_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_FORMS_URL;
+  const key = process.env.SUPABASE_FORMS_SECRET_KEY;
   if (!url || !key) throw new Error('Supabase configuration missing');
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -86,11 +87,10 @@ export async function GET(request: NextRequest) {
         };
       });
 
-    return NextResponse.json({
-      locale,
-      forms: standaloneForms,
-      eventApplications,
-    });
+    return NextResponse.json(
+      { locale, forms: standaloneForms, eventApplications },
+      { headers: { 'Cache-Control': PUBLIC_CACHE_CONTROL } }
+    );
   } catch (err) {
     console.error('Public forms list error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

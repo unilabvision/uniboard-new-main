@@ -3,11 +3,12 @@ import { createClient } from '@supabase/supabase-js';
 import { siteApplicationsDb, getAbsoluteEventApplicationPath } from '@/app/lib/siteApplications/config';
 import { fetchEventBySlug } from '@/app/lib/siteApplications/events';
 import { toPublicForm } from '@/app/lib/siteApplications/forms';
+import { PUBLIC_CACHE_CONTROL } from '@/app/lib/http/publicCache';
 import type { SiteApplicationForm, SiteApplicationFormField } from '@/app/types/siteApplicationForms';
 
 function getSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_FORM_URL;
-  const key = process.env.SUPABASE_FORM_SECRET_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_FORMS_URL;
+  const key = process.env.SUPABASE_FORMS_SECRET_KEY;
   if (!url || !key) throw new Error('Supabase configuration missing');
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -79,16 +80,19 @@ export async function GET(
       locale
     );
 
-    return NextResponse.json({
-      form: {
-        ...publicForm,
-        event_slug: event.slug,
-        event_title: event.title,
-        application_url: getAbsoluteEventApplicationPath(locale, event.slug),
+    return NextResponse.json(
+      {
+        form: {
+          ...publicForm,
+          event_slug: event.slug,
+          event_title: event.title,
+          application_url: getAbsoluteEventApplicationPath(locale, event.slug),
+        },
+        locale,
+        event,
       },
-      locale,
-      event,
-    });
+      { headers: { 'Cache-Control': PUBLIC_CACHE_CONTROL } }
+    );
   } catch (err) {
     console.error('Public event form fetch error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
