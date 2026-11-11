@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { createClient } from '@supabase/supabase-js';
 import { loadUserAccessRows } from '@/app/lib/moduleAccess/rbac';
+import { getIdentityServiceSupabase } from '@/app/api/lms/_helpers';
 import {
   buildKurumCourseOverviews,
   buildKurumStudentProgress,
@@ -32,9 +33,10 @@ async function requireLmsOrStudentsAdmin() {
   }
 
   const supabase = getServiceSupabase();
+  const accessSupabase = getIdentityServiceSupabase();
   let rows: Awaited<ReturnType<typeof loadUserAccessRows>>;
   try {
-    rows = await loadUserAccessRows(supabase, userId);
+    rows = await loadUserAccessRows(accessSupabase, userId);
   } catch (e) {
     return {
       error: e instanceof Error ? e.message : 'Error',

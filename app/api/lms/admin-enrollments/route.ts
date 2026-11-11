@@ -148,8 +148,29 @@ export async function POST(request: NextRequest) {
     (row) => row.is_active !== false
   );
 
+  const enrollmentCourseIds = [
+    ...new Set(enrollments.map((row) => row.course_id).filter(Boolean)),
+  ];
+  let orders: Array<Record<string, unknown>> = [];
+
+  if (enrollmentCourseIds.length > 0) {
+    const { data: orderRows, error: ordersError } = await authResult.supabase
+      .from('orders')
+      .select(
+        'orderid, courseid, coursename, amount, discountcode, discountamount, useremail, enrolled, status, paymentmethod, created_at, custom_data'
+      )
+      .in('courseid', [...enrollmentCourseIds, 'CART'])
+      .limit(5000);
+
+    if (ordersError) {
+      return NextResponse.json({ error: ordersError.message }, { status: 500 });
+    }
+    orders = (orderRows || []) as Array<Record<string, unknown>>;
+  }
+
   return NextResponse.json({
     enrollments,
+    orders,
     count: enrollments.length,
   });
 }

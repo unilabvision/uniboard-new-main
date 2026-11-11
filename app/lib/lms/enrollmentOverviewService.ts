@@ -455,6 +455,8 @@ export async function getEnrollmentOverview(options?: {
 }): Promise<PersonEnrollmentOverview[]> {
   // Browser anon RLS blocks most enrollment rows → use admin API (service role)
   let enrollments: EnrollmentRow[] = [];
+  let orderRows: OrderRow[] = [];
+  let ordersLoadedFromAdminApi = false;
   if (typeof window !== 'undefined') {
     const res = await fetch('/api/lms/admin-enrollments', {
       method: 'POST',
@@ -470,6 +472,8 @@ export async function getEnrollmentOverview(options?: {
     enrollments = ((json.enrollments || []) as EnrollmentRow[]).filter(
       (e) => e.is_active !== false
     );
+    orderRows = (json.orders || []) as OrderRow[];
+    ordersLoadedFromAdminApi = true;
   } else {
     let enrollmentsQuery = supabase
       .from('myuni_enrollments')
@@ -624,18 +628,19 @@ export async function getEnrollmentOverview(options?: {
   const userDetails = await fetchClerkUserDetails(userIds);
 
   // Payment / discount data from orders (same DB as LMS)
-  let orderRows: OrderRow[] = [];
-  const { data: ordersData, error: ordersError } = await supabase
-    .from('orders')
-    .select(
-      'orderid, courseid, coursename, amount, discountcode, discountamount, useremail, enrolled, status, paymentmethod, created_at, custom_data'
-    )
-    .in('courseid', [...courseIds, 'CART']);
+  if (!ordersLoadedFromAdminApi) {
+    const { data: ordersData, error: ordersError } = await supabase
+      .from('orders')
+      .select(
+        'orderid, courseid, coursename, amount, discountcode, discountamount, useremail, enrolled, status, paymentmethod, created_at, custom_data'
+      )
+      .in('courseid', [...courseIds, 'CART']);
 
-  if (ordersError) {
-    console.warn('Orders fetch skipped:', ordersError.message);
-  } else {
-    orderRows = (ordersData || []) as OrderRow[];
+    if (ordersError) {
+      console.warn('Orders fetch skipped:', ordersError.message);
+    } else {
+      orderRows = (ordersData || []) as OrderRow[];
+    }
   }
 
   // Group enrollments by user + course (a user may buy multiple packages)
