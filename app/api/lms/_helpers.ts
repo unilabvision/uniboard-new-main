@@ -20,7 +20,7 @@ export function getLmsFormSupabase() {
   });
 }
 
-function getModuleAccessSupabase() {
+export function getIdentityServiceSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL;
   const key = process.env.SUPABASE_IDENTITY_SECRET_KEY;
   if (!url || !key) throw new Error('Identity database configuration missing');
@@ -37,7 +37,7 @@ export async function requireLmsContentAdmin() {
   }
 
   const supabase = getLmsServiceSupabase();
-  const accessSupabase = getModuleAccessSupabase();
+  const accessSupabase = getIdentityServiceSupabase();
   let rows: Awaited<ReturnType<typeof loadUserAccessRows>>;
   try {
     rows = await loadUserAccessRows(accessSupabase, userId);

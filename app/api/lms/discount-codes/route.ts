@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireLmsContentAdmin } from '@/app/api/lms/_helpers';
+import {
+  getIdentityServiceSupabase,
+  requireLmsContentAdmin,
+} from '@/app/api/lms/_helpers';
 import {
   applyHighValueFixedDefaults,
   DISCOUNT_ADMIN_SELECT,
@@ -15,13 +18,14 @@ export async function GET(request: NextRequest) {
   if (authResult.error || !authResult.supabase) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
+  const discountSupabase = getIdentityServiceSupabase();
 
   try {
     const { searchParams } = new URL(request.url);
     const isCampaign = searchParams.get('is_campaign');
     const limit = Math.min(parseInt(searchParams.get('limit') || '200', 10), 500);
 
-    let query = authResult.supabase
+    let query = discountSupabase
       .from('discount_codes')
       .select(DISCOUNT_ADMIN_SELECT)
       .eq('is_referral', false)
@@ -51,6 +55,7 @@ export async function POST(request: NextRequest) {
   if (authResult.error || !authResult.supabase) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
+  const discountSupabase = getIdentityServiceSupabase();
 
   try {
     const body = (await request.json()) as DiscountCodeAdminPayload;
@@ -97,7 +102,7 @@ export async function POST(request: NextRequest) {
       full_course_only: Boolean(body.full_course_only),
     });
 
-    const { data, error } = await authResult.supabase
+    const { data, error } = await discountSupabase
       .from('discount_codes')
       .insert(row)
       .select(DISCOUNT_ADMIN_SELECT)

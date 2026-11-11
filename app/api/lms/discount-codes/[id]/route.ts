@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireLmsContentAdmin } from '@/app/api/lms/_helpers';
+import {
+  getIdentityServiceSupabase,
+  requireLmsContentAdmin,
+} from '@/app/api/lms/_helpers';
 import {
   applyHighValueFixedDefaults,
   DISCOUNT_ADMIN_SELECT,
@@ -18,6 +21,7 @@ export async function PATCH(
   if (authResult.error || !authResult.supabase) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
+  const discountSupabase = getIdentityServiceSupabase();
 
   const { id } = await params;
   if (!id) {
@@ -83,7 +87,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Güncellenecek alan yok' }, { status: 400 });
     }
 
-    const { data: existing } = await authResult.supabase
+    const { data: existing } = await discountSupabase
       .from('discount_codes')
       .select('discount_type, discount_amount, has_balance_limit, minimum_order_amount')
       .eq('id', id)
@@ -107,7 +111,7 @@ export async function PATCH(
       updates.minimum_order_amount = merged.minimum_order_amount;
     }
 
-    const { data, error } = await authResult.supabase
+    const { data, error } = await discountSupabase
       .from('discount_codes')
       .update(updates)
       .eq('id', id)
@@ -137,13 +141,14 @@ export async function DELETE(
   if (authResult.error || !authResult.supabase) {
     return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
+  const discountSupabase = getIdentityServiceSupabase();
 
   const { id } = await params;
   if (!id) {
     return NextResponse.json({ error: 'ID gerekli' }, { status: 400 });
   }
 
-  const { error } = await authResult.supabase.from('discount_codes').delete().eq('id', id);
+  const { error } = await discountSupabase.from('discount_codes').delete().eq('id', id);
   if (error) {
     console.error('LMS discount-codes DELETE error:', error);
     return NextResponse.json({ error: error.message || 'Silinemedi' }, { status: 500 });
