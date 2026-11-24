@@ -10,6 +10,7 @@ import {
   displayClerkName,
 } from '@/app/lib/internship/accessQuery';
 import type { ModuleAccessDefinition } from '@/app/lib/moduleAccess/registry';
+import { getFormsAdminClient } from '@/app/lib/supabase/adminDatabases.server';
 import {
   assertCanGrantToOrg,
   clerkUserToResult,
@@ -575,7 +576,7 @@ export async function grantModuleAccessMember(
 
   if (def.primaryModuleKey === 'internship' && addAsReviewer) {
     await upsertInternshipReviewer(
-      authResult.supabase,
+      getFormsAdminClient(),
       targetUserId,
       targetEmail,
       targetName

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { unstable_cache } from 'next/cache';
+import { getFormsAdminClient } from '@/app/lib/supabase/adminDatabases.server';
 import {
   mentorshipDb,
   getPublicMentorshipPath,
@@ -16,21 +16,10 @@ import {
   PUBLIC_CACHE_REVALIDATE_SECONDS,
 } from '@/app/lib/http/publicCache';
 
-function getSupabase() {
-  const url =
-    process.env.SUPABASE_LEARNING_URL ||
-    process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL;
-  const key = process.env.SUPABASE_LEARNING_SECRET_KEY;
-  if (!url || !key) throw new Error('Supabase configuration missing');
-  return createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
-
 function loadPublicMentorship(slug: string) {
   return unstable_cache(
     async () => {
-      const { data, error } = await getSupabase()
+      const { data, error } = await getFormsAdminClient()
         .from(mentorshipDb.mentorships)
         .select('*')
         .eq('slug', slug)

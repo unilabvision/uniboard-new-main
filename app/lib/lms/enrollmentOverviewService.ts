@@ -453,46 +453,25 @@ function collectEntitlementLabels(
 export async function getEnrollmentOverview(options?: {
   courseId?: string;
 }): Promise<PersonEnrollmentOverview[]> {
-  // Browser anon RLS blocks most enrollment rows → use admin API (service role)
+  if (typeof window === 'undefined') {
+    throw new Error('getEnrollmentOverview must be called from the browser');
+  }
+
+  // Identity data is loaded through the authenticated admin API. The browser
+  // client below is scoped to Learning and must never query Identity tables.
   let enrollments: EnrollmentRow[] = [];
   let orderRows: OrderRow[] = [];
-  let ordersLoadedFromAdminApi = false;
-  if (typeof window !== 'undefined') {
-    const res = await fetch('/api/lms/admin-enrollments', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(
-        options?.courseId
-          ? { courseId: options.courseId }
-          : {}
-      ),
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || 'Enrollment fetch failed');
-    enrollments = ((json.enrollments || []) as EnrollmentRow[]).filter(
-      (e) => e.is_active !== false
-    );
-    orderRows = (json.orders || []) as OrderRow[];
-    ordersLoadedFromAdminApi = true;
-  } else {
-    let enrollmentsQuery = supabase
-      .from('myuni_enrollments')
-      .select(
-        'course_id, user_id, enrolled_at, progress_percentage, is_active, tier_id'
-      )
-      .or('is_active.eq.true,is_active.is.null');
-
-    if (options?.courseId) {
-      enrollmentsQuery = enrollmentsQuery.eq('course_id', options.courseId);
-    }
-
-    const { data: enrollmentsData, error: enrollmentsError } =
-      await enrollmentsQuery;
-    if (enrollmentsError) throw enrollmentsError;
-    enrollments = ((enrollmentsData || []) as EnrollmentRow[]).filter(
-      (e) => e.is_active !== false
-    );
-  }
+  const res = await fetch('/api/lms/admin-enrollments', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(options?.courseId ? { courseId: options.courseId } : {}),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Enrollment fetch failed');
+  enrollments = ((json.enrollments || []) as EnrollmentRow[]).filter(
+    (e) => e.is_active !== false
+  );
+  orderRows = (json.orders || []) as OrderRow[];
 
   if (enrollments.length === 0) return [];
 
@@ -626,22 +605,6 @@ export async function getEnrollmentOverview(options?: {
   const progressKey = (userId: string, lessonId: string) => `${userId}:${lessonId}`;
   const progressMap = new Map(progressRows.map((p) => [progressKey(p.user_id, p.lesson_id), p]));
   const userDetails = await fetchClerkUserDetails(userIds);
-
-  // Payment / discount data from orders (same DB as LMS)
-  if (!ordersLoadedFromAdminApi) {
-    const { data: ordersData, error: ordersError } = await supabase
-      .from('orders')
-      .select(
-        'orderid, courseid, coursename, amount, discountcode, discountamount, useremail, enrolled, status, paymentmethod, created_at, custom_data'
-      )
-      .in('courseid', [...courseIds, 'CART']);
-
-    if (ordersError) {
-      console.warn('Orders fetch skipped:', ordersError.message);
-    } else {
-      orderRows = (ordersData || []) as OrderRow[];
-    }
-  }
 
   // Group enrollments by user + course (a user may buy multiple packages)
   const grouped = new Map<string, EnrollmentRow[]>();

@@ -1,7 +1,7 @@
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { createClerkClient } from '@clerk/backend';
-import { createClient } from '@supabase/supabase-js';
 import type { ModuleAccessDefinition } from '@/app/lib/moduleAccess/registry';
+import { getIdentityAdminClient } from '@/app/lib/supabase/adminDatabases.server';
 import { isEmailQuery } from '@/app/lib/internship/accessQuery';
 import {
   canManageAccess,
@@ -12,12 +12,7 @@ import {
 } from '@/app/lib/moduleAccess/rbac';
 
 export function getServiceSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL;
-  const key = process.env.SUPABASE_IDENTITY_SECRET_KEY;
-  if (!url || !key) throw new Error('Database configuration missing');
-  return createClient(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  return getIdentityAdminClient();
 }
 
 export type ModuleAccessManagerContext = {

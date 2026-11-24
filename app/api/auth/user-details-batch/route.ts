@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
 import { auth } from '@clerk/nextjs/server';
 import { createClerkClient } from '@clerk/backend';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { canReadUserDirectory } from '@/app/lib/moduleAccess/userDirectoryAccess.server';
+import { getIdentityAdminClient } from '@/app/lib/supabase/adminDatabases.server';
 
 type UserDetails = {
   id: string;
@@ -175,26 +176,6 @@ function clerkUserToDetails(
   };
 }
 
-function getProfilesSupabase(): SupabaseClient | null {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL;
-  const key =
-    process.env.SUPABASE_IDENTITY_SECRET_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_PUBLISHABLE_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
-
-function getLmsSupabase(): SupabaseClient | null {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL;
-  const key = process.env.SUPABASE_LEARNING_SECRET_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
-
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -330,46 +311,36 @@ async function enrichFromProfiles(
   userIds: string[],
   usersMap: Record<string, UserDetails>
 ): Promise<number> {
-  const supabase = getProfilesSupabase();
-  if (!supabase || userIds.length === 0) return 0;
-
-  const tables = ['profiles', 'myuni_profiles'] as const;
+  if (userIds.length === 0) return 0;
+  const supabase = getIdentityAdminClient();
   let enriched = 0;
 
-  for (const table of tables) {
-    let tableExists = true;
-    for (let i = 0; i < userIds.length; i += 100) {
-      const chunk = userIds.slice(i, i + 100);
-      const { data, error } = await supabase
-        .from(table)
-        .select('clerk_user_id, email, first_name, last_name')
-        .in('clerk_user_id', chunk);
+  for (let i = 0; i < userIds.length; i += 100) {
+    const chunk = userIds.slice(i, i + 100);
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('clerk_id, email, first_name, last_name')
+      .in('clerk_id', chunk);
 
-      if (error) {
-        if (error.message.includes('does not exist')) {
-          tableExists = false;
-          break;
-        }
-        console.error(`${table} enrich error:`, error.message);
-        continue;
-      }
-
-      for (const row of data || []) {
-        const id = row.clerk_user_id as string;
-        if (!id) continue;
-        const user = ensureUser(usersMap, id);
-        const before = user.email;
-        applyName(
-          user,
-          (row.first_name as string) || null,
-          (row.last_name as string) || null,
-          null
-        );
-        applyEmail(user, row.email as string, 'profile');
-        if (!before && user.email) enriched += 1;
-      }
+    if (error) {
+      console.error('user_profiles enrich error:', error.message);
+      continue;
     }
-    if (tableExists) break;
+
+    for (const row of data || []) {
+      const id = row.clerk_id as string;
+      if (!id) continue;
+      const user = ensureUser(usersMap, id);
+      const before = user.email;
+      applyName(
+        user,
+        (row.first_name as string) || null,
+        (row.last_name as string) || null,
+        null
+      );
+      applyEmail(user, row.email as string, 'profile');
+      if (!before && user.email) enriched += 1;
+    }
   }
 
   return enriched;
@@ -397,8 +368,8 @@ async function enrichFromOrders(
   userIds: string[],
   usersMap: Record<string, UserDetails>
 ): Promise<number> {
-  const supabase = getLmsSupabase();
-  if (!supabase || userIds.length === 0) return 0;
+  if (userIds.length === 0) return 0;
+  const supabase = getIdentityAdminClient();
 
   const wanted = new Set(userIds);
   let enriched = 0;
@@ -440,6 +411,9 @@ export async function POST(request: NextRequest) {
     const { userId: requesterId } = await auth();
     if (!requesterId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!(await canReadUserDirectory(requesterId))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const body = await request.json();

@@ -1,32 +1,21 @@
 import { auth } from '@clerk/nextjs/server';
-import { createClient } from '@supabase/supabase-js';
 import { loadUserAccessRows } from '@/app/lib/moduleAccess/rbac';
+import {
+  getFormsAdminClient,
+  getIdentityAdminClient,
+  getLearningAdminClient,
+} from '@/app/lib/supabase/adminDatabases.server';
 
 export function getLmsServiceSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL;
-  const key = process.env.SUPABASE_LEARNING_SECRET_KEY;
-  if (!url || !key) throw new Error('Database configuration missing');
-  return createClient(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  return getLearningAdminClient();
 }
 
 export function getLmsFormSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_FORMS_URL;
-  const key = process.env.SUPABASE_FORMS_SECRET_KEY;
-  if (!url || !key) throw new Error('Form database configuration missing');
-  return createClient(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  return getFormsAdminClient();
 }
 
 export function getIdentityServiceSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL;
-  const key = process.env.SUPABASE_IDENTITY_SECRET_KEY;
-  if (!url || !key) throw new Error('Identity database configuration missing');
-  return createClient(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  return getIdentityAdminClient();
 }
 
 /** LMS content admin: super-admin or lms/courses/students module. */

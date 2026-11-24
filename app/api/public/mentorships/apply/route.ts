@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { getLocalizedJson, mentorshipDb } from '@/app/lib/mentorship/config';
+import { getFormsAdminClient } from '@/app/lib/supabase/adminDatabases.server';
 import {
   normalizeMentorshipQuestions,
   splitLegacyAnswerFields,
@@ -8,17 +8,6 @@ import {
 } from '@/app/lib/mentorship/questions';
 import type { MentorshipApplicationInput } from '@/app/types/mentorship';
 import { sendMentorshipApplicationEmails } from '@/app/_services/mentorshipApplicationEmail';
-
-function getSupabase() {
-  const url =
-    process.env.SUPABASE_LEARNING_URL ||
-    process.env.NEXT_PUBLIC_SUPABASE_LEARNING_URL;
-  const key = process.env.SUPABASE_LEARNING_SECRET_KEY;
-  if (!url || !key) throw new Error('Supabase configuration missing');
-  return createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 function buildAnswers(body: MentorshipApplicationInput): Record<string, unknown> {
   const answers: Record<string, unknown> =
@@ -59,7 +48,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = getSupabase();
+    const supabase = getFormsAdminClient();
 
     const selectCols =
       'id, slug, title, mentor_name, is_active, is_application_open, max_mentees, current_mentees, application_questions';

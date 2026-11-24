@@ -112,10 +112,11 @@ export async function fetchEventBySlug(
 
 /** Linked event for admin (includes inactive so preview/warnings stay accurate). */
 export async function fetchEventById(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
   eventId: string
 ): Promise<{ event: LinkedEventSummary | null; error: string | null }> {
-  const { data, error } = await supabase
+  void _supabase;
+  const { data, error } = await getEventsLookupClient()
     .from(eventsDb.events)
     .select('id, slug, title, is_active')
     .eq('id', eventId)

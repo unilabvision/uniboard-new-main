@@ -2,6 +2,7 @@
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { claimPendingModuleFromClerkMetadata } from '@/app/lib/moduleAccess/grantToken';
+import { getIdentityAdminClient } from '@/app/lib/supabase/adminDatabases.server';
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -48,19 +49,7 @@ export async function GET() {
       }, { status: 500 });
     }
 
-    // 3. Supabase client'ı oluştur
-    const { createClient } = await import('@supabase/supabase-js');
-    
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_IDENTITY_URL,
-      process.env.SUPABASE_IDENTITY_SECRET_KEY,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    );
+    const supabase = getIdentityAdminClient();
     
     if (isDev) {
       console.log('✅ Supabase client created');
