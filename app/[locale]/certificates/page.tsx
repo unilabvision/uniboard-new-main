@@ -621,10 +621,6 @@ export default function CertificatesPage() {
 
         const availableOrganizations = (payload.organizations || []) as Organization[];
         setOrganizations(availableOrganizations);
-        setCurrentUser((user) => user ? {
-          ...user,
-          organizationSlugs: availableOrganizations.map((organization) => organization.slug),
-        } : user);
         setCertificates((payload.certificates || []) as Certificate[]);
         
     } catch (error: unknown) {
@@ -1065,18 +1061,18 @@ export default function CertificatesPage() {
               <Award className="w-8 h-8 text-neutral-400 dark:text-neutral-500" />
             </div>
             <h3 className="text-lg font-medium text-neutral-900 dark:text-neutral-100 mb-2">
-              {currentUser.organizationSlugs && currentUser.organizationSlugs.length > 0 ? 
+              {organizations.length > 0 ?
                 t.emptyState.title : 
                 "Erişiminiz olan kurum bulunmuyor"
               }
             </h3>
             <p className="text-neutral-600 dark:text-neutral-400 mb-4">
-              {currentUser.organizationSlugs && currentUser.organizationSlugs.length > 0 ? 
+              {organizations.length > 0 ?
                 t.emptyState.subtitle : 
                 "Sertifika oluşturabilmek için önce bir kuruma erişim almanız gerekiyor"
               }
             </p>
-            {currentUser.organizationSlugs && currentUser.organizationSlugs.length > 0 ? (
+            {organizations.length > 0 ? (
               <Link 
                 href={`/${locale}/certificates/create`} 
                 className="inline-flex items-center px-4 py-2 bg-[#990000] hover:bg-[#880000] text-white text-sm font-medium rounded-md transition-colors"
