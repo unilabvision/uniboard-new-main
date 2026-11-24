@@ -1,7 +1,6 @@
 'use client';
 
 import { certificatesSupabase as supabase } from '@/app/_services/certificatesSupabaseClient';
-import { decodeCertOrgsFromNotes } from '@/app/lib/moduleAccess/rbac';
 
 export function organizationSlugFromJoin(
   organizations: { slug?: string } | { slug?: string }[] | null | undefined
@@ -20,67 +19,22 @@ export function organizationSlugFromJoin(
  * Hiçbir organizasyon atanmamışsa boş liste döner (kullanıcı kendi organizasyonunu oluşturabilir).
  */
 export async function getCertificateOrganizationSlugs(
-  clerkUserId: string,
-  isSuperAdmin = false
+  _clerkUserId: string,
+  _isSuperAdmin: boolean
 ): Promise<string[]> {
+  void _clerkUserId;
+  void _isSuperAdmin;
+
   try {
-    if (isSuperAdmin) {
-      const { data, error } = await supabase
-        .from('organizations')
-        .select('slug')
-        .order('name', { ascending: true });
-
-      if (error) {
-        console.error('Error fetching organizations for super admin:', error);
-        return [];
-      }
-
-      return (data ?? []).map((org) => org.slug).filter(Boolean);
-    }
-
-    const { data, error } = await supabase
-      .from('user_module_access')
-      .select('organization_id, notes')
-      .eq('clerk_user_id', clerkUserId)
-      .eq('module_key', 'certificates')
-      .eq('is_enabled', true);
-
-    if (error) {
-      console.error('Error fetching certificate organization access:', error);
-      return [];
-    }
-
-    if (!data || data.length === 0) {
-      return [];
-    }
-
-    // 1) Check notes for uba_cert_orgs
-    for (const row of data) {
-      const certOrgs = decodeCertOrgsFromNotes(row.notes);
-      if (certOrgs && certOrgs.length > 0) {
-        return certOrgs;
-      }
-    }
-
-    // 2) Legacy: organization_id join
-    const organizationIds =
-      data
-        .map((row) => row.organization_id)
-        .filter((id): id is number => id != null);
-
-    if (organizationIds.length > 0) {
-      const { data: orgs, error: orgsError } = await supabase
-        .from('organizations')
-        .select('slug')
-        .in('id', organizationIds);
-
-      if (!orgsError && orgs && orgs.length > 0) {
-        return orgs.map((org) => org.slug).filter(Boolean);
-      }
-    }
-
-    // 3) No org binding at all → empty (user can create own org)
-    return [];
+    const response = await fetch('/api/certificates/organizations', {
+      cache: 'no-store',
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) return [];
+    const payload = await response.json();
+    return (payload.organizations ?? [])
+      .map((organization: { slug?: string }) => organization.slug)
+      .filter((slug: unknown): slug is string => typeof slug === 'string' && Boolean(slug));
   } catch (error) {
     console.error('getCertificateOrganizationSlugs error:', error);
     return [];

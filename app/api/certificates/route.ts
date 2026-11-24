@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireCertificatesCapability } from '@/app/lib/certificates/access';
+import {
+  requireCertificatesCapability,
+  requireCertificatesModuleUser,
+} from '@/app/lib/certificates/access';
 import { CERTIFICATE_ISSUANCE_TABLE } from '@/app/lib/certificates/issuance';
-import { decodeCertOrgsFromNotes } from '@/app/lib/moduleAccess/rbac';
-import type { SupabaseClient } from '@supabase/supabase-js';
+import { resolveCertificateOrganizationSlugs } from '@/app/lib/certificates/organizationScope';
 
 function parseIds(body: unknown): number[] {
   if (!body || typeof body !== 'object') return [];
@@ -17,58 +19,67 @@ function parseIds(body: unknown): number[] {
   ];
 }
 
-async function getAllowedCertificateOrgSlugs(params: {
-  // Supabase service-role client
-  supabase: SupabaseClient;
-  clerkUserId: string | null;
-  isSuperAdmin: boolean;
-}) {
-  const { supabase, clerkUserId, isSuperAdmin } = params;
-
-  // Super admin can delete across orgs.
-  if (isSuperAdmin) return null;
-
-  if (!clerkUserId) return [];
-
-  type AccessRow = { organization_id: number | string | null; notes: string | null };
-  const { data: accessRows, error } = await supabase
-    .from('user_module_access')
-    .select('organization_id, notes')
-    .eq('clerk_user_id', clerkUserId)
-    .eq('module_key', 'certificates')
-    .eq('is_enabled', true);
-
-  if (error) {
-    console.warn('Certificate delete: failed to load access rows:', error.message);
-    return [];
+export async function GET() {
+  const authResult = await requireCertificatesModuleUser();
+  if (authResult.error || !authResult.supabase) {
+    return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   }
 
-  // 1) New scheme: store allowed certificate org slugs in uba_cert_orgs notes.
-  for (const row of (accessRows ?? []) as AccessRow[]) {
-    const slugs = decodeCertOrgsFromNotes(row.notes);
-    if (slugs && slugs.length > 0) return slugs;
+  try {
+    const allowedSlugs = await resolveCertificateOrganizationSlugs({
+      supabase: authResult.supabase,
+      clerkUserId: authResult.userId,
+      isSuperAdmin: authResult.isSuperAdmin,
+    });
+    if (allowedSlugs && allowedSlugs.length === 0) {
+      return NextResponse.json({ certificates: [], organizations: [], total: 0 });
+    }
+
+    let organizationQuery = authResult.supabase
+      .from('organizations')
+      .select('id, slug, name, description, logo, primary_color, secondary_color')
+      .order('name', { ascending: true });
+    if (allowedSlugs) organizationQuery = organizationQuery.in('slug', allowedSlugs);
+    const { data: organizations, error: organizationsError } = await organizationQuery;
+    if (organizationsError) throw new Error(organizationsError.message);
+
+    const certificates: Array<Record<string, unknown>> = [];
+    const pageSize = 1000;
+    const maxRows = 10000;
+    for (let offset = 0; offset < maxRows; offset += pageSize) {
+      let query = authResult.supabase
+        .from('certificates')
+        .select(`
+          *,
+          certificate_templates:template_id (
+            id,
+            name,
+            background_image,
+            is_default
+          )
+        `)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + pageSize - 1);
+      if (allowedSlugs) query = query.in('organization_slug', allowedSlugs);
+      const { data, error } = await query;
+      if (error) throw new Error(error.message);
+      certificates.push(...((data ?? []) as Array<Record<string, unknown>>));
+      if (!data || data.length < pageSize) break;
+    }
+
+    return NextResponse.json({
+      certificates,
+      organizations: organizations ?? [],
+      total: certificates.length,
+      truncated: certificates.length >= maxRows,
+    });
+  } catch (error) {
+    console.error('Certificate list error:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Certificate list failed' },
+      { status: 500 }
+    );
   }
-
-  // 2) Legacy scheme: organization_id join.
-  const organizationIds = (accessRows ?? [])
-    .map((row) => row.organization_id)
-    .map((id) => (typeof id === 'string' ? Number(id) : id))
-    .filter((id): id is number => Number.isFinite(id));
-
-  if (organizationIds.length === 0) return [];
-
-  const { data: orgs, error: orgErr } = await supabase
-    .from('organizations')
-    .select('slug')
-    .in('id', organizationIds);
-
-  if (orgErr) {
-    console.warn('Certificate delete: failed to resolve legacy orgs:', orgErr.message);
-    return [];
-  }
-
-  type OrgRow = { slug: string | null };
-  return ((orgs ?? []) as OrgRow[]).map((o) => o.slug).filter(Boolean);
 }
 
 export async function DELETE(request: NextRequest) {
@@ -93,7 +104,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'ids required' }, { status: 400 });
   }
 
-  const allowedSlugs = await getAllowedCertificateOrgSlugs({
+  const allowedSlugs = await resolveCertificateOrganizationSlugs({
     // service supabase client injected by requireCertificatesCapability
     supabase: authResult.supabase,
     clerkUserId: authResult.userId,

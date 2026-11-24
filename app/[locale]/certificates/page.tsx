@@ -9,8 +9,6 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useUser } from '@clerk/nextjs';
-import { certificatesSupabase as supabase } from '@/app/_services/certificatesSupabaseClient';
-import { getCertificateOrganizationSlugs } from '@/app/_services/organizationAccessService';
 import { useUserModules } from '@/app/hooks/useUserModules';
 
 // Types
@@ -574,7 +572,7 @@ export default function CertificatesPage() {
   
   // Clerk user hook
   const { user: clerkUser, isLoaded } = useUser();
-  const { isSuperAdmin, loading: modulesLoading } = useUserModules();
+  const { loading: modulesLoading } = useUserModules();
   const locale = 'tr'; // You can get this from params or context
   const t = texts[locale] || texts.tr;
 
@@ -591,13 +589,10 @@ export default function CertificatesPage() {
       }
 
       try {
-        const orgSlugs = await getCertificateOrganizationSlugs(clerkUser.id, isSuperAdmin);
-
         setCurrentUser({
           id: clerkUser.id,
           name: clerkUser.fullName || clerkUser.firstName || 'Kullanıcı',
           email: clerkUser.emailAddresses[0]?.emailAddress || '',
-          organizationSlugs: orgSlugs
         });
       } catch (error) {
         console.error('Error getting user profile:', error);
@@ -605,7 +600,7 @@ export default function CertificatesPage() {
     };
 
     getCurrentUser();
-  }, [clerkUser, isLoaded, isSuperAdmin, modulesLoading]);
+  }, [clerkUser, isLoaded, modulesLoading]);
 
   // Fetch data
   useEffect(() => {
@@ -615,47 +610,22 @@ export default function CertificatesPage() {
       try {
         setLoading(true);
         
-        // Check if user has any organization slugs
-        if (!currentUser.organizationSlugs || currentUser.organizationSlugs.length === 0) {
-          // If no organizations, show empty state
-          setOrganizations([]);
-          setCertificates([]);
-          setLoading(false);
-          return;
+        const response = await fetch('/api/certificates', {
+          cache: 'no-store',
+          headers: { Accept: 'application/json' },
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.error || 'Sertifikalar alınamadı');
         }
-        
-        // Fetch organizations first
-        const { data: orgsData, error: orgsError } = await supabase
-          .from('organizations')
-          .select('*')
-          .in('slug', currentUser.organizationSlugs);
-        
-        if (orgsError) {
-          throw orgsError;
-        }
-        
-        setOrganizations(orgsData || []);
-        
-        // Fetch certificates with template information
-        const { data: certsData, error: certsError } = await supabase
-          .from('certificates')
-          .select(`
-            *,
-            certificate_templates:template_id (
-              id,
-              name,
-              background_image,
-              is_default
-            )
-          `)
-          .in('organization_slug', currentUser.organizationSlugs)
-          .order('created_at', { ascending: false });
-        
-        if (certsError) {
-          throw certsError;
-        }
-        
-        setCertificates(certsData || []);
+
+        const availableOrganizations = (payload.organizations || []) as Organization[];
+        setOrganizations(availableOrganizations);
+        setCurrentUser((user) => user ? {
+          ...user,
+          organizationSlugs: availableOrganizations.map((organization) => organization.slug),
+        } : user);
+        setCertificates((payload.certificates || []) as Certificate[]);
         
     } catch (error: unknown) {
       console.error('Error fetching data:', error);
