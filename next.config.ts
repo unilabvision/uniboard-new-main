@@ -32,6 +32,12 @@ const nextConfig = {
       },
       {
         protocol: 'https',
+        hostname: 'fibexawaayvejcqoofqu.supabase.co',
+        port: '',
+        pathname: '/storage/v1/object/public/**',
+      },
+      {
+        protocol: 'https',
         hostname: 'petqvkaqfjluaklyyrdo.supabase.co',
         port: '',
         pathname: '/storage/v1/object/public/**',

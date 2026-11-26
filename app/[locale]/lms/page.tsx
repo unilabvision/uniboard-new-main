@@ -664,6 +664,7 @@ const CourseCard = ({
             src={course.thumbnail_url} 
             alt={course.title}
             fill
+            sizes="(min-width: 1280px) 25vw, (min-width: 768px) 33vw, (min-width: 640px) 50vw, 100vw"
             className="object-cover"
           />
         ) : (
